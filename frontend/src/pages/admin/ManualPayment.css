@@ -1,15 +1,50 @@
+/* ── Container & Top Bar ─────────────────────────────────── */
 .mp-container {
   padding: 0 40px;
   font-family: 'DM Sans', sans-serif;
+}
+
+.mp-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
 .mp-title {
   font-size: 20px;
   font-weight: 800;
   color: #1E293B;
-  margin-bottom: 24px;
+  margin: 0;
 }
 
+/* ── Period Filter ────────────────────────────────────────── */
+.mp-period-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #fff;
+  border: 1px solid #E2E8F0;
+  border-radius: 8px;
+  padding: 0 14px;
+  height: 40px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.mp-period-filter select {
+  height: 36px;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1E293B;
+  cursor: pointer;
+}
+
+/* ── Card ─────────────────────────────────────────────────── */
 .mp-card {
   background: #fff;
   border-radius: 12px;
@@ -17,10 +52,12 @@
   padding: 32px;
 }
 
+/* ── User Info ────────────────────────────────────────────── */
 .mp-user-info {
   display: flex;
   gap: 24px;
   margin-bottom: 40px;
+  align-items: flex-start;
 }
 
 .mp-user-avatar {
@@ -38,17 +75,8 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-}
-
-.mp-user-select {
-  background: #E2E8F0;
-  border-radius: 6px;
-  padding: 8px 12px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 200px;
-  cursor: pointer;
+  flex: 1;
+  min-width: 0;
 }
 
 .mp-user-meta {
@@ -64,8 +92,122 @@
   line-height: 1.6;
 }
 
+/* ── Searchable Member Dropdown ───────────────────────────── */
+.mp-searchable-wrap {
+  position: relative;
+  width: 360px;
+}
+
+.mp-search-input-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #F8FAFC;
+  border: 1.5px solid #CBD5E1;
+  border-radius: 8px;
+  padding: 0 12px;
+  height: 42px;
+  cursor: text;
+  transition: border-color 0.2s;
+}
+
+.mp-search-input-box:focus-within {
+  border-color: #4f7df3;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(79, 125, 243, 0.1);
+}
+
+.mp-search-icon {
+  color: #94A3B8;
+  flex-shrink: 0;
+}
+
+.mp-search-input {
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 14px;
+  color: #1E293B;
+  width: 100%;
+  font-family: inherit;
+}
+
+.mp-search-input::placeholder {
+  color: #94A3B8;
+}
+
+.mp-selected-badge {
+  display: none; /* shown via placeholder instead */
+}
+
+.mp-member-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: #fff;
+  border: 1px solid #E2E8F0;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  max-height: 220px;
+  overflow-y: auto;
+  z-index: 100;
+}
+
+.mp-member-dropdown::-webkit-scrollbar { width: 5px; }
+.mp-member-dropdown::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
+
+.mp-dropdown-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+  border-bottom: 1px solid #F1F5F9;
+}
+
+.mp-dropdown-item:last-child { border-bottom: none; }
+
+.mp-dropdown-item:hover,
+.mp-dropdown-item.selected {
+  background: #EFF6FF;
+}
+
+.mp-dropdown-item.selected .mp-drop-name {
+  color: #4f7df3;
+  font-weight: 700;
+}
+
+.mp-drop-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1E293B;
+}
+
+.mp-drop-nik {
+  font-size: 11px;
+  color: #94A3B8;
+  font-weight: 500;
+}
+
+.mp-dropdown-empty {
+  padding: 16px;
+  text-align: center;
+  font-size: 13px;
+  color: #94A3B8;
+}
+
+/* ── Sections ─────────────────────────────────────────────── */
 .mp-section {
   margin-bottom: 32px;
+}
+
+.mp-section-header-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
 }
 
 .mp-section-title {
@@ -76,11 +218,40 @@
   margin-bottom: 16px;
 }
 
+.mp-period-badge {
+  font-size: 12px;
+  font-weight: 600;
+  color: #4f7df3;
+  background: #eef2ff;
+  padding: 2px 10px;
+  border-radius: 20px;
+}
+
+.mp-loading-text {
+  font-size: 12px;
+  color: #999;
+}
+
+.mp-row-count {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748B;
+  background: #F1F5F9;
+  border-radius: 20px;
+  padding: 1px 8px;
+  margin-left: 8px;
+  font-style: normal;
+}
+
+/* ── Outstanding Grid ─────────────────────────────────────── */
 .mp-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 32px;
 }
+
+.mp-outstanding-list { /* left column */ }
 
 .mp-out-item {
   margin-bottom: 20px;
@@ -121,103 +292,328 @@
 
 .mp-saving-card h4 {
   margin: 0;
-  font-size: 16px;
-  font-weight: 800;
+  font-size: 13px;
+  font-weight: 700;
   color: #333;
+  line-height: 1.7;
 }
 
-.mp-payment-inputs {
+/* ── Payment Rows ─────────────────────────────────────────── */
+.mp-payment-row {
   display: flex;
-  gap: 24px;
-  margin-bottom: 40px;
+  gap: 14px;
+  margin-bottom: 12px;
+  align-items: center;
 }
 
 .mp-input-wrap {
   flex: 1;
-}
-
-.mp-input-wrap select,
-.mp-input-wrap input {
-  width: 100%;
-  padding: 12px 16px;
-  border-radius: 8px;
-  border: 1px solid #475569;
-  background: #E2E8F0;
-  font-size: 14px;
-  color: #64748B;
-  font-weight: 600;
-  font-style: italic;
-  outline: none;
-}
-
-.mp-actions {
-  display: flex;
-  justify-content: flex-end; /* changed to right align to look better */
-  gap: 16px;
-  border-top: 1px solid #eaeaea;
-  padding-top: 24px;
-}
-
-.mp-btn {
-  background: #fcfcfc;
-  color: #666;
-  border: 1px solid #eaeaea;
-  padding: 10px 24px;
-  border-radius: 6px;
-  font-weight: 600;
-  font-size: 13px;
-  cursor: pointer;
-  transition: opacity 0.2s;
-}
-
-.mp-btn:nth-child(2) {
-  background: #4f7df3;
-  color: white;
-  border-color: #4f7df3;
-}
-.mp-btn:nth-child(3) {
-  background: transparent;
-  border-color: transparent;
-}
-
-.mp-btn:hover {
-  opacity: 0.9;
+  position: relative;
 }
 
 .mp-clean-input {
   width: 100%;
-  padding: 12px 16px;
-  border: 1px solid #d1d5db;
+  padding: 11px 14px;
+  border: 1.5px solid #CBD5E1;
   border-radius: 8px;
   background-color: #fff;
   font-size: 14px;
   color: #1a1a1a;
   outline: none;
   transition: border-color 0.2s;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  font-family: inherit;
+  box-sizing: border-box;
 }
 
 .mp-clean-input:focus {
   border-color: #4f7df3;
+  box-shadow: 0 0 0 3px rgba(79, 125, 243, 0.1);
 }
 
+.mp-clean-input.mp-input-error {
+  border-color: #ef4444;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+}
+
+/* Amount input with Rp prefix */
+.mp-currency-prefix {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 13px;
+  font-weight: 700;
+  color: #64748B;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.mp-amount-input {
+  padding-left: 34px !important;
+}
+
+/* "auto-filled" hint */
+.mp-auto-label {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 10px;
+  font-weight: 600;
+  color: #10b981;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 10px;
+  padding: 1px 7px;
+  pointer-events: none;
+}
+
+/* Add More button */
+.mp-add-payment-btn {
+  background: #f8fafc;
+  border: 1px solid #CBD5E1;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.mp-add-payment-btn:hover:not(:disabled) {
+  background: #eff6ff;
+  border-color: #4f7df3;
+  color: #4f7df3;
+}
+
+.mp-add-payment-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Remove button */
+.mp-remove-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+
+.mp-remove-btn:hover { transform: scale(1.1); }
+
+/* ── Notes & Proof ────────────────────────────────────────── */
+.mp-payment-extra {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 24px;
+}
+
+.mp-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mp-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.mp-required {
+  color: #ef4444;
+  margin-left: 2px;
+}
+
+.mp-required-hint {
+  font-size: 11px;
+  font-weight: 400;
+  color: #94A3B8;
+  margin-left: 4px;
+}
+
+.mp-textarea {
+  min-height: 108px;
+  resize: vertical;
+  font-style: normal;
+  font-family: inherit;
+}
+
+/* ── File Upload ──────────────────────────────────────────── */
+.mp-file-upload { position: relative; }
+
+.mp-file-input {
+  position: absolute;
+  width: 0.1px;
+  height: 0.1px;
+  opacity: 0;
+  overflow: hidden;
+  z-index: -1;
+}
+
+.mp-file-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 16px;
+  border: 2px dashed #CBD5E1;
+  border-radius: 10px;
+  background: #F8FAFC;
+  color: #64748B;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-height: 108px;
+  text-align: center;
+}
+
+.mp-file-label:hover {
+  border-color: #4f7df3;
+  background: #eff6ff;
+  color: #4f7df3;
+}
+
+.mp-file-label.mp-file-selected {
+  border-color: #10b981;
+  background: #f0fdf4;
+  color: #10b981;
+  flex-direction: row;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 16px;
+  min-height: 60px;
+}
+
+.mp-file-hint {
+  font-size: 11px;
+  font-weight: 400;
+  color: #94A3B8;
+}
+
+.mp-filename {
+  font-size: 13px;
+  font-weight: 600;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mp-filesize {
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.mp-file-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #ef4444;
+  font-weight: 500;
+  margin-top: 4px;
+}
+
+/* ── Form Feedback ────────────────────────────────────────── */
+.mp-form-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #dc2626;
+  margin-bottom: 16px;
+}
+
+.mp-form-success {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: #f0fdf4;
+  border-left: 4px solid #16a34a;
+  border-radius: 6px;
+  padding: 16px;
+  font-size: 13px;
+  color: #166534;
+  margin-bottom: 24px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  animation: mpFadeIn 0.3s ease-out;
+}
+
+.mp-success-title {
+  font-weight: 800;
+  font-size: 14px;
+  margin-bottom: 4px;
+  color: #15803d;
+}
+
+.mp-success-detail {
+  font-weight: 500;
+  opacity: 0.9;
+  line-height: 1.5;
+}
+
+@keyframes mpFadeIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Actions ──────────────────────────────────────────────── */
+.mp-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  border-top: 1px solid #eaeaea;
+  padding-top: 24px;
+}
+
+.mp-btn {
+  background: #F1F5F9;
+  color: #475569;
+  border: 1px solid #CBD5E1;
+  padding: 10px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.mp-btn:hover { background: #E2E8F0; }
+
+.mp-btn-process {
+  background: #4f7df3;
+  color: #fff;
+  border-color: #4f7df3;
+}
+
+.mp-btn-process:hover { background: #3d6de0; border-color: #3d6de0; }
+
+/* ── Responsive ───────────────────────────────────────────── */
 @media (max-width: 900px) {
-  .mp-container {
-    padding: 0 16px;
-  }
-  .mp-user-info {
-    flex-direction: column;
-    gap: 16px;
-  }
-  .mp-user-details {
-    margin-left: 0;
-  }
-  .mp-grid {
-    grid-template-columns: 1fr;
-    gap: 24px;
-  }
-  .mp-payment-inputs {
-    flex-direction: column;
-    gap: 16px;
-  }
+  .mp-container { padding: 0 16px; }
+  .mp-user-info { flex-direction: column; gap: 16px; }
+  .mp-user-details { margin-left: 0; }
+  .mp-searchable-wrap { width: 100%; }
+  .mp-grid { grid-template-columns: 1fr; gap: 24px; }
+  .mp-payment-extra { grid-template-columns: 1fr; }
+  .mp-payment-row { flex-wrap: wrap; }
 }

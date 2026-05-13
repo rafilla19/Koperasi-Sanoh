@@ -130,7 +130,7 @@ const SHUDashboard = () => {
       {/* Total Simpanan Anggota */}
       <div className="shu-section-title">
         Total Simpanan Anggota
-        <span className="shu-link-detail">Lihat Detail</span>
+        {/* <span className="shu-link-detail">Lihat Detail</span> */}
       </div>
       <div className="shu-savings-card">
         <div className="shu-savings-grid">

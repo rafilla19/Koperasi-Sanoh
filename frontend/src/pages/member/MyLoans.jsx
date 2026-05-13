@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Info, ChevronRight } from 'lucide-react';
 import './MyLoans.css';
@@ -6,6 +6,165 @@ import './MyLoans.css';
 const MyLoans = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('active');
+  const [hasActiveLoan, setHasActiveLoan] = useState(false);
+  const [totalOutstanding, setTotalOutstanding] = useState(0);
+  const [nextDeduction, setNextDeduction] = useState('-');
+  const [showAutoDeductBanner, setShowAutoDeductBanner] = useState(false);
+  const [loansData, setLoansData] = useState({
+    active: [],
+    completed: [],
+    pending: [],
+    rejected: []
+  });
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const response = await fetch('http://127.0.0.1:8000/api/loan/loan-applications/');
+        if (response.ok) {
+          const data = await response.json();
+          const active = data.some(loan => loan.member === 1 && loan.status === 25);
+          setHasActiveLoan(active);
+        }
+
+        const loanResponse = await fetch('http://127.0.0.1:8000/api/loan/loans/');
+        if (loanResponse.ok) {
+          const loanData = await loanResponse.json();
+          // select remaining_balance from loans where member_id = '1' and status_id = '25' and remaining_balance <> 0
+          const activeLoans = loanData.filter(loan => loan.member_id === 1 && loan.status === 25);
+          const outstanding = activeLoans
+            .filter(loan => parseFloat(loan.remaining_balance) !== 0)
+            .reduce((sum, loan) => sum + parseFloat(loan.remaining_balance), 0);
+          setTotalOutstanding(outstanding);
+
+          // Get due_date from the active loan
+          if (activeLoans.length > 0) {
+            const sortedLoans = [...activeLoans].sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
+            if (sortedLoans[0].due_date) {
+              const nextDate = new Date(sortedLoans[0].due_date);
+              const formattedDate = nextDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+              setNextDeduction(formattedDate);
+            } else {
+              setNextDeduction('-');
+            }
+          } else {
+            setNextDeduction('-');
+          }
+        }
+
+        const activeSummaryResponse = await fetch('http://127.0.0.1:8000/api/loan/loans/active_summary/');
+        if (activeSummaryResponse.ok) {
+          const activeSummary = await activeSummaryResponse.json();
+          const activeLoansFormatted = activeSummary.map(item => ({
+            id: `#${item.loan_id}`,
+            type: item.type_name || 'Pinjaman',
+            status: 'Active',
+            totalBorrowed: formatRupiah(item.principal_amount),
+            remaining: formatRupiah(item.remaining_balance),
+            purpose: item.purpose,
+            bunga: `${parseFloat(item.bunga || 0).toFixed(1).replace('.', ',')}%`,
+            progress: item.total_installment > 0 ? Math.round((item.paid_installment / item.total_installment) * 100) : 0,
+            installmentsPaid: item.paid_installment || 0,
+            totalInstallments: item.total_installment || 0,
+            nextDeduction: item.next_installment_balance ? formatRupiah(item.next_installment_balance) : '-',
+          }));
+          setLoansData(prev => ({ ...prev, active: activeLoansFormatted }));
+        }
+
+        const completedSummaryResponse = await fetch('http://127.0.0.1:8000/api/loan/loans/completed_summary/');
+        if (completedSummaryResponse.ok) {
+          const completedSummary = await completedSummaryResponse.json();
+          const completedLoansFormatted = completedSummary.map(item => ({
+            id: `#${item.loan_id}`,
+            type: item.type_name || 'Pinjaman',
+            status: 'Completed',
+            totalBorrowed: formatRupiah(item.principal_amount),
+            remaining: formatRupiah(item.remaining_balance),
+            purpose: item.purpose,
+            bunga: `${parseFloat(item.bunga || 0).toFixed(1).replace('.', ',')}%`,
+            progress: item.total_installment > 0 ? Math.round((item.paid_installment / item.total_installment) * 100) : 0,
+            installmentsPaid: item.paid_installment || 0,
+            totalInstallments: item.total_installment || 0,
+            nextDeduction: item.next_installment_balance ? formatRupiah(item.next_installment_balance) : '-',
+          }));
+          setLoansData(prev => ({ ...prev, completed: completedLoansFormatted }));
+        }
+
+        const pendingSummaryResponse = await fetch('http://127.0.0.1:8000/api/loan/loan-applications/pending_summary/');
+        if (pendingSummaryResponse.ok) {
+          const pendingSummary = await pendingSummaryResponse.json();
+          const pendingLoansFormatted = pendingSummary.map(item => ({
+            id: `#${item.id}`,
+            type: item.type_name || 'Pinjaman',
+            status: item.status_code || 'Pending',
+            totalBorrowed: formatRupiah(item.amount_requested),
+            remaining: formatRupiah(item.amount_requested),
+            interestEstimate: formatRupiah(item.amount_requested * 0.005),
+            purpose: item.purpose,
+            bunga: '0,5%',
+            progress: 0,
+            installmentsPaid: 0,
+            totalInstallments: item.duration_months || 0,
+            appliedAt: new Date(item.applied_at).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
+            nextDeduction: '-',
+          }));
+          setLoansData(prev => ({ ...prev, pending: pendingLoansFormatted }));
+        }
+
+        const rejectedSummaryResponse = await fetch('http://127.0.0.1:8000/api/loan/loan-applications/rejected_summary/');
+        if (rejectedSummaryResponse.ok) {
+          const rejectedSummary = await rejectedSummaryResponse.json();
+          const rejectedLoansFormatted = rejectedSummary.map(item => ({
+            id: `#${item.id}`,
+            type: item.type_name || 'Pinjaman',
+            status: 'Rejected',
+            totalBorrowed: formatRupiah(item.amount_requested),
+            appliedAt: new Date(item.applied_at).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
+            dateRejected: new Date(item.admin_update).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
+            purpose: item.purpose,
+            rejectReason: item.reject_reason || '-',
+            progress: 0,
+            installmentsPaid: 0,
+            totalInstallments: item.duration_months || 0,
+            nextDeduction: '-',
+          }));
+          setLoansData(prev => ({ ...prev, rejected: rejectedLoansFormatted }));
+        }
+
+        const memberResponse = await fetch('http://127.0.0.1:8000/api/master/members/');
+        if (memberResponse.ok) {
+          const memberData = await memberResponse.json();
+          const currentMember = memberData.find(m => m.id === 1);
+          if (currentMember) {
+            const empStatus = currentMember.employee_status_id;
+            if (empStatus === 1 || empStatus === 2) {
+              setShowAutoDeductBanner(true);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch data:', error);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  const formatRupiah = (number) => {
+    return new Intl.NumberFormat('id-ID', {
+      style: 'currency',
+      currency: 'IDR',
+      minimumFractionDigits: 0
+    }).format(number).replace(',00', '');
+  };
+
+  const handleApplyLoan = () => {
+    if (hasActiveLoan) {
+      alert('Anda tidak dapat mengajukan pinjaman baru karena masih ada pinjaman yang aktif.');
+    } else {
+      navigate('/dashboard/loans/application');
+    }
+  };
 
   const tabs = [
     { id: 'active', label: 'Active Loans' },
@@ -14,87 +173,11 @@ const MyLoans = () => {
     { id: 'rejected', label: 'Rejected' },
   ];
 
-  const mockLoans = {
-    active: [
-      {
-        id: '#20250512',
-        type: 'Pinjaman Tunai',
-        status: 'Active',
-        totalBorrowed: 'Rp 10.000.000',
-        remaining: 'Rp 5.000.000',
-        purpose: 'Renovasi',
-        bunga: '0,5%',
-        progress: 50,
-        installmentsPaid: 5,
-        totalInstallments: 10,
-        nextDeduction: 'Rp 1.000.000',
-      },
-      {
-        id: '#20250513',
-        type: 'Pinjaman Barang',
-        status: 'Active',
-        totalBorrowed: 'Rp 10.000.000',
-        remaining: 'Rp 5.000.000',
-        purpose: 'Renovasi',
-        bunga: '0,5%',
-        progress: 50,
-        installmentsPaid: 5,
-        totalInstallments: 10,
-        nextDeduction: 'Rp 1.000.000',
-      }
-    ],
-    completed: [
-      {
-        id: '#20240101',
-        type: 'Pinjaman Pendidikan',
-        status: 'Completed',
-        totalBorrowed: 'Rp 5.000.000',
-        remaining: 'Rp 0',
-        purpose: 'Biaya Sekolah Anak',
-        bunga: '0,5%',
-        progress: 100,
-        installmentsPaid: 5,
-        totalInstallments: 5,
-        nextDeduction: '-',
-      }
-    ],
-    pending: [
-      {
-        id: '#20250999',
-        type: 'Pinjaman Kendaraan',
-        status: 'Pending',
-        totalBorrowed: 'Rp 15.000.000',
-        remaining: 'Rp 15.000.000',
-        purpose: 'Beli Motor Baru',
-        bunga: '0,5%',
-        progress: 0,
-        installmentsPaid: 0,
-        totalInstallments: 15,
-        nextDeduction: '-',
-      }
-    ],
-    rejected: [
-      {
-        id: '#20250888',
-        type: 'Pinjaman Tunai',
-        status: 'Rejected',
-        totalBorrowed: 'Rp 20.000.000',
-        remaining: 'Rp 20.000.000',
-        purpose: 'Modal Usaha',
-        bunga: '0,5%',
-        progress: 0,
-        installmentsPaid: 0,
-        totalInstallments: 20,
-        nextDeduction: '-',
-      }
-    ]
-  };
-
   const getStatusColor = (status) => {
     switch (status.toLowerCase()) {
       case 'active': return 'status-active';
       case 'completed': return 'status-completed';
-      case 'pending': return 'status-pending';
+      case 'submitted': return 'status-pending';
       case 'rejected': return 'status-rejected';
       default: return '';
     }
@@ -107,7 +190,11 @@ const MyLoans = () => {
           <h1>Loan Overview</h1>
           <p>Overview active loans, repayment progress, and payroll deduction</p>
         </div>
-        <button className="btn-apply-loan" onClick={() => navigate('/dashboard/loans/application')}>
+        <button
+          className="btn-apply-loan"
+          onClick={handleApplyLoan}
+          style={hasActiveLoan ? { opacity: 0.6, cursor: 'not-allowed' } : {}}
+        >
           <Plus size={16} strokeWidth={2.5} />
           Apply for a New Loan
         </button>
@@ -116,31 +203,31 @@ const MyLoans = () => {
       <div className="ml-overview-cards">
         <div className="ml-ov-card">
           <div className="ml-ov-label">TOTAL OUTSTANDING BALANCE</div>
-          <div className="ml-ov-value">Rp 15.200.000</div>
+          <div className="ml-ov-value">{formatRupiah(totalOutstanding)}</div>
           <div className="ml-ov-badge up">
-            <ChevronRight size={12} strokeWidth={3} style={{transform: 'rotate(-45deg)'}} />
+            <ChevronRight size={12} strokeWidth={3} style={{ transform: 'rotate(-45deg)' }} />
             Increased by 5% this month
           </div>
         </div>
         <div className="ml-ov-card">
           <div className="ml-ov-label">NEXT PAYROLL DEDUCTION</div>
-          <div className="ml-ov-value">Oct 15, 2026</div>
+          <div className="ml-ov-value">{nextDeduction}</div>
           <div className="ml-ov-badge info">
             <span className="dot"></span>
             Scheduled Automatically
           </div>
         </div>
-      </div>
-
-      <div className="ml-info-banner">
-        <div className="info-icon-wrapper">
-          <Info size={16} strokeWidth={2} />
+      </div>      {showAutoDeductBanner && (
+        <div className="ml-info-banner">
+          <div className="info-icon-wrapper">
+            <Info size={16} strokeWidth={2} />
+          </div>
+          <div>
+            <h4>Automatic Payment Deduction</h4>
+            <p>Payments are automatically deducted by HRD on the 25th of each month</p>
+          </div>
         </div>
-        <div>
-          <h4>Automatic Payment Deduction</h4>
-          <p>Payments are automatically deducted by HRD on the 25th of each month</p>
-        </div>
-      </div>
+      )}
 
       <div className="ml-tabs-section">
         <h2>My Loans</h2>
@@ -158,9 +245,9 @@ const MyLoans = () => {
       </div>
 
       <div className="ml-loan-list">
-        {mockLoans[activeTab].length > 0 ? (
+        {loansData[activeTab].length > 0 ? (
           <div className="ml-grid">
-            {mockLoans[activeTab].map((loan, idx) => (
+            {loansData[activeTab].map((loan, idx) => (
               <div className="ml-loan-card" key={idx}>
                 <div className="ml-lc-header">
                   <div>
@@ -178,38 +265,68 @@ const MyLoans = () => {
                     <span className="val">{loan.totalBorrowed}</span>
                   </div>
                   <div className="ml-lc-col">
-                    <span className="lbl">REMAINING</span>
-                    <span className="val">{loan.remaining}</span>
+                    <span className="lbl">
+                      {activeTab === 'pending' ? 'ESTIMATE INTEREST AMOUNT'
+                        : activeTab === 'rejected' ? 'DATE APPLY'
+                          : 'REMAINING'}
+                    </span>
+                    <span className="val">
+                      {activeTab === 'pending' ? loan.interestEstimate
+                        : activeTab === 'rejected' ? loan.appliedAt
+                          : loan.remaining}
+                    </span>
                   </div>
                   <div className="ml-lc-col">
                     <span className="lbl">PURPOSE</span>
                     <span className="val">{loan.purpose}</span>
                   </div>
                   <div className="ml-lc-col">
-                    <span className="lbl">BUNGA (FLAT)</span>
-                    <span className="val">{loan.bunga}</span>
+                    <span className="lbl">
+                      {activeTab === 'pending' ? 'ESTIMATE BUNGA'
+                        : activeTab === 'rejected' ? 'DATE REJECTED'
+                          : 'BUNGA (FLAT)'}
+                    </span>
+                    <span className="val">
+                      {activeTab === 'rejected' ? loan.dateRejected : loan.bunga}
+                    </span>
                   </div>
                 </div>
 
                 <div className="ml-lc-progress">
                   <div className="prog-header">
-                    <span>Repayment Progress</span>
-                    <span className="pct">{loan.progress}%</span>
+                    <span>{activeTab === 'pending' || activeTab === 'rejected' ? 'Repayment Request' : 'Repayment Progress'}</span>
+                    {(activeTab !== 'pending' && activeTab !== 'rejected') && <span className="pct">{loan.progress}%</span>}
                   </div>
-                  <div className="prog-bar">
-                    <div className="prog-fill" style={{ width: `${loan.progress}%` }}></div>
-                  </div>
+                  {(activeTab !== 'pending' && activeTab !== 'rejected') && (
+                    <div className="prog-bar">
+                      <div className="prog-fill" style={{ width: `${loan.progress}%` }}></div>
+                    </div>
+                  )}
                   <div className="prog-footer">
-                    {loan.installmentsPaid} of {loan.totalInstallments} Installments Paid
+                    {activeTab === 'pending' || activeTab === 'rejected'
+                      ? `${loan.totalInstallments} Months Installment Request`
+                      : `${loan.installmentsPaid} of ${loan.totalInstallments} Installments Paid`}
                   </div>
                 </div>
 
                 <div className="ml-lc-footer">
-                  <div>
-                    <div className="lbl">NEXT DEDUCTION</div>
-                    <div className="val">{loan.nextDeduction}</div>
-                  </div>
-                  <button className="btn-view-details" onClick={() => navigate(`/dashboard/loans/${loan.id.replace('#','')}`)}>
+                  {activeTab === 'pending' ? (
+                    <div>
+                      <div className="lbl">APPLIED AT</div>
+                      <div className="val">{loan.appliedAt}</div>
+                    </div>
+                  ) : activeTab === 'rejected' ? (
+                    <div>
+                      <div className="lbl">REASON REJECT</div>
+                      <div className="val" style={{ color: '#ef4444', fontWeight: '500' }}>{loan.rejectReason}</div>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="lbl">NEXT DEDUCTION</div>
+                      <div className="val">{loan.nextDeduction}</div>
+                    </div>
+                  )}
+                  <button className="btn-view-details" onClick={() => navigate(`/dashboard/loans/${loan.id.replace('#', '')}`)}>
                     View Details
                   </button>
                 </div>

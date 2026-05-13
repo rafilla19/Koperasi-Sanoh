@@ -41,6 +41,7 @@ import SHUMasterData from './pages/admin/SHUMasterData';
 import AdminLoansDashboard from './pages/admin/AdminLoansDashboard';
 import AdminPendingApprovals from './pages/admin/AdminPendingApprovals';
 import AdminLoanDetail from './pages/admin/AdminLoanDetail';
+import AdminActiveLoanDetail from './pages/admin/AdminActiveLoanDetail';
 
 import SavingsDashboard from './pages/admin/SavingsDashboard';
 import SavingsManagement  from './pages/admin/SavingsManagement';
@@ -87,6 +88,7 @@ function App() {
           <Route path="admin/ls-loans" element={<AdminLoansDashboard />} />
           <Route path="admin/ls-loans/pending" element={<AdminPendingApprovals />} />
           <Route path="admin/ls-loans/:id" element={<AdminLoanDetail />} />
+          <Route path="admin/ls-loans/active/:id" element={<AdminActiveLoanDetail />} />
           <Route path="admin/members" element={<MemberManagement />} />
           <Route path="admin/members/:id" element={<MemberDetail />} />
           <Route path="admin/approvals" element={<MemberApprovals />} />

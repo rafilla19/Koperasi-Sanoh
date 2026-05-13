@@ -2,6 +2,9 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   Wallet, PiggyBank, Briefcase, CreditCard,
   Download, Copy, HandCoins, ArrowUpRight, TrendingUp,
+  PieChart, Calendar, Search, FileText, Filter,
+  ArrowRightLeft, AlertCircle, Info, CheckCircle2,
+  ChevronDown, TrendingDown
 } from 'lucide-react';
 import {
   Chart as ChartJS,
@@ -9,6 +12,8 @@ import {
   LineElement, Title, Tooltip, Filler, Legend,
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import './DashboardHome.css';
 
 ChartJS.register(
@@ -78,7 +83,182 @@ const chartOptions = {
 const DashboardHome = () => {
   const [selectedTx, setSelectedTx] = useState(null);
   const [shuFilter, setShuFilter] = useState('YTD');
+  const [txTypeFilter, setTxTypeFilter] = useState('all');
+  const [summary, setSummary] = useState(null);
+  const [transactions, setTransactions] = useState([]);
+  const [loading, setLoading] = useState(true);
   const chartRef = useRef(null);
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        const [summaryRes, txRes] = await Promise.all([
+          fetch('http://127.0.0.1:8000/api/loan/loans/dashboard_summary/'),
+          fetch(`http://127.0.0.1:8000/api/loan/loans/my_transactions/?type=${txTypeFilter}`)
+        ]);
+
+        const summaryData = await summaryRes.json();
+        const txData = await txRes.json();
+
+        setSummary(summaryData);
+        setTransactions(Array.isArray(txData) ? txData : []);
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchDashboardData();
+  }, [txTypeFilter]);
+
+  const formatRupiah = (number) => {
+    return new Intl.NumberFormat('id-ID', {
+      style: 'currency',
+      currency: 'IDR',
+      minimumFractionDigits: 0
+    }).format(number || 0).replace(',00', '');
+  };
+
+  const calculateGrowth = (inc, total) => {
+    if (!total || total === 0) return 0;
+    return ((inc / total) * 100).toFixed(1);
+  };
+
+  const handleDownloadReport = () => {
+    console.log('Generating report...');
+    try {
+      const doc = new jsPDF();
+      const dateStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+
+      // Header
+      doc.setFontSize(18);
+      doc.setTextColor(15, 23, 42); // Navy
+      doc.text('KOPERASI SANOH SINERGI BERSAMA', 105, 20, { align: 'center' });
+      
+      doc.setFontSize(14);
+      doc.setTextColor(100);
+      doc.text('FINANCIAL SUMMARY REPORT', 105, 30, { align: 'center' });
+      
+      doc.setLineWidth(0.5);
+      doc.line(20, 35, 190, 35);
+
+      // Member Info
+      doc.setFontSize(11);
+      doc.setTextColor(0);
+      doc.text(`Member Name : ${summary?.full_name || 'Member'}`, 20, 45);
+      doc.text(`Report Date   : ${dateStr}`, 20, 52);
+
+      // Savings Section
+      doc.setFontSize(14);
+      doc.text('1. Savings Overview', 20, 70);
+      const savingsBody = [
+        ['Principal Savings', formatRupiah(summary?.principle_balance)],
+        ['Mandatory Savings', formatRupiah(summary?.mandatory_balance)],
+        ['Voluntary Savings', formatRupiah(summary?.voluntary_balance)],
+        ['Total Balance', formatRupiah(summary?.total_saving_balance)]
+      ];
+      autoTable(doc, {
+        startY: 75,
+        head: [['Account Type', 'Current Balance']],
+        body: savingsBody,
+        theme: 'striped',
+        headStyles: { fillColor: [15, 23, 42] }
+      });
+
+    // Loan Section
+    const finalY = doc.lastAutoTable.finalY + 15;
+    doc.text('2. Loan Status', 20, finalY);
+    const loanBody = [
+      ['Approved Principal', formatRupiah(summary?.principal_amount)],
+      ['Remaining Balance', formatRupiah(summary?.total_loan_remaining)],
+      ['Installments Paid', `${summary?.paid_installments} of ${summary?.total_installments}`],
+      ['Total Outstanding', formatRupiah(summary?.grand_total_outstanding)]
+    ];
+    autoTable(doc, {
+      startY: finalY + 5,
+      body: loanBody,
+      theme: 'plain',
+      styles: { fontSize: 10 }
+    });
+
+    // Transaction Section
+    const txY = doc.lastAutoTable.finalY + 15;
+    doc.text('3. Recent Transactions', 20, txY);
+    const txBody = transactions.map(tx => [
+      new Date(tx.transaction_date).toLocaleDateString('id-ID'),
+      tx.transaction_type,
+      formatRupiah(tx.amount),
+      tx.status
+    ]);
+    autoTable(doc, {
+      startY: txY + 5,
+      head: [['Date', 'Type', 'Amount', 'Status']],
+      body: txBody,
+      styles: { fontSize: 9 }
+    });
+
+    // Footer
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(9);
+      doc.setTextColor(150);
+      doc.text(`Koperasi Sanoh - Professional Financial Management System`, 105, 285, { align: 'center' });
+    }
+
+    doc.save(`Financial_Report_${summary?.full_name}_${new Date().toISOString().split('T')[0]}.pdf`);
+      console.log('Report generated successfully.');
+    } catch (error) {
+      console.error('Failed to generate PDF report:', error);
+      alert('Failed to generate report. Please check if your browser allows downloads or try again later.');
+    }
+  };
+
+  const handleDownloadReceipt = (tx) => {
+    try {
+      const doc = new jsPDF();
+      
+      // Header
+      doc.setFontSize(18);
+      doc.setTextColor(15, 23, 42);
+      doc.text('KOPERASI SANOH SINERGI BERSAMA', 105, 30, { align: 'center' });
+      
+      doc.setFontSize(14);
+      doc.text('TRANSACTION RECEIPT', 105, 40, { align: 'center' });
+      
+      doc.setLineWidth(0.5);
+      doc.line(20, 45, 190, 45);
+
+      // Details
+      doc.setFontSize(11);
+      doc.setTextColor(0);
+      
+      const rows = [
+        ['Status', tx.status],
+        ['Category', tx.transaction_type],
+        ['Date', new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(tx.transaction_date))],
+        ['Member Name', summary?.full_name],
+        ['Amount', formatRupiah(tx.amount)]
+      ];
+
+      autoTable(doc, {
+        startY: 55,
+        body: rows,
+        theme: 'plain',
+        styles: { fontSize: 11, cellPadding: 5 },
+        columnStyles: { 0: { fontStyle: 'bold', width: 50 } }
+      });
+
+      doc.setFontSize(10);
+      doc.setTextColor(100);
+      doc.text('Thank you for being a part of Koperasi Sanoh.', 105, doc.lastAutoTable.finalY + 20, { align: 'center' });
+
+      doc.save(`Receipt_${tx.reference || 'TX'}.pdf`);
+    } catch (error) {
+      console.error('Failed to generate Receipt:', error);
+      alert('Failed to generate receipt.');
+    }
+  };
 
   const activeChart = dummyChartDataMap[shuFilter];
 
@@ -120,10 +300,10 @@ const DashboardHome = () => {
       {/* ── Page Header ────────────────────────────────────── */}
       <div className="dh-page-header">
         <div>
-          <h1>Welcome Back, Riska!</h1>
+          <h1>Welcome Back, {loading ? '...' : (summary?.full_name || 'Member')}!</h1>
           <p>Here is your financial overview for this period.</p>
         </div>
-        <button className="dh-report-btn hidden-mobile">
+        <button className="dh-report-btn hidden-mobile" onClick={handleDownloadReport}>
           <Download size={14} />
           Report Overview
         </button>
@@ -138,12 +318,9 @@ const DashboardHome = () => {
             <div className="icon-wrapper blue-gradient">
               <Briefcase size={20} />
             </div>
-            <span className="badge-soft-green">
-              <ArrowUpRight size={11} /> 2.5%
-            </span>
           </div>
           <p className="summary-label">Principal Savings</p>
-          <h3 className="summary-value">Rp 100.000</h3>
+          <h3 className="summary-value">{loading ? '...' : formatRupiah(summary?.principle_balance)}</h3>
         </div>
 
         {/* Voluntary Savings */}
@@ -153,11 +330,11 @@ const DashboardHome = () => {
               <PiggyBank size={20} />
             </div>
             <span className="badge-soft-green">
-              <ArrowUpRight size={11} /> 12.0%
+              <ArrowUpRight size={11} /> {calculateGrowth(summary?.voluntary_month_inc, summary?.voluntary_balance)}%
             </span>
           </div>
           <p className="summary-label">Voluntary Savings</p>
-          <h3 className="summary-value">Rp 500.000</h3>
+          <h3 className="summary-value">{loading ? '...' : formatRupiah(summary?.voluntary_balance)}</h3>
         </div>
 
         {/* Mandatory Savings */}
@@ -167,11 +344,11 @@ const DashboardHome = () => {
               <Wallet size={20} />
             </div>
             <span className="badge-soft-green">
-              <ArrowUpRight size={11} /> 5.0%
+              <ArrowUpRight size={11} /> {calculateGrowth(summary?.mandatory_month_inc, summary?.mandatory_balance)}%
             </span>
           </div>
           <p className="summary-label">Mandatory Savings</p>
-          <h3 className="summary-value">Rp 500.000</h3>
+          <h3 className="summary-value">{loading ? '...' : formatRupiah(summary?.mandatory_balance)}</h3>
         </div>
 
         {/* Outstanding Payment */}
@@ -183,7 +360,9 @@ const DashboardHome = () => {
             <span className="badge-soft-gray">Upcoming</span>
           </div>
           <p className="summary-label">Outstanding Payment</p>
-          <h3 className="summary-value" style={{ color: '#E11D48' }}>Rp 200.000</h3>
+          <h3 className="summary-value" style={{ color: '#E11D48' }}>
+            {loading ? '...' : formatRupiah(summary?.grand_total_outstanding)}
+          </h3>
         </div>
 
       </div>
@@ -243,35 +422,44 @@ const DashboardHome = () => {
           <div>
             <p className="loan-balance-label">Active Loan Balance</p>
             <h2 className="loan-amount-big">
-              Rp 14.000<span className="amount-cents">.000</span>
+              {loading ? '...' : formatRupiah(summary?.total_loan_remaining)}
             </h2>
             <p className="loan-subtitle">
-              From total approved loan of <strong>Rp 25.000.000</strong>
+              From total approved loan of <strong>{loading ? '...' : formatRupiah(summary?.principal_amount)}</strong>
             </p>
           </div>
 
           <div className="loan-donut-row">
-            {/* Donut Chart — SVG CSS approach */}
-            {/* r=46 → C = 2π×46 ≈ 289.03  |  70% paid → dashoffset = 289.03 × 0.30 ≈ 86.71 */}
-            <div className="donut-container">
-              <svg className="donut-svg-el" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="50" cy="50" r="46" fill="none" stroke="#EEF2F9" strokeWidth="8" />
-                <circle
-                  cx="50" cy="50" r="46" fill="none"
-                  stroke="#F59E0B" strokeWidth="8"
-                  strokeDasharray="289.03"
-                  strokeDashoffset="86.71"
-                  strokeLinecap="round"
-                />
-              </svg>
-              <div className="donut-center-text">
-                <span className="donut-pct">70%</span>
-                <span className="donut-pct-lbl">Paid</span>
-              </div>
-            </div>
+            {/* Donut Chart — Dynamic Progress */}
+            {(() => {
+              const total = summary?.total_installments || 0;
+              const paid = summary?.paid_installments || 0;
+              const paidPct = total > 0 ? Math.round((paid / total) * 100) : 0;
+              // r=46 → C = 2π×46 ≈ 289.03
+              const dashOffset = 289.03 * (1 - paidPct / 100);
+
+              return (
+                <div className="donut-container">
+                  <svg className="donut-svg-el" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="50" cy="50" r="46" fill="none" stroke="#EEF2F9" strokeWidth="8" />
+                    <circle
+                      cx="50" cy="50" r="46" fill="none"
+                      stroke="#F59E0B" strokeWidth="8"
+                      strokeDasharray="289.03"
+                      strokeDashoffset={dashOffset}
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                  <div className="donut-center-text">
+                    <span className="donut-pct">{paidPct}%</span>
+                    <span className="donut-pct-lbl">Paid</span>
+                  </div>
+                </div>
+              );
+            })()}
 
             <div className="loan-install-info">
-              <h4>8 of 24 Installments</h4>
+              <h4>{summary?.paid_installments || 0} of {summary?.total_installments || 0} Installments</h4>
               <p>Keep up the good payment history to increase your next loan limit.</p>
             </div>
           </div>
@@ -279,11 +467,17 @@ const DashboardHome = () => {
           <div className="loan-footer-row">
             <div>
               <p className="due-chip-label">Next Payment Due</p>
-              <p className="due-chip-val">Dec 21, 2025</p>
+              <p className="due-chip-val">
+                {summary?.next_due_date
+                  ? new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(summary.next_due_date))
+                  : '-'}
+              </p>
             </div>
             <div style={{ textAlign: 'right' }}>
               <p className="due-chip-label">Amount Due</p>
-              <p className="due-chip-val danger">Rp 300.000,00</p>
+              <p className="due-chip-val danger">
+                {summary?.next_due_amount ? formatRupiah(summary.next_due_amount) : '-'}
+              </p>
             </div>
           </div>
         </div>
@@ -304,13 +498,13 @@ const DashboardHome = () => {
             id="transaction-type-filter"
             name="transactionType"
             className="filter-pill-select"
+            value={txTypeFilter}
+            onChange={(e) => setTxTypeFilter(e.target.value)}
           >
             <option value="all">All Types</option>
-            <option value="vol">Voluntary Saving</option>
-            <option value="man">Mandatory Saving</option>
-            <option value="pri">Principal Saving</option>
+            <option value="deposit">Deposit</option>
             <option value="loan">Loan Installment</option>
-            <option value="with">Withdrawals</option>
+            <option value="withdrawal">Withdrawals</option>
           </select>
 
           <span className="filter-strip-label">Date</span>
@@ -326,37 +520,48 @@ const DashboardHome = () => {
 
         {/* Table */}
         <div className="tx-table-outer">
-          <table className="table-excel">
+          <table className="tx-table">
             <thead>
               <tr>
-                <th style={{ width: '25%' }}>Date &amp; Time</th>
-                <th style={{ width: '35%' }}>Transaction Type</th>
-                <th style={{ width: '20%' }}>Amount</th>
+                <th style={{ width: '20%' }}>Date</th>
+                <th style={{ width: '20%' }}>Ref ID</th>
+                <th style={{ width: '25%' }}>Transaction Type</th>
+                <th style={{ width: '15%' }}>Amount</th>
                 <th style={{ width: '20%', textAlign: 'center' }}>Status</th>
               </tr>
             </thead>
             <tbody>
-              {dummyTransactions.map((tx, idx) => (
-                <tr key={idx} onDoubleClick={() => setSelectedTx(tx)}>
-                  <td>
-                    <span className="tx-date-primary">{tx.date}</span>
-                    <span className="tx-date-secondary">{tx.time}</span>
-                  </td>
-                  <td>
-                    <span className="tx-type-cell">{tx.type}</span>
-                  </td>
-                  <td>
-                    <span className="tx-amount-cell">{tx.amount}</span>
-                  </td>
-                  <td style={{ textAlign: 'center' }}>
-                    {tx.status === 'Success' ? (
-                      <span className="status-pill status-pill-success">Success</span>
-                    ) : (
-                      <span className="status-pill status-pill-pending">Pending</span>
-                    )}
+              {transactions.length === 0 ? (
+                <tr>
+                  <td colSpan="4" style={{ textAlign: 'center', padding: '40px', color: '#94A3B8' }}>
+                    No recent transactions found.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                transactions.map((tx, idx) => (
+                  <tr key={idx} className="tx-row" onClick={() => setSelectedTx(tx)}>
+                    <td>
+                      <span className="tx-date-primary">
+                        {new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(tx.transaction_date))}
+                      </span>
+                    </td>
+                    <td>
+                      <span className="tx-ref-id">{tx.reference || '-'}</span>
+                    </td>
+                    <td>
+                      <span className="tx-type-cell">{tx.transaction_type}</span>
+                    </td>
+                    <td>
+                      <span className="tx-amount-cell">{formatRupiah(tx.amount)}</span>
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <span className={`status-pill status-pill-${tx.status?.toLowerCase().replace(' ', '-')}`}>
+                        {tx.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
@@ -391,7 +596,7 @@ const DashboardHome = () => {
             </div>
             <div className="modal-header-text">
               <h3>Transaction Receipt</h3>
-              <span className={`modal-status-tag ${selectedTx.status === 'Success' ? 'success' : 'pending'}`}>
+              <span className={`modal-status-tag ${selectedTx.status?.toLowerCase().includes('berhasil') || selectedTx.status?.toLowerCase().includes('success') ? 'success' : 'pending'}`}>
                 {selectedTx.status}
               </span>
             </div>
@@ -402,21 +607,20 @@ const DashboardHome = () => {
             <div className="modal-rows">
               <div className="modal-row">
                 <span className="modal-row-key">Category</span>
-                <span className="modal-row-val tag">{selectedTx.type}</span>
+                <span className="modal-row-val tag">{selectedTx.transaction_type}</span>
               </div>
 
               <div className="modal-row">
-                <span className="modal-row-key">Date &amp; Time</span>
+                <span className="modal-row-key">Date</span>
                 <div className="modal-row-val">
-                  {selectedTx.date}
-                  <small>{selectedTx.time}</small>
+                  {new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(selectedTx.transaction_date))}
                 </div>
               </div>
 
               <div className="modal-id-block">
                 <div>
-                  <span className="modal-row-key">Transaction ID</span>
-                  <span className="modal-id-code">{selectedTx.id}</span>
+                  <span className="modal-row-key">Reference ID</span>
+                  <span className="modal-id-code">{selectedTx.reference || '-'}</span>
                 </div>
                 <button className="modal-copy-btn" title="Copy to clipboard">
                   <Copy size={14} />
@@ -424,10 +628,10 @@ const DashboardHome = () => {
               </div>
 
               <div className="modal-row">
-                <span className="modal-row-key">Recipient</span>
+                <span className="modal-row-key">Organization</span>
                 <div className="modal-recipient-chip">
                   <div className="recipient-avatar">KS</div>
-                  <span className="modal-row-val">{selectedTx.recipient}</span>
+                  <span className="modal-row-val">Koperasi Sanoh</span>
                 </div>
               </div>
             </div>
@@ -436,15 +640,15 @@ const DashboardHome = () => {
 
             <div className="modal-total-row">
               <span className="modal-total-label">Total Amount</span>
-              <span className="modal-total-amount">{selectedTx.amount}</span>
+              <span className="modal-total-amount">{formatRupiah(selectedTx.amount)}</span>
             </div>
 
             <div className="modal-actions">
               <button className="btn-modal-ghost" onClick={() => setSelectedTx(null)}>
                 Close
               </button>
-              <button className="btn-modal-primary">
-                <Download size={15} /> Download PDF
+              <button className="btn-modal-primary" onClick={() => handleDownloadReceipt(selectedTx)}>
+                <Download size={15} /> Download Receipt
               </button>
             </div>
 

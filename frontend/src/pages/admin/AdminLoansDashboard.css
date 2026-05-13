@@ -19,18 +19,18 @@
 
 .ald-stats {
   display: flex;
+  flex-wrap: wrap;
   gap: 16px;
   margin-bottom: 32px;
-  overflow-x: auto;
 }
 
 .ald-stat-card {
   background: white;
   border-radius: 12px;
   padding: 16px;
+  flex: 1 1 calc(25% - 12px);
   min-width: 220px;
-  flex: 1;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
 }
 
 .ald-stat-top {
@@ -76,6 +76,15 @@
   font-size: 12px;
   color: #666;
   margin-left: auto;
+  font-weight: 600;
+}
+
+.ald-stat-trend.up {
+  color: #10b981;
+}
+
+.ald-stat-trend.down {
+  color: #ef4444;
 }
 
 .ald-pending-section {
@@ -114,7 +123,7 @@
   padding: 20px;
   min-width: 280px;
   flex: 1;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
 }
 
 .ald-pc-top {
@@ -141,7 +150,8 @@
   color: #1a1a1a;
 }
 
-.ald-pc-dept, .ald-pc-id {
+.ald-pc-dept,
+.ald-pc-id {
   font-size: 12px;
   color: #666;
 }
@@ -205,12 +215,14 @@
 }
 
 .ald-btn.reject {
-  color: #ff4d4f;
+  background-color: #ff4d4f;
+  color: white;
   border: 1px solid #ff4d4f;
 }
 
 .ald-btn.approve {
-  color: #4f7df3;
+  background-color: #4f7df3;
+  color: white;
   border: 1px solid #4f7df3;
 }
 
@@ -220,9 +232,10 @@
 
 .ald-table-section {
   background: white;
+  color: white;
   border-radius: 12px;
   padding: 20px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
 }
 
 .ald-table-controls {
@@ -230,6 +243,29 @@
   gap: 12px;
   margin-bottom: 20px;
   align-items: center;
+  flex-wrap: wrap;
+}
+
+.ald-period-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #fcfcfc;
+  border: 1px solid #eaeaea;
+  border-radius: 8px;
+  padding: 0 12px;
+  height: 40px;
+}
+
+.ald-period-filter select {
+  height: 36px;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a1a;
+  cursor: pointer;
 }
 
 .ald-search {
@@ -273,6 +309,38 @@
   border: 1px solid #eaeaea;
   border-radius: 8px;
   cursor: pointer;
+  transition: all 0.2s;
+}
+
+.ald-print-btn:hover {
+  background: #f0f0f0;
+}
+
+.ald-send-reminder-btn {
+  height: 40px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #4f7df3;
+  color: white;
+  border: 1px solid #4f7df3;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.ald-send-reminder-btn:hover {
+  background: #3d5fbf;
+  border-color: #3d5fbf;
+}
+
+.ald-send-reminder-btn:disabled {
+  background: #ccc;
+  border-color: #ccc;
+  cursor: not-allowed;
 }
 
 .ald-table-container {
@@ -284,11 +352,24 @@
   border-collapse: collapse;
 }
 
+.ald-checkbox-header,
+.ald-checkbox-row {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #4f7df3;
+}
+
+.ald-checkbox-cell {
+  width: 50px;
+  text-align: center;
+}
+
 .ald-table th {
   text-align: left;
   padding: 12px;
   font-size: 13px;
-  color: #666;
+  color: #fff;
   border-bottom: 1px solid #eaeaea;
   font-weight: 600;
 }
@@ -315,22 +396,84 @@
   border-radius: 50%;
 }
 
-.ald-status.active::before { background: #4f7df3; }
-.ald-status.paid::before { background: #52c41a; }
+.ald-status.close::before {
+  background: #4f7df3;
+}
+
+.ald-status.paid::before {
+  background: #52c41a;
+}
+
+.ald-status.active::before {
+  background: #52c41a;
+}
+
+.ald-status.macet::before {
+  background: #ff4d4f;
+}
+
+.ald-status.late-paid::before {
+  background: #faad14;
+}
 
 @media (max-width: 768px) {
   .ald-table-controls {
     flex-direction: column;
     align-items: stretch;
   }
+
   .ald-search {
     width: 100%;
     box-sizing: border-box;
   }
+
   .ald-filter select {
     width: 100%;
   }
+
   .ald-print-btn {
     width: 100%;
   }
+}
+
+.ald-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 24px;
+  padding-bottom: 8px;
+}
+
+.ald-pagination button {
+  background: white;
+  border: 1px solid #eaeaea;
+  border-radius: 6px;
+  min-width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a1a;
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 0 12px;
+}
+
+.ald-pagination button:hover {
+  background: #f5f5f5;
+}
+
+.ald-pagination button.active {
+  background: #1a1a1a;
+  color: #4f7df3;
+  border-color: #1a1a1a;
+}
+
+.ald-pagination span {
+  color: #666;
+  font-weight: 600;
+  padding: 0 4px;
 }

@@ -1,3 +1,7 @@
 django
 djangorestframework
 django-cors-headers
+django-apscheduler
+apscheduler
+python-dotenv
+psycopg2-binary

@@ -1,6 +1,8 @@
-from django.urls import path
-from .views import hello_world
+from django.urls import path, include
 
 urlpatterns = [
-    path('hello/', hello_world, name='hello_world'),
+    # path('api/', include('login.urls')),
+    path('loan/', include('api.loan.urls')),
+    path('master/', include('api.master.urls'))
 ]
+    

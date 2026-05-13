@@ -300,21 +300,23 @@
 }
 
 .aldet-action-btn.reject {
-  color: #ff4d4f;
+  color: white;
+  background: #ff4d4f;
   border: 1px solid #ff4d4f;
 }
 
 .aldet-action-btn.reject:hover {
-  background: #fff1f0;
+  background: #d9363e;
 }
 
 .aldet-action-btn.approve {
-  color: #4f7df3;
+  color: white;
+  background: #4f7df3;
   border: 1px solid #4f7df3;
 }
 
 .aldet-action-btn.approve:hover {
-  background: #edf2ff;
+  background: #3b5bdb;
 }
 
 .aldet-sim-card {

@@ -3,30 +3,30 @@
 
 /* ─── ROOT TOKENS ─────────────────────────────────────────────────────────── */
 :root {
-  --dh-navy: #0A1628;
-  --dh-navy-mid: #0F2040;
-  --dh-accent: #2D6BE4;
-  --dh-accent-lt: rgba(45, 107, 228, 0.12);
-  --dh-emerald: #059669;
-  --dh-emerald-bg: rgba(5, 150, 105, 0.1);
-  --dh-teal: #0284C7;
-  --dh-teal-bg: rgba(2, 132, 199, 0.1);
-  --dh-rose: #E11D48;
-  --dh-rose-bg: rgba(225, 29, 72, 0.1);
+  --dh-navy: #0F172A;
+  --dh-navy-mid: #1E293B;
+  --dh-accent: #3B82F6;
+  --dh-accent-lt: rgba(59, 130, 246, 0.08);
+  --dh-emerald: #10B981;
+  --dh-emerald-bg: rgba(16, 185, 129, 0.08);
+  --dh-teal: #0EA5E9;
+  --dh-teal-bg: rgba(14, 165, 233, 0.08);
+  --dh-rose: #F43F5E;
+  --dh-rose-bg: rgba(244, 63, 94, 0.08);
   --dh-amber: #F59E0B;
   --dh-surface: #FFFFFF;
-  --dh-surface-2: #F6F8FC;
-  --dh-surface-3: #EEF2F9;
-  --dh-border: rgba(10, 22, 40, 0.08);
-  --dh-border-md: rgba(10, 22, 40, 0.13);
-  --dh-txt: #0A1628;
-  --dh-txt-2: #3D5270;
-  --dh-txt-3: #7A90B0;
-  --dh-radius: 16px;
-  --dh-radius-sm: 10px;
-  --dh-shadow-sm: 0 1px 3px rgba(10, 22, 40, 0.05), 0 1px 2px rgba(10, 22, 40, 0.03);
-  --dh-shadow-md: 0 4px 20px rgba(10, 22, 40, 0.08), 0 2px 8px rgba(10, 22, 40, 0.04);
-  --dh-shadow-lg: 0 24px 56px rgba(10, 22, 40, 0.16), 0 10px 24px rgba(10, 22, 40, 0.07);
+  --dh-surface-2: #F8FAFC;
+  --dh-surface-3: #F1F5F9;
+  --dh-border: rgba(226, 232, 240, 0.8);
+  --dh-border-md: rgba(203, 213, 225, 1);
+  --dh-txt: #1E293B;
+  --dh-txt-2: #475569;
+  --dh-txt-3: #64748B;
+  --dh-radius: 20px;
+  --dh-radius-sm: 12px;
+  --dh-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --dh-shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --dh-shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
   --dh-font-head: 'Syne', sans-serif;
   --dh-font-body: 'DM Sans', sans-serif;
 }
@@ -121,17 +121,18 @@
 .premium-card {
   background-color: var(--dh-surface);
   border-radius: var(--dh-radius);
-  padding: 22px;
+  padding: 24px;
   box-shadow: var(--dh-shadow-sm);
   border: 1px solid var(--dh-border);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
 }
 
 .premium-card.group:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--dh-shadow-md);
+  transform: translateY(-4px);
+  box-shadow: var(--dh-shadow-lg);
+  border-color: rgba(59, 130, 246, 0.2);
 }
 
 /* ─── STAT CARDS ──────────────────────────────────────────────────────────── */
@@ -167,13 +168,14 @@
 
 /* Icon wrappers — tonal style */
 .icon-wrapper {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  transition: all 0.3s ease;
 }
 
 .blue-gradient {
@@ -206,15 +208,16 @@
 
 /* Status badges */
 .badge-soft-green {
-  background: #DCFCE7;
-  color: #16A34A;
-  padding: 3px 9px;
-  border-radius: 99px;
-  font-size: 11px;
-  font-weight: 700;
+  background: #F0FDF4;
+  color: #15803D;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
+  border: 1px solid #DCFCE7;
   white-space: nowrap;
 }
 
@@ -239,10 +242,11 @@
 
 .summary-value {
   font-family: var(--dh-font-head);
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 800;
   color: var(--dh-navy);
-  letter-spacing: -0.025em;
+  letter-spacing: -0.02em;
+  margin-top: 2px;
 }
 
 /* ─── CHART CARD ──────────────────────────────────────────────────────────── */

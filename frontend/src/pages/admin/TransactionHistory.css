@@ -1,158 +1,149 @@
+/* Transaction History Styles */
 .th-container {
-  padding: 0 40px 40px;
-  font-family: 'DM Sans', sans-serif;
+  padding: 30px;
+  background: #f8fafc;
+  min-height: 100vh;
+}
+
+.th-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
 }
 
 .th-title {
-  font-size: 24px;
+  font-size: 28px;
   font-weight: 800;
-  color: #000;
-  margin-bottom: 24px;
+  color: #1e293b;
+  margin: 0;
 }
 
-.th-cards {
-  display: flex;
-  gap: 24px;
-  margin-bottom: 24px;
+.th-subtitle {
+  color: #64748b;
+  font-size: 14px;
+  margin-top: 4px;
 }
 
-.th-card {
-  flex: 1;
-  background: #E2E8F0;
-  border-radius: 12px;
-  padding: 24px;
-}
-
-.th-card-title {
-  font-size: 13px;
-  font-weight: 700;
-  color: #1E293B;
-  margin-bottom: 16px;
-}
-
-.th-card-val {
+.th-export-btn {
   display: flex;
   align-items: center;
-  gap: 12px;
-}
-
-.th-icon-box {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  background: #3B82F6;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.th-card-val span {
-  font-size: 16px;
-  font-weight: 800;
-  color: #000;
-}
-
-.th-filters-modern {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  background: #fff;
-  padding: 16px 24px;
-  border-radius: 12px;
-  margin-bottom: 24px;
-}
-
-.th-fm-group {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.th-fm-label {
-  font-size: 11.5px;
-  font-weight: 700;
-  color: #7A90B0;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-
-.th-fm-select {
-  border: 1px solid #E2E8F0;
-  border-radius: 99px;
-  background: #F8FAFC;
-  padding: 8px 16px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  cursor: pointer;
-}
-
-.th-fm-select span {
-  font-size: 13px;
+  gap: 8px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  padding: 10px 18px;
+  border-radius: 10px;
+  color: #475569;
   font-weight: 600;
-  color: #1E293B;
-}
-
-.th-fm-dash {
-  color: #94A3B8;
-  font-weight: 500;
-  margin: 0 4px;
-}
-
-.th-fm-datebox {
-  border: 1px solid #E2E8F0;
-  border-radius: 99px;
-  background: #F8FAFC;
-  padding: 8px 12px 8px 16px;
-  display: flex;
-  align-items: center;
-  gap: 24px;
-  cursor: pointer;
-}
-
-.th-fm-datebox span {
-  font-size: 13px;
-  font-weight: 600;
-  color: #1E293B;
-}
-
-.th-fm-actions {
-  display: flex;
-  gap: 12px;
-}
-
-.th-fm-btn {
-  padding: 8px 20px;
-  border-radius: 99px;
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 14px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
-.th-fm-btn.clear {
-  background: #fff;
-  border: 1px solid #E2E8F0;
-  color: #475569;
-}
-.th-fm-btn.clear:hover {
-  background: #F8FAFC;
+.th-export-btn:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
 }
 
-.th-fm-btn.search {
-  background: #059669; /* var(--dl-green) */
-  border: 1px solid #059669;
-  color: #fff;
-}
-.th-fm-btn.search:hover {
-  background: #047857;
-}
-
-.th-table-wrap {
-  background: #E2E8F0;
-  border-radius: 12px;
+/* FILTERS CARD */
+.th-filters-card {
+  background: white;
+  border-radius: 16px;
   padding: 24px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.03);
   margin-bottom: 24px;
+  border: 1px solid #f1f5f9;
+}
+
+.th-filters-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 20px;
+  align-items: flex-end;
+}
+
+.th-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.th-input-group label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.th-search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.th-search-icon {
+  position: absolute;
+  left: 12px;
+  color: #94a3b8;
+}
+
+.th-search-box input,
+.th-input-group select,
+.th-input-group input[type="date"] {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 14px;
+  outline: none;
+  background: #f8fafc;
+  transition: all 0.2s;
+}
+
+.th-search-box input {
+  padding-left: 38px;
+}
+
+.th-input-group select:focus,
+.th-input-group input:focus {
+  border-color: #3b82f6;
+  background: white;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.th-filter-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.th-btn-apply {
+  background: #3b82f6;
+  color: white;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  flex: 2;
+}
+
+.th-btn-reset {
+  background: #f1f5f9;
+  color: #64748b;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  flex: 1;
+}
+
+/* TABLE */
+.th-table-wrap {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.03);
+  border: 1px solid #f1f5f9;
+  overflow: hidden;
 }
 
 .th-table {
@@ -161,85 +152,163 @@
 }
 
 .th-table th {
+  background: #1e293b;
+  color: white;
   text-align: left;
-  padding: 12px 0;
+  padding: 18px 20px;
   font-size: 13px;
   font-weight: 700;
-  color: #64748B;
-  border-bottom: 1px solid #CBD5E1;
   text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .th-table td {
-  padding: 20px 0;
+  padding: 18px 20px;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 14px;
+  color: #334155;
+}
+
+.th-member-cell {
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.th-amount-cell {
+  font-weight: 700;
+}
+
+.th-ref-cell {
+  font-family: 'Courier New', Courier, monospace;
   font-size: 13px;
-  color: #1E293B;
-  font-weight: 600;
+  color: #64748b;
 }
 
-.th-table tr {
-  border-bottom: 1px solid #CBD5E1;
-}
-.th-table tr:last-child {
-  border-bottom: none;
+.th-type-badge {
+  background: #f1f5f9;
+  color: #475569;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 800;
 }
 
+.th-status-badge {
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.th-status-completed {
+  background: #f0fdf4;
+  color: #16a34a;
+}
+
+.th-status-pending {
+  background: #fffbeb;
+  color: #d97706;
+}
+
+.th-status-failed {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.th-empty {
+  text-align: center;
+  padding: 60px !important;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+/* PAGINATION */
 .th-pagination {
   display: flex;
   justify-content: center;
   align-items: center;
   gap: 8px;
   margin-top: 32px;
+  padding-bottom: 40px;
 }
 
 .th-page-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
-  border: 1px solid #CBD5E1;
-  background: transparent;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  padding: 8px 16px;
+  border-radius: 10px;
+  color: #1e293b;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.th-page-btn.next {
+  background: white;
+  border: 1px solid #e2e8f0;
+  color: #1e293b;
+}
+
+.th-page-btn:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.th-page-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.th-page-num {
+  width: 40px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  font-weight: 700;
   color: #475569;
   cursor: pointer;
   transition: all 0.2s;
 }
 
-.th-page-btn.active {
-  background: #1E293B;
-  color: #fff;
-  border-color: #1E293B;
+.th-page-num:hover {
+  background: #f1f5f9;
 }
 
-.th-page-btn:hover:not(.active) {
-  background: #F1F5F9;
+.th-page-num.active {
+  background: #1e293b;
+  color: #3b82f6; /* Sesuai gambar, angka aktif berwarna biru di kotak gelap */
+  border-color: #1e293b;
 }
 
-.th-page-btn.next {
-  width: auto;
-  padding: 0 12px;
-  gap: 4px;
+.th-page-dots {
+  color: #94a3b8;
+  padding: 0 4px;
 }
 
-@media (max-width: 900px) {
-  .th-cards {
-    flex-wrap: wrap;
+@media (max-width: 1200px) {
+  .th-filters-grid {
+    grid-template-columns: repeat(3, 1fr);
   }
-  .th-card {
-    min-width: 250px;
+}
+
+@media (max-width: 768px) {
+  .th-filters-grid {
+    grid-template-columns: 1fr;
   }
-  .th-filters-modern {
-    flex-wrap: wrap;
+  .th-header {
     flex-direction: column;
     align-items: flex-start;
+    gap: 16px;
   }
-  .th-fm-actions {
-    width: 100%;
-    justify-content: flex-end;
-  }
-  .th-table-wrap {
-    overflow-x: auto;
+  .th-pagination {
+    flex-wrap: wrap;
   }
 }

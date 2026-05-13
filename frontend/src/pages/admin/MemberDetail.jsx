@@ -1,10 +1,39 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Pen, Handshake } from 'lucide-react';
 import './MemberDetail.css';
 
 const MemberDetail = () => {
   const navigate = useNavigate();
+  const { id } = useParams();
+  const [profile, setProfile] = useState(null);
+
+  useEffect(() => {
+    fetch(`http://127.0.0.1:8000/api/loan/loan-applications/admin_member_profile/?member_id=${id}`)
+      .then(res => res.json())
+      .then(data => {
+        if (!data.error) {
+          setProfile(data);
+        }
+      })
+      .catch(err => console.error(err));
+  }, [id]);
+
+  if (!profile) return <div style={{ padding: '24px' }}>Loading...</div>;
+
+  const formatRupiah = (number) => {
+    return new Intl.NumberFormat('id-ID', {
+      style: 'currency',
+      currency: 'IDR',
+      minimumFractionDigits: 0
+    }).format(number || 0).replace(',00', '');
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  };
 
   return (
     <div className="md-container">
@@ -16,14 +45,14 @@ const MemberDetail = () => {
             <div className="icon"><Handshake size={20} /></div>
             Koperasi Sanoh Sinergi Bersama
           </div>
-          <div className="md-banner-badge">ACTIVE</div>
+          <div className="md-banner-badge">{profile.active_status}</div>
         </div>
         <div className="md-user-info">
           <div>
-            <h2>Rafilla Shalwa</h2>
-            <p>123-32747</p>
+            <h2>{profile.full_name}</h2>
+            <p>{profile.nik_employee}</p>
           </div>
-          <div className="account-number">12.345.678.9-6636.000</div>
+          <div className="account-number">{profile.account_number}</div>
         </div>
       </div>
 
@@ -31,44 +60,44 @@ const MemberDetail = () => {
         <div className="md-form-column">
           <div className="md-form-group">
             <label className="lbl">Full Name</label>
-            <input type="text" className="md-input" value="Rafilla Shalwa" disabled />
+            <input type="text" className="md-input" value={profile.full_name || ''} disabled />
           </div>
-          
+
           <div className="md-form-group">
             <label className="lbl">Phone Number</label>
-            <input type="text" className="md-input" value="0821321728319" disabled />
+            <input type="text" className="md-input" value={profile.phone_number || ''} disabled />
           </div>
 
           <div className="md-form-group">
             <label className="lbl">Email</label>
-            <input type="email" className="md-input" value="rafillashalwa@gmail.com" disabled />
+            <input type="email" className="md-input" value={profile.email || ''} disabled />
           </div>
 
           <div className="md-form-group">
             <label className="lbl">Address</label>
-            <textarea className="md-input" rows={4} disabled value="Jl. Cimandiri 7 Blok W2 No.21" />
+            <textarea className="md-input" rows={4} disabled value={profile.address || ''} />
           </div>
 
           <div className="md-form-group">
             <label className="lbl">Department</label>
-            <input type="text" className="md-input" value="Engineering" disabled />
+            <input type="text" className="md-input" value={profile.department_name || ''} disabled />
           </div>
 
           <div className="md-form-group">
             <label className="lbl">Gender</label>
-            <input type="text" className="md-input" value="Female" disabled />
+            <input type="text" className="md-input" value={profile.gender || ''} disabled />
           </div>
 
           <div className="md-form-group">
             <label className="lbl">Employee Status</label>
-            <input type="text" className="md-input" value="Contract" disabled />
+            <input type="text" className="md-input" value={profile.employee_status || ''} disabled />
           </div>
 
           <div className="md-form-group">
             <label className="lbl">Total Current Loan</label>
             <div className="md-input-group">
               <span className="md-input-prefix">Rp</span>
-              <input type="text" className="md-input" value="100.000,00" disabled />
+              <input type="text" className="md-input" value={formatRupiah(profile.current_loan)} disabled />
             </div>
           </div>
 
@@ -84,75 +113,51 @@ const MemberDetail = () => {
         <div className="md-form-column">
           <div className="md-form-group">
             <label className="lbl">Destination Bank Account</label>
-            <select className="md-input" disabled defaultValue="mandiri">
-              <option value="mandiri">BANK MANDIRI</option>
+            <select className="md-input" disabled value={profile.bank_name || ''}>
+              <option value={profile.bank_name || ''}>{profile.bank_name || 'No Bank Account'}</option>
             </select>
           </div>
 
           <div className="md-form-group">
             <label className="lbl">Account Name</label>
-            <input type="text" className="md-input" value="RAFILLA SHALWA" disabled />
+            <input type="text" className="md-input" value={profile.account_holder_name || ''} disabled />
           </div>
 
           <div className="md-form-group">
             <label className="lbl">Account Number</label>
-            <input type="text" className="md-input" value="00120251304" disabled />
+            <input type="text" className="md-input" value={profile.account_number || ''} disabled />
           </div>
 
-          <div className="md-form-group" style={{marginTop: 16}}>
+          <div className="md-form-group" style={{ marginTop: 16 }}>
             <label className="lbl">Voluntary Saving</label>
             <div className="md-input-group">
               <span className="md-input-prefix">Rp</span>
-              <input type="text" className="md-input" value="100.000,00" disabled />
-            </div>
-          </div>
-
-          <div className="md-form-group">
-            <label className="lbl">Total Voluntary Saving</label>
-            <div className="md-input-group">
-              <span className="md-input-prefix">Rp</span>
-              <input type="text" className="md-input" value="100.000,00" disabled />
-            </div>
-          </div>
-
-          <div className="md-form-group">
-            <label className="lbl">Total Mandatory Saving</label>
-            <div className="md-input-group">
-              <span className="md-input-prefix">Rp</span>
-              <input type="text" className="md-input" value="100.000,00" disabled />
+              <input type="text" className="md-input" value={formatRupiah(profile.saving_balance)} disabled />
             </div>
           </div>
 
           <div className="md-form-group">
             <label className="lbl">Registration Date</label>
-            <input type="text" className="md-input" value="13 November 2025" disabled />
+            <input type="text" className="md-input" value={formatDate(profile.join_date)} disabled />
           </div>
 
           <div className="md-form-group">
             <label className="lbl">KTP</label>
-            <a href="#" className="md-file-link">KTP.pdf</a>
-          </div>
-
-          <div className="md-form-group">
-            <label className="lbl">Salary Income</label>
-            <div className="md-input-group" style={{background: 'transparent', border: '1px solid #CBD5E1'}}>
-              <span className="md-input-prefix">Rp</span>
-              <input type="text" className="md-input" value="5.000.000,00" disabled />
-            </div>
+            {profile.ktp_file_path ? (
+              <a href={profile.ktp_file_path} className="md-file-link" target="_blank" rel="noopener noreferrer">View KTP</a>
+            ) : (
+              <span className="md-input" style={{ display: 'inline-block', lineHeight: '40px' }}>Not Uploaded</span>
+            )}
           </div>
 
           <div className="md-form-group">
             <label className="lbl">NIK Employee</label>
-            <input type="text" className="md-input" value="1123" disabled style={{background: 'transparent', border: '1px solid #CBD5E1'}} />
+            <input type="text" className="md-input" value={profile.nik_employee || ''} disabled style={{ background: 'transparent', border: '1px solid #CBD5E1' }} />
           </div>
         </div>
 
         <div className="md-actions">
           <button className="btn-md" onClick={() => navigate(-1)}>Back</button>
-          <button className="btn-md edit">
-            <Pen size={14} /> Edit Profile
-          </button>
-          <button className="btn-md">Save</button>
         </div>
       </div>
     </div>
