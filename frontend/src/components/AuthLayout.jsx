@@ -13,11 +13,11 @@ const AuthLayout = () => {
           <ul className="auth-contact-list">
             <li>
               <MapPin size={18} />
-              <span>Jl Inti II Blok C-4 No. 10, Kawasan Industri Hyundai, Cikarang - Bekasi</span>
+              <span>JL. INTI II, BLOK C-4, NO-10, KAWASAN INDUSTRI HYUNDAI CIKARANG RT. 000 RW.000, SUKARESMI, CIKARANG SELATAN, KAB.BEKASI, JAWA BARAT</span>
             </li>
             <li>
               <Mail size={18} />
-              <span>@gmail.com</span>
+              <span>sanohsinergikoperasi@gmail.com</span>
             </li>
             <li>
               <Phone size={18} />

@@ -114,3 +114,24 @@ class SHUComponent(models.Model):
     class Meta:
         db_table = 'master_configurations'
         managed = False
+
+class PaymentChannel(models.Model):
+    channel_code = models.CharField(max_length=50)
+    channel_name = models.CharField(max_length=100)
+    fee_percentage = models.DecimalField(max_digits=5, decimal_places=2)
+    fee_fixed = models.DecimalField(max_digits=15, decimal_places=2)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = 'payment_channels'
+        managed = False
+
+class IncomeExpenseCategory(models.Model):
+    category_name = models.CharField(max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'income_expense_categories'
+        managed = False

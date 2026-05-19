@@ -22,7 +22,7 @@ class LoanApplication(models.Model):
     # description = models.TextField()
     status = models.ForeignKey('Status', on_delete=models.RESTRICT)
     # approval_date = models.DateField(null=True, blank=True)
-    salary_statement_file = models.FileField(null=True, blank=True)
+    salary_statement_file = models.FileField(upload_to='loan/slip_gaji/', null=True, blank=True)
     # salary_statement_file = models.CharField(max_length=500)
     admin = models.ForeignKey('User', on_delete=models.RESTRICT, null=True, blank=True)
 

@@ -4,7 +4,7 @@ import {
   Download, Copy, HandCoins, ArrowUpRight, TrendingUp,
   PieChart, Calendar, Search, FileText, Filter,
   ArrowRightLeft, AlertCircle, Info, CheckCircle2,
-  ChevronDown, TrendingDown
+  ChevronDown, TrendingDown, X, Check, UserCircle
 } from 'lucide-react';
 import {
   Chart as ChartJS,
@@ -87,14 +87,48 @@ const DashboardHome = () => {
   const [summary, setSummary] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [user, setUser] = useState(null);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [selectedPayments, setSelectedPayments] = useState({
+    savingIds: [], // Array of saving bill IDs
+    loanIds: [] // Array of installment IDs
+  });
+  const [savingMonthFilter, setSavingMonthFilter] = useState('ALL');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [searchTrigger, setSearchTrigger] = useState(0);
+
+  const itemsPerPage = 5;
   const chartRef = useRef(null);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
+      // Get member_id from user in localStorage
+      const userStr = localStorage.getItem('user');
+      const userData = userStr ? JSON.parse(userStr) : null;
+      setUser(userData);
+      
+      const memberId = userData?.member_id;
+
+      if (!memberId) {
+        setLoading(false);
+        console.warn('No member_id found for current user');
+        return;
+      }
+
       try {
+        let url = `http://127.0.0.1:8000/api/loan/loans/my_transactions/?type=${txTypeFilter}&member_id=${memberId}`;
+        if (startDate) {
+          url += `&start_date=${startDate}`;
+        }
+        if (endDate) {
+          url += `&end_date=${endDate}`;
+        }
+
         const [summaryRes, txRes] = await Promise.all([
-          fetch('http://127.0.0.1:8000/api/loan/loans/dashboard_summary/'),
-          fetch(`http://127.0.0.1:8000/api/loan/loans/my_transactions/?type=${txTypeFilter}`)
+          fetch(`http://127.0.0.1:8000/api/loan/loans/dashboard_summary/?member_id=${memberId}`),
+          fetch(url)
         ]);
 
         const summaryData = await summaryRes.json();
@@ -109,7 +143,15 @@ const DashboardHome = () => {
       }
     };
     fetchDashboardData();
-  }, [txTypeFilter]);
+    setCurrentPage(1); // Reset to first page when filter changes
+  }, [txTypeFilter, searchTrigger]);
+
+  const handleClearFilters = () => {
+    setTxTypeFilter('all');
+    setStartDate('');
+    setEndDate('');
+    setSearchTrigger(prev => prev + 1);
+  };
 
   const formatRupiah = (number) => {
     return new Intl.NumberFormat('id-ID', {
@@ -117,6 +159,127 @@ const DashboardHome = () => {
       currency: 'IDR',
       minimumFractionDigits: 0
     }).format(number || 0).replace(',00', '');
+  };
+
+  useEffect(() => {
+    if (summary) {
+      let loanIds = [];
+      if (summary.unpaid_installments_list) {
+        loanIds = summary.unpaid_installments_list.map(i => i.id);
+      }
+      let savingIds = [];
+      if (summary.unpaid_bills_list) {
+        savingIds = summary.unpaid_bills_list.map(b => b.id);
+      }
+      setSelectedPayments({ savingIds, loanIds });
+      setSavingMonthFilter('ALL');
+    }
+  }, [summary]);
+
+  const uniqueSavingMonths = React.useMemo(() => {
+    if (!summary?.unpaid_bills_list) return [];
+    const months = new Set();
+    summary.unpaid_bills_list.forEach(b => {
+      const d = new Date(b.bill_date);
+      const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      months.add(val);
+    });
+    return Array.from(months).sort();
+  }, [summary]);
+
+  const filteredBills = React.useMemo(() => {
+    if (!summary?.unpaid_bills_list) return [];
+    if (savingMonthFilter === 'ALL') return summary.unpaid_bills_list;
+    return summary.unpaid_bills_list.filter(b => {
+      const d = new Date(b.bill_date);
+      const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      return val === savingMonthFilter;
+    });
+  }, [summary, savingMonthFilter]);
+
+  const toggleSavingBill = (id) => {
+    setSelectedPayments(prev => {
+      let newIds = [...prev.savingIds];
+      if (newIds.includes(id)) {
+        newIds = newIds.filter(i => i !== id);
+      } else {
+        newIds.push(id);
+      }
+      return { ...prev, savingIds: newIds };
+    });
+  };
+
+  const toggleInstallment = (id) => {
+    if (!summary?.unpaid_installments_list) return;
+    
+    const index = summary.unpaid_installments_list.findIndex(i => i.id === id);
+    const isSelected = selectedPayments.loanIds.includes(id);
+
+    setSelectedPayments(prev => {
+      let newLoanIds = [...prev.loanIds];
+
+      if (!isSelected) {
+        // When selecting, we must ensure all previous ones are also selected
+        // Or just allow selecting this one IF previous are already selected
+        const prevUnselected = summary.unpaid_installments_list
+          .slice(0, index)
+          .some(i => !newLoanIds.includes(i.id));
+        
+        if (prevUnselected) {
+          // Auto-select all previous ones too? Or just block?
+          // User said "harus memilih lebih atas dulu", so let's auto-select all up to this one
+          const upToNow = summary.unpaid_installments_list.slice(0, index + 1).map(i => i.id);
+          return { ...prev, loanIds: Array.from(new Set([...newLoanIds, ...upToNow])) };
+        }
+        newLoanIds.push(id);
+      } else {
+        // When unselecting, we must also unselect all subsequent ones to maintain sequence
+        const subsequentIds = summary.unpaid_installments_list.slice(index).map(i => i.id);
+        newLoanIds = newLoanIds.filter(i => !subsequentIds.includes(i));
+      }
+
+      return { ...prev, loanIds: newLoanIds };
+    });
+  };
+
+  const isSequentialSelectionValid = () => {
+    if (selectedPayments.loanIds.length === 0) return true;
+    if (!summary?.unpaid_installments_list?.length) return true;
+
+    // The first unpaid installment MUST be selected if any loan installment is selected
+    const firstUnpaidId = summary.unpaid_installments_list[0].id;
+    if (!selectedPayments.loanIds.includes(firstUnpaidId)) return false;
+
+    // Check for gaps
+    let foundUnselected = false;
+    for (const inst of summary.unpaid_installments_list) {
+      if (selectedPayments.loanIds.includes(inst.id)) {
+        if (foundUnselected) return false; // Gap found!
+      } else {
+        foundUnselected = true;
+      }
+    }
+    return true;
+  };
+
+  const calculateTotal = () => {
+    let total = 0;
+    if (summary?.unpaid_bills_list) {
+      summary.unpaid_bills_list.forEach(b => {
+        if (selectedPayments.savingIds.includes(b.id)) {
+          total += Number(b.amount_due - (b.amount_paid || 0));
+        }
+      });
+    }
+    
+    if (summary?.unpaid_installments_list) {
+      summary.unpaid_installments_list.forEach(inst => {
+        if (selectedPayments.loanIds.includes(inst.id)) {
+          total += Number(inst.amount_total);
+        }
+      });
+    }
+    return total;
   };
 
   const calculateGrowth = (inc, total) => {
@@ -134,11 +297,11 @@ const DashboardHome = () => {
       doc.setFontSize(18);
       doc.setTextColor(15, 23, 42); // Navy
       doc.text('KOPERASI SANOH SINERGI BERSAMA', 105, 20, { align: 'center' });
-      
+
       doc.setFontSize(14);
       doc.setTextColor(100);
       doc.text('FINANCIAL SUMMARY REPORT', 105, 30, { align: 'center' });
-      
+
       doc.setLineWidth(0.5);
       doc.line(20, 35, 190, 35);
 
@@ -165,48 +328,48 @@ const DashboardHome = () => {
         headStyles: { fillColor: [15, 23, 42] }
       });
 
-    // Loan Section
-    const finalY = doc.lastAutoTable.finalY + 15;
-    doc.text('2. Loan Status', 20, finalY);
-    const loanBody = [
-      ['Approved Principal', formatRupiah(summary?.principal_amount)],
-      ['Remaining Balance', formatRupiah(summary?.total_loan_remaining)],
-      ['Installments Paid', `${summary?.paid_installments} of ${summary?.total_installments}`],
-      ['Total Outstanding', formatRupiah(summary?.grand_total_outstanding)]
-    ];
-    autoTable(doc, {
-      startY: finalY + 5,
-      body: loanBody,
-      theme: 'plain',
-      styles: { fontSize: 10 }
-    });
+      // Loan Section
+      const finalY = doc.lastAutoTable.finalY + 15;
+      doc.text('2. Loan Status', 20, finalY);
+      const loanBody = [
+        ['Approved Principal', formatRupiah(summary?.principal_amount)],
+        ['Remaining Balance', formatRupiah(summary?.total_loan_remaining)],
+        ['Installments Paid', `${summary?.paid_installments} of ${summary?.total_installments}`],
+        ['Total Outstanding', formatRupiah(summary?.grand_total_outstanding)]
+      ];
+      autoTable(doc, {
+        startY: finalY + 5,
+        body: loanBody,
+        theme: 'plain',
+        styles: { fontSize: 10 }
+      });
 
-    // Transaction Section
-    const txY = doc.lastAutoTable.finalY + 15;
-    doc.text('3. Recent Transactions', 20, txY);
-    const txBody = transactions.map(tx => [
-      new Date(tx.transaction_date).toLocaleDateString('id-ID'),
-      tx.transaction_type,
-      formatRupiah(tx.amount),
-      tx.status
-    ]);
-    autoTable(doc, {
-      startY: txY + 5,
-      head: [['Date', 'Type', 'Amount', 'Status']],
-      body: txBody,
-      styles: { fontSize: 9 }
-    });
+      // Transaction Section
+      const txY = doc.lastAutoTable.finalY + 15;
+      doc.text('3. Recent Transactions', 20, txY);
+      const txBody = transactions.map(tx => [
+        new Date(tx.transaction_date).toLocaleDateString('id-ID'),
+        tx.transaction_type,
+        formatRupiah(tx.amount),
+        tx.status
+      ]);
+      autoTable(doc, {
+        startY: txY + 5,
+        head: [['Date', 'Type', 'Amount', 'Status']],
+        body: txBody,
+        styles: { fontSize: 9 }
+      });
 
-    // Footer
-    const pageCount = doc.internal.getNumberOfPages();
-    for (let i = 1; i <= pageCount; i++) {
-      doc.setPage(i);
-      doc.setFontSize(9);
-      doc.setTextColor(150);
-      doc.text(`Koperasi Sanoh - Professional Financial Management System`, 105, 285, { align: 'center' });
-    }
+      // Footer
+      const pageCount = doc.internal.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(9);
+        doc.setTextColor(150);
+        doc.text(`Koperasi Sanoh - Professional Financial Management System`, 105, 285, { align: 'center' });
+      }
 
-    doc.save(`Financial_Report_${summary?.full_name}_${new Date().toISOString().split('T')[0]}.pdf`);
+      doc.save(`Financial_Report_${summary?.full_name}_${new Date().toISOString().split('T')[0]}.pdf`);
       console.log('Report generated successfully.');
     } catch (error) {
       console.error('Failed to generate PDF report:', error);
@@ -217,22 +380,22 @@ const DashboardHome = () => {
   const handleDownloadReceipt = (tx) => {
     try {
       const doc = new jsPDF();
-      
+
       // Header
       doc.setFontSize(18);
       doc.setTextColor(15, 23, 42);
       doc.text('KOPERASI SANOH SINERGI BERSAMA', 105, 30, { align: 'center' });
-      
+
       doc.setFontSize(14);
       doc.text('TRANSACTION RECEIPT', 105, 40, { align: 'center' });
-      
+
       doc.setLineWidth(0.5);
       doc.line(20, 45, 190, 45);
 
       // Details
       doc.setFontSize(11);
       doc.setTextColor(0);
-      
+
       const rows = [
         ['Status', tx.status],
         ['Category', tx.transaction_type],
@@ -300,7 +463,7 @@ const DashboardHome = () => {
       {/* ── Page Header ────────────────────────────────────── */}
       <div className="dh-page-header">
         <div>
-          <h1>Welcome Back, {loading ? '...' : (summary?.full_name || 'Member')}!</h1>
+          <h1>Welcome Back, {loading && !user ? '...' : (user?.full_name || summary?.full_name || 'Member')}!</h1>
           <p>Here is your financial overview for this period.</p>
         </div>
         <button className="dh-report-btn hidden-mobile" onClick={handleDownloadReport}>
@@ -308,6 +471,24 @@ const DashboardHome = () => {
           Report Overview
         </button>
       </div>
+
+      {!user?.member_id && !loading && (
+        <div className="alert-info-dashboard" style={{ 
+          background: '#EFF6FF', 
+          border: '1px solid #BFDBFE', 
+          padding: '16px', 
+          borderRadius: '12px', 
+          marginBottom: '24px',
+          color: '#1E40AF',
+          fontSize: '14px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px'
+        }}>
+          <UserCircle size={20} />
+          <span>Informasi profil member Anda belum lengkap. Silakan hubungi admin untuk menghubungkan akun Anda dengan data anggota.</span>
+        </div>
+      )}
 
       {/* ── Stat Cards ─────────────────────────────────────── */}
       <div className="dash-grid-4">
@@ -357,7 +538,17 @@ const DashboardHome = () => {
             <div className="icon-wrapper red-gradient">
               <CreditCard size={20} />
             </div>
-            <span className="badge-soft-gray">Upcoming</span>
+            {summary?.employee_status_id === 3 && summary?.grand_total_outstanding > 0 && (
+              <button 
+                className="pay-now-badge-btn" 
+                onClick={() => setShowPaymentModal(true)}
+              >
+                Pay Now
+              </button>
+            )}
+            {summary?.employee_status_id !== 3 && (
+              <span className="badge-soft-gray">Upcoming</span>
+            )}
           </div>
           <p className="summary-label">Outstanding Payment</p>
           <h3 className="summary-value" style={{ color: '#E11D48' }}>
@@ -508,13 +699,33 @@ const DashboardHome = () => {
           </select>
 
           <span className="filter-strip-label">Date</span>
-          <input type="date" className="filter-pill-date" />
+          <input 
+            type="date" 
+            className="filter-pill-date" 
+            value={startDate} 
+            onChange={(e) => setStartDate(e.target.value)} 
+          />
           <span className="filter-sep">—</span>
-          <input type="date" className="filter-pill-date" />
+          <input 
+            type="date" 
+            className="filter-pill-date" 
+            value={endDate} 
+            onChange={(e) => setEndDate(e.target.value)} 
+          />
 
           <div className="filter-actions-group">
-            <button className="btn-filter-clear">Clear</button>
-            <button className="btn-filter-search">Search</button>
+            <button 
+              className="btn-filter-clear" 
+              onClick={handleClearFilters}
+            >
+              Clear
+            </button>
+            <button 
+              className="btn-filter-search" 
+              onClick={() => setSearchTrigger(prev => prev + 1)}
+            >
+              Search
+            </button>
           </div>
         </div>
 
@@ -533,17 +744,24 @@ const DashboardHome = () => {
             <tbody>
               {transactions.length === 0 ? (
                 <tr>
-                  <td colSpan="4" style={{ textAlign: 'center', padding: '40px', color: '#94A3B8' }}>
+                  <td colSpan="5" style={{ textAlign: 'center', padding: '40px', color: '#94A3B8' }}>
                     No recent transactions found.
                   </td>
                 </tr>
               ) : (
-                transactions.map((tx, idx) => (
-                  <tr key={idx} className="tx-row" onClick={() => setSelectedTx(tx)}>
+                transactions
+                  .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+                  .map((tx, idx) => (
+                    <tr key={idx} className="tx-row" onClick={() => setSelectedTx(tx)}>
                     <td>
-                      <span className="tx-date-primary">
-                        {new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(tx.transaction_date))}
-                      </span>
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span className="tx-date-primary">
+                          {new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(tx.transaction_date))}
+                        </span>
+                        <span className="tx-time-secondary" style={{ fontSize: '11px', color: '#94A3B8', marginTop: '2px' }}>
+                          {new Intl.DateTimeFormat('id-ID', { hour: '2-digit', minute: '2-digit' }).format(new Date(tx.transaction_date))} WIB
+                        </span>
+                      </div>
                     </td>
                     <td>
                       <span className="tx-ref-id">{tx.reference || '-'}</span>
@@ -567,17 +785,158 @@ const DashboardHome = () => {
         </div>
 
         {/* Pagination */}
-        <div className="tx-pagination-row">
-          <span className="pg-count-label">Showing 1 to 5 of 24 entries</span>
-          <div className="pg-btn-group">
-            <button className="page-nav-btn" disabled>Prev</button>
-            <button className="page-nav-btn active">1</button>
-            <button className="page-nav-btn">2</button>
-            <button className="page-nav-btn">3</button>
-            <button className="page-nav-btn">Next</button>
+        {transactions.length > 0 && (
+          <div className="tx-pagination-row">
+            <span className="pg-count-label">
+              Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, transactions.length)} of {transactions.length} entries
+            </span>
+            <div className="pg-btn-group">
+              <button
+                className="page-nav-btn"
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+              >
+                Prev
+              </button>
+              {Array.from({ length: Math.ceil(transactions.length / itemsPerPage) }, (_, i) => (
+                <button
+                  key={i + 1}
+                  className={`page-nav-btn${currentPage === i + 1 ? ' active' : ''}`}
+                  onClick={() => setCurrentPage(i + 1)}
+                >
+                  {i + 1}
+                </button>
+              ))}
+              <button
+                className="page-nav-btn"
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, Math.ceil(transactions.length / itemsPerPage)))}
+                disabled={currentPage === Math.ceil(transactions.length / itemsPerPage)}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Payment Modal ────────────────────────────────────── */}
+      {showPaymentModal && (
+        <div className="dh-modal-overlay" onClick={() => setShowPaymentModal(false)}>
+          <div className="dh-payment-modal" onClick={e => e.stopPropagation()}>
+            <div className="dh-modal-header">
+              <div className="header-title">
+                <div className="icon-box">
+                  <CreditCard size={20} color="#E11D48" />
+                </div>
+                <div>
+                  <h3>Select Payment</h3>
+                  <p>Choose bills you want to pay</p>
+                </div>
+              </div>
+              <button className="close-btn" onClick={() => setShowPaymentModal(false)}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="dh-modal-content">
+              <div className="payment-options">
+                {/* Savings Bill Section */}
+                <div className="payment-group-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>Saving Bills</span>
+                  {uniqueSavingMonths.length > 0 && (
+                    <select 
+                      value={savingMonthFilter} 
+                      onChange={e => setSavingMonthFilter(e.target.value)}
+                      style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #E2E8F0', fontSize: '12px', background: '#fff' }}
+                    >
+                      <option value="ALL">All Months</option>
+                      {uniqueSavingMonths.map(m => (
+                        <option key={m} value={m}>{new Date(m + '-01').toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+
+                {filteredBills.length > 0 ? (
+                  filteredBills.map(b => (
+                    <div 
+                      key={b.id}
+                      className={`payment-option sub-option ${selectedPayments.savingIds.includes(b.id) ? 'selected' : ''}`}
+                      onClick={() => toggleSavingBill(b.id)}
+                    >
+                      <div className="option-info">
+                        <div className={`checkbox ${selectedPayments.savingIds.includes(b.id) ? 'checked' : ''}`}>
+                          {selectedPayments.savingIds.includes(b.id) && <Check size={14} />}
+                        </div>
+                        <div>
+                          <span className="option-label">{b.saving_type_id === 1 ? 'Mandatory Saving' : 'Voluntary Saving'}</span>
+                          <span className="option-desc">Bill Date: {new Date(b.bill_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                        </div>
+                      </div>
+                      <span className="option-amount">{formatRupiah(b.amount_due - (b.amount_paid || 0))}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="no-items-msg">No unpaid saving bills</div>
+                )}
+
+                {/* Loan Installments Section */}
+                <div className="payment-group-label">Loan Installments</div>
+                {summary?.unpaid_installments_list?.length > 0 ? (
+                  summary.unpaid_installments_list.map((inst) => (
+                    <div 
+                      key={inst.id}
+                      className={`payment-option sub-option ${selectedPayments.loanIds.includes(inst.id) ? 'selected' : ''}`}
+                      onClick={() => toggleInstallment(inst.id)}
+                    >
+                      <div className="option-info">
+                        <div className={`checkbox ${selectedPayments.loanIds.includes(inst.id) ? 'checked' : ''}`}>
+                          {selectedPayments.loanIds.includes(inst.id) && <Check size={14} />}
+                        </div>
+                        <div>
+                          <span className="option-label">Installment #{inst.installment_number}</span>
+                          <span className="option-desc">Due: {new Date(inst.due_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                        </div>
+                      </div>
+                      <span className="option-amount">{formatRupiah(inst.amount_total)}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="no-items-msg">No unpaid installments</div>
+                )}
+              </div>
+
+              <div className="payment-summary-box">
+                <div className="summary-row">
+                  <span>Subtotal Selected</span>
+                  <span className="summary-val">
+                    {formatRupiah(calculateTotal())}
+                  </span>
+                </div>
+                <div className="summary-row total">
+                  <span>Total Amount</span>
+                  <span className="total-val">
+                    {formatRupiah(calculateTotal())}
+                  </span>
+                </div>
+              </div>
+
+              <button 
+                className="dh-modal-pay-btn"
+                disabled={
+                  (selectedPayments.savingIds.length === 0 && selectedPayments.loanIds.length === 0) || 
+                  !isSequentialSelectionValid()
+                }
+                onClick={() => {
+                  alert(`Redirecting to Payment Gateway for ${formatRupiah(calculateTotal())}`);
+                }}
+              >
+                {!isSequentialSelectionValid() ? 'Please Select Chronologically' : 'Proceed to Payment'}
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* ── Transaction Modal ───────────────────────────────── */}
       {selectedTx && (
@@ -647,9 +1006,9 @@ const DashboardHome = () => {
               <button className="btn-modal-ghost" onClick={() => setSelectedTx(null)}>
                 Close
               </button>
-              <button className="btn-modal-primary" onClick={() => handleDownloadReceipt(selectedTx)}>
+              {/* <button className="btn-modal-primary" onClick={() => handleDownloadReceipt(selectedTx)}>
                 <Download size={15} /> Download Receipt
-              </button>
+              </button> */}
             </div>
 
           </div>

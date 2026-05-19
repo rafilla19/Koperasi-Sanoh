@@ -91,8 +91,24 @@ const TransactionHistory = () => {
   };
 
   const formatDate = (dateString) => {
-    const options = { year: 'numeric', month: 'short', day: 'numeric' };
-    return new Date(dateString).toLocaleDateString('en-US', options);
+    if (!dateString) return '—';
+    // Normalize dateString if it is naive UTC (missing timezone suffix)
+    let normalized = dateString;
+    if (typeof dateString === 'string') {
+      const hasZ = dateString.endsWith('Z');
+      const hasOffset = /([+-]\d{2}:?\d{2})$/.test(dateString);
+      if (!hasZ && !hasOffset) {
+        if (dateString.includes('T')) {
+          normalized = dateString + 'Z';
+        } else if (dateString.includes(' ')) {
+          normalized = dateString.replace(' ', 'T') + 'Z';
+        }
+      }
+    }
+    const d = new Date(normalized);
+    const dateStr = d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    const timeStr = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+    return `${dateStr} ${timeStr}`;
   };
 
   const getStatusClass = (status) => {

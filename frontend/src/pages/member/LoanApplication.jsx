@@ -8,6 +8,9 @@ const LoanApplication = () => {
   const [showSimulation, setShowSimulation] = useState(false);
   const [agreed, setAgreed] = useState(false);
   const [loanTypes, setLoanTypes] = useState([]);
+  const [hasActiveLoan, setHasActiveLoan] = useState(false);
+  const [checkingLoan, setCheckingLoan] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
 
   // Form state
   const [form, setForm] = useState({
@@ -18,6 +21,9 @@ const LoanApplication = () => {
     purpose: '',
     salary_statement_file: null,
   });
+
+  const [aiData, setAiData] = useState(null);
+  const [loadingAi, setLoadingAi] = useState(false);
 
   const formatRupiah = (number) => {
     return new Intl.NumberFormat('id-ID', {
@@ -38,6 +44,27 @@ const LoanApplication = () => {
   };
 
   useEffect(() => {
+    const checkActiveLoan = async () => {
+      try {
+        const userStr = localStorage.getItem('user');
+        const user = userStr ? JSON.parse(userStr) : null;
+        if (user?.member_id) {
+          const res = await fetch(`http://127.0.0.1:8000/api/loan/loans/dashboard_summary/?member_id=${user.member_id}`);
+          if (res.ok) {
+            const data = await res.json();
+            // Use explicit boolean flag from backend
+            if (data.has_active_loan) {
+              setHasActiveLoan(true);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Failed to check active loan:', err);
+      } finally {
+        setCheckingLoan(false);
+      }
+    };
+
     const fetchLoanTypes = async () => {
       try {
         const response = await fetch('http://127.0.0.1:8000/api/loan/loan-types/');
@@ -50,12 +77,39 @@ const LoanApplication = () => {
       }
     };
 
+    checkActiveLoan();
     fetchLoanTypes();
   }, []);
 
-  const handleContinue = (e) => {
+  const handleContinue = async (e) => {
     e.preventDefault();
-    setShowSimulation(true);
+    setLoadingAi(true);
+
+    try {
+      const userStr = localStorage.getItem('user');
+      const user = userStr ? JSON.parse(userStr) : null;
+      const memberId = user?.member_id || 1;
+
+      const res = await fetch('http://127.0.0.1:8000/api/loan/loan-applications/get_prediction_pre_submit/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: form.amount_raw,
+          duration: form.duration_months,
+          member_id: memberId
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setAiData(data);
+      }
+    } catch (err) {
+      console.error('AI Prediction Error:', err);
+    } finally {
+      setLoadingAi(false);
+      setShowSimulation(true);
+    }
   };
 
   const handleFileChange = (e) => {
@@ -65,10 +119,16 @@ const LoanApplication = () => {
   };
 
   const handleSubmit = async () => {
+    setSubmitting(true);
     try {
       const formData = new FormData();
 
-      formData.append('member', 1); // TODO: Replace with dynamic member ID from auth
+      // Get member_id from user in localStorage
+      const userStr = localStorage.getItem('user');
+      const user = userStr ? JSON.parse(userStr) : null;
+      const memberId = user?.member_id || 1;
+
+      formData.append('member', memberId); 
       formData.append('loan_type', parseInt(form.loan_type, 10));
       formData.append('amount_requested', form.amount_raw);
       formData.append('duration_months', parseInt(form.duration_months, 10));
@@ -98,6 +158,8 @@ const LoanApplication = () => {
     } catch (error) {
       console.error(error);
       alert('Error: ' + error.message);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -108,8 +170,10 @@ const LoanApplication = () => {
         <button className="la-back-btn" onClick={() => navigate(-1)}>
           <ArrowLeft size={16} /> Back
         </button>
-        <h1>Loan Application</h1>
-        <p>Submit a new loan application</p>
+        <div className="la-header-content">
+          <h1>Loan Application</h1>
+          <p>Submit a new loan application</p>
+        </div>
       </div>
 
       <div className="la-content-grid">
@@ -187,17 +251,24 @@ const LoanApplication = () => {
             </div>
           </div>
 
-          <button type="submit" className="la-btn-continue">Continue</button>
+          <button type="submit" className="la-btn-continue" disabled={loadingAi || checkingLoan}>
+            {loadingAi ? 'Processing...' : (checkingLoan ? 'Checking Profile...' : 'Continue')}
+          </button>
         </form>
 
         {showSimulation && (
           <div className="la-simulation-card fade-in">
-            <h2>Angsuran Simulation</h2>
-            <p className="la-sim-sub">Estimated Monthly Payment</p>
-            <div className="la-sim-amount">
-              {formatRupiah(((form.amount_raw * 1.06) / parseInt(form.duration_months, 10)))}
+            <div className="la-sim-header">
+              <h2>Angsuran Simulation</h2>
+              <p className="la-sim-sub">Estimated Monthly Payment</p>
             </div>
-            <p className="la-sim-desc">Based on {form.duration_months} months @ 0.5% interest/month</p>
+            
+            <div className="la-sim-main">
+              <div className="la-sim-amount">
+                {formatRupiah(((form.amount_raw * (1 + (aiData?.suggested_interest_rate || 0.5) / 100 * parseInt(form.duration_months, 10))) / parseInt(form.duration_months, 10)))}
+              </div>
+              <p className="la-sim-desc">Based on {form.duration_months} months @ {aiData?.suggested_interest_rate || '0.5'}% interest/month</p>
+            </div>
 
             <div className="la-sim-details">
               <div className="la-sim-row">
@@ -205,17 +276,23 @@ const LoanApplication = () => {
                 <span>{formatRupiah(form.amount_raw)}</span>
               </div>
               <div className="la-sim-row">
-                <span>Total Interest (Est. 6% p.a)</span>
-                <span>{formatRupiah(form.amount_raw * 0.06 * (parseInt(form.duration_months, 10) / 12))}</span>
+                <span>Total Interest Prediction</span>
+                <span>{formatRupiah(form.amount_raw * (aiData?.suggested_interest_rate || 0.5) / 100 * parseInt(form.duration_months, 10))}</span>
               </div>
               <div className="la-sim-row total">
                 <span>Total Repayment</span>
-                <span>{formatRupiah(form.amount_raw * (1 + 0.06 * (parseInt(form.duration_months, 10) / 12)))}</span>
+                <span>{formatRupiah(form.amount_raw * (1 + (aiData?.suggested_interest_rate || 0.5) / 100 * parseInt(form.duration_months, 10)))}</span>
               </div>
             </div>
 
+            {aiData && (
+              <div className={`la-ai-badge ${aiData.eligibility.toLowerCase()}`}>
+                Potential Eligibility: <strong>{aiData.eligibility}</strong>
+              </div>
+            )}
+
             <p className="la-sim-disclaimer">
-              The interest rate shown is a system estimate and is not binding. Final rates are set by the cooperative.
+              The interest rate and eligibility shown are AI recommendations based on your profile. Final approval is subject to admin review.
             </p>
 
             <label className="la-checkbox">
@@ -225,10 +302,10 @@ const LoanApplication = () => {
 
             <button
               className="la-btn-submit"
-              disabled={!agreed}
+              disabled={!agreed || submitting}
               onClick={handleSubmit}
             >
-              Submit
+              {submitting ? 'Submitting Application...' : 'Submit'}
             </button>
           </div>
         )}

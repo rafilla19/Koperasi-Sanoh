@@ -1,13 +1,29 @@
 import React, { useState } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Wallet, CreditCard, FileText, UserCircle, LogOut, Bell, Menu, ChevronLeft, ChevronRight, CheckCircle, AlertTriangle, Users, CheckSquare, Database, Archive } from 'lucide-react';
+import { LayoutDashboard, Wallet, CreditCard, FileText, UserCircle, LogOut, Menu, ChevronLeft, ChevronRight, Users, CheckSquare, Database, Archive } from 'lucide-react';
 import logoImg from '../assets/logo.png';
 import './DashboardLayout.css';
 
 const DashboardLayout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Get user data from localStorage
+  const userStr = localStorage.getItem('user');
+  const user = userStr ? JSON.parse(userStr) : null;
+
+  // Basic Auth Guard
+  React.useEffect(() => {
+    if (!user) {
+      navigate('/login');
+    }
+  }, [user, navigate]);
+
+  if (!user) return null;
+
+  const roleId = parseInt(user.role_id);
   
   // Admin Accordion state
   const [openSections, setOpenSections] = useState({
@@ -18,29 +34,12 @@ const DashboardLayout = () => {
     transaction: false,
   });
 
-  const [showAllNotifs, setShowAllNotifs] = useState(false);
-
-  const dummyNotifs = [
-    { id: 1, type: 'success', title: 'Payment Successful', desc: 'Your loan installment of Rp 1.005.000 has been paid.', time: 'Just now', unread: true },
-    { id: 2, type: 'warning', title: 'Payment Due', desc: 'Your next loan deduction is due in 3 days.', time: '2 hours ago', unread: false },
-    { id: 3, type: 'info', title: 'System Update', desc: 'Koperasi Sanoh dashboard has been updated!', time: '1 day ago', unread: false },
-    { id: 4, type: 'info', title: 'New Feature', desc: 'Check out the new My Savings feature on your dashboard.', time: '2 days ago', unread: false },
-    { id: 5, type: 'success', title: 'Withdrawal Approved', desc: 'Your voluntary saving withdrawal of Rp 500.000 has been approved.', time: '3 days ago', unread: false },
-    { id: 6, type: 'warning', title: 'Action Required', desc: 'Please update your profile to access all features.', time: '4 days ago', unread: false },
-    { id: 7, type: 'info', title: 'Monthly Statement', desc: 'Your monthly cooperative statement is ready to view.', time: '1 week ago', unread: false },
-    { id: 8, type: 'info', title: 'System Maintenance', desc: 'The system will be down for maintenance this weekend.', time: '1 week ago', unread: false },
-    { id: 9, type: 'success', title: 'Registration Complete', desc: 'Welcome! Your cooperative membership Registration is Approved.', time: '2 weeks ago', unread: false },
-    { id: 10, type: 'info', title: 'Welcome to Koperasi Sanoh', desc: 'Thank you for joining Koperasi Sanoh.', time: '2 weeks ago', unread: false },
-  ];
-
   const toggleSection = (sec) => {
     setOpenSections(prev => ({ ...prev, [sec]: !prev[sec] }));
   };
 
-  const navigate = useNavigate();
-  const location = useLocation();
-
   const handleLogout = () => {
+    localStorage.removeItem('user');
     navigate('/login');
   };
 
@@ -93,135 +92,143 @@ const DashboardLayout = () => {
         </div>
 
         <nav className="dl-sb-nav">
-          <div className="dl-sb-lbl">MAIN MENU</div>
-          <NavLink to="/dashboard" end className={({ isActive }) => `dl-sb-item ${isActive ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)} title="Dashboard">
-            <div className="dl-sb-dot"></div>
-            <LayoutDashboard size={17} strokeWidth={2} />
-            <span className="dl-sb-item-text">Dashboard</span>
-          </NavLink>
-          <NavLink to="/dashboard/saving" className={({ isActive }) => `dl-sb-item ${isActive ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)} title="My Saving">
-            <div className="dl-sb-dot"></div>
-            <Wallet size={17} strokeWidth={2} />
-            <span className="dl-sb-item-text">My Saving</span>
-          </NavLink>
-          <NavLink to="/dashboard/loans" className={({ isActive }) => `dl-sb-item ${isActive ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)} title="My Loans">
-            <div className="dl-sb-dot"></div>
-            <CreditCard size={17} strokeWidth={2} />
-            <span className="dl-sb-item-text">My Loans</span>
-          </NavLink>
-          <NavLink to="/dashboard/terms" className={({ isActive }) => `dl-sb-item ${isActive ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)} title="Terms & Conditions">
-            <div className="dl-sb-dot"></div>
-            <FileText size={17} strokeWidth={2} />
-            <span className="dl-sb-item-text">Terms & Conditions</span>
-          </NavLink>
+          {roleId === 2 && (
+            <>
+              <div className="dl-sb-lbl">MAIN MENU</div>
+              <NavLink to="/dashboard" end className={({ isActive }) => `dl-sb-item ${isActive ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)} title="Dashboard">
+                <div className="dl-sb-dot"></div>
+                <LayoutDashboard size={17} strokeWidth={2} />
+                <span className="dl-sb-item-text">Dashboard</span>
+              </NavLink>
+              <NavLink to="/dashboard/saving" className={({ isActive }) => `dl-sb-item ${isActive ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)} title="My Saving">
+                <div className="dl-sb-dot"></div>
+                <Wallet size={17} strokeWidth={2} />
+                <span className="dl-sb-item-text">My Saving</span>
+              </NavLink>
+              <NavLink to="/dashboard/loans" className={({ isActive }) => `dl-sb-item ${isActive ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)} title="My Loans">
+                <div className="dl-sb-dot"></div>
+                <CreditCard size={17} strokeWidth={2} />
+                <span className="dl-sb-item-text">My Loans</span>
+              </NavLink>
+              <NavLink to="/dashboard/terms" className={({ isActive }) => `dl-sb-item ${isActive ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)} title="Terms & Conditions">
+                <div className="dl-sb-dot"></div>
+                <FileText size={17} strokeWidth={2} />
+                <span className="dl-sb-item-text">Terms & Conditions</span>
+              </NavLink>
 
-          <div className="dl-sb-lbl" style={{ marginTop: 16 }}>ACCOUNT</div>
-          <NavLink to="/dashboard/profile" className={({ isActive }) => `dl-sb-item ${isActive ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)} title="My Profile">
-            <div className="dl-sb-dot"></div>
-            <UserCircle size={17} strokeWidth={2} />
-            <span className="dl-sb-item-text">My Profile</span>
-          </NavLink>
+              <div className="dl-sb-lbl" style={{ marginTop: 16 }}>ACCOUNT</div>
+              <NavLink to="/dashboard/profile" className={({ isActive }) => `dl-sb-item ${isActive ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)} title="My Profile">
+                <div className="dl-sb-dot"></div>
+                <UserCircle size={17} strokeWidth={2} />
+                <span className="dl-sb-item-text">My Profile</span>
+              </NavLink>
+            </>
+          )}
 
-          {/* ADMIN MENU (Temporary combined layout) */}
-          <div className="dl-sb-lbl" style={{ marginTop: 24, borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 16 }}>ADMIN OVERVIEW</div>
-          <NavLink to="/dashboard/admin" end className={({ isActive }) => `dl-sb-item ${isActive ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)}>
-            <div className="dl-sb-dot"></div>
-            <LayoutDashboard size={17} strokeWidth={2} />
-            <span className="dl-sb-item-text">Dashboard</span>
-          </NavLink>
+          {roleId === 1 && (
+            <>
+              {/* ADMIN MENU (Temporary combined layout) */}
+              <div className="dl-sb-lbl" style={{ marginTop: 24 }}>ADMIN OVERVIEW</div>
+              <NavLink to="/dashboard" end className={({ isActive }) => `dl-sb-item ${isActive ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)}>
+                <div className="dl-sb-dot"></div>
+                <LayoutDashboard size={17} strokeWidth={2} />
+                <span className="dl-sb-item-text">Dashboard</span>
+              </NavLink>
 
-          <div className="dl-sb-group">
-            <button className={`dl-sb-parent ${openSections.member ? 'active' : ''}`} onClick={() => toggleSection('member')}>
-              <div className="dl-sb-parent-left">
-                <div className="dl-sb-parent-icon"><Users size={17} strokeWidth={2} /></div>
-                <span className="dl-sb-item-text" style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>Member</span>
+              <div className="dl-sb-group">
+                <button className={`dl-sb-parent ${openSections.member ? 'active' : ''}`} onClick={() => toggleSection('member')}>
+                  <div className="dl-sb-parent-left">
+                    <div className="dl-sb-parent-icon"><Users size={17} strokeWidth={2} /></div>
+                    <span className="dl-sb-item-text" style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>Member</span>
+                  </div>
+                </button>
+                <div className={`dl-sb-children ${openSections.member ? 'open' : ''}`}>
+                  <NavLink to="/dashboard/admin/members" className={({ isActive }) => `dl-sb-child ${isActive ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)}>
+                    Management
+                  </NavLink>
+                  <NavLink to="/dashboard/admin/approvals" className={({ isActive }) => `dl-sb-child ${isActive ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)}>
+                    Approvals
+                  </NavLink>
+                </div>
               </div>
-            </button>
-            <div className={`dl-sb-children ${openSections.member ? 'open' : ''}`}>
-              <NavLink to="/dashboard/admin/members" className={({ isActive }) => `dl-sb-child ${isActive ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)}>
-                Management
-              </NavLink>
-              <NavLink to="/dashboard/admin/approvals" className={({ isActive }) => `dl-sb-child ${isActive ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)}>
-                Approvals
-              </NavLink>
-            </div>
-          </div>
 
-          <div className="dl-sb-group">
-            <button className={`dl-sb-parent ${openSections.ls ? 'active' : ''}`} onClick={() => toggleSection('ls')}>
-              <div className="dl-sb-parent-left">
-                <div className="dl-sb-parent-icon"><Wallet size={17} strokeWidth={2} /></div>
-                <span className="dl-sb-item-text" style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>Loans & Saving</span>
+              <div className="dl-sb-group">
+                <button className={`dl-sb-parent ${openSections.ls ? 'active' : ''}`} onClick={() => toggleSection('ls')}>
+                  <div className="dl-sb-parent-left">
+                    <div className="dl-sb-parent-icon"><Wallet size={17} strokeWidth={2} /></div>
+                    <span className="dl-sb-item-text" style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>Loans & Saving</span>
+                  </div>
+                </button>
+                <div className={`dl-sb-children ${openSections.ls ? 'open' : ''}`}>
+                  <NavLink to="/dashboard/admin/ls-loans" className={({ isActive }) => `dl-sb-child ${isActive ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)}>
+                    Loans
+                  </NavLink>
+                  <NavLink to="/dashboard/admin/ls-savings" className={({ isActive }) => `dl-sb-child ${isActive ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)}>
+                    Savings
+                  </NavLink>
+                </div>
               </div>
-            </button>
-            <div className={`dl-sb-children ${openSections.ls ? 'open' : ''}`}>
-              <NavLink to="/dashboard/admin/ls-loans" className={({ isActive }) => `dl-sb-child ${isActive ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)}>
-                Loans
-              </NavLink>
-              <NavLink to="/dashboard/admin/ls-savings" className={({ isActive }) => `dl-sb-child ${isActive ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)}>
-                Savings
-              </NavLink>
-            </div>
-          </div>
 
-          <div className="dl-sb-group">
-            <button className={`dl-sb-parent ${openSections.pr ? 'active' : ''}`} onClick={() => toggleSection('pr')}>
-              <div className="dl-sb-parent-left">
-                <div className="dl-sb-parent-icon"><CreditCard size={17} strokeWidth={2} /></div>
-                <span className="dl-sb-item-text" style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>Payroll</span>
+              <div className="dl-sb-group">
+                <button className={`dl-sb-parent ${openSections.pr ? 'active' : ''}`} onClick={() => toggleSection('pr')}>
+                  <div className="dl-sb-parent-left">
+                    <div className="dl-sb-parent-icon"><CreditCard size={17} strokeWidth={2} /></div>
+                    <span className="dl-sb-item-text" style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>Payroll</span>
+                  </div>
+                </button>
+                <div className={`dl-sb-children ${openSections.pr ? 'open' : ''}`}>
+                  <NavLink to="/dashboard/admin/pr-loans" className={({ isActive }) => `dl-sb-child ${isActive ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)}>
+                    Loans
+                  </NavLink>
+                  <NavLink to="/dashboard/admin/pr-savings" className={({ isActive }) => `dl-sb-child ${isActive ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)}>
+                    Savings
+                  </NavLink>
+                </div>
               </div>
-            </button>
-            <div className={`dl-sb-children ${openSections.pr ? 'open' : ''}`}>
-              <NavLink to="/dashboard/admin/pr-loans" className={({ isActive }) => `dl-sb-child ${isActive ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)}>
-                Loans
-              </NavLink>
-              <NavLink to="/dashboard/admin/pr-savings" className={({ isActive }) => `dl-sb-child ${isActive ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)}>
-                Savings
-              </NavLink>
-            </div>
-          </div>
 
-          <div className="dl-sb-group">
-            <button className={`dl-sb-parent ${openSections.shu ? 'active' : ''}`} onClick={() => toggleSection('shu')}>
-              <div className="dl-sb-parent-left">
-                <div className="dl-sb-parent-icon"><LayoutDashboard size={17} strokeWidth={2} /></div>
-                <span className="dl-sb-item-text" style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>SHU Management</span>
+              <div className="dl-sb-group">
+                <button className={`dl-sb-parent ${openSections.shu ? 'active' : ''}`} onClick={() => toggleSection('shu')}>
+                  <div className="dl-sb-parent-left">
+                    <div className="dl-sb-parent-icon"><LayoutDashboard size={17} strokeWidth={2} /></div>
+                    <span className="dl-sb-item-text" style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>SHU Management</span>
+                  </div>
+                </button>
+                <div className={`dl-sb-children ${openSections.shu ? 'open' : ''}`}>
+                  <NavLink to="/dashboard/admin/shu-dashboard" className={({ isActive }) => `dl-sb-child ${isActive ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)}>
+                    Dashboard
+                  </NavLink>
+                  <NavLink to="/dashboard/admin/shu-master" className={({ isActive }) => `dl-sb-child ${isActive ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)}>
+                    Master Data
+                  </NavLink>
+                </div>
               </div>
-            </button>
-            <div className={`dl-sb-children ${openSections.shu ? 'open' : ''}`}>
-              <NavLink to="/dashboard/admin/shu-dashboard" className={({ isActive }) => `dl-sb-child ${isActive ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)}>
-                Dashboard
-              </NavLink>
-              <NavLink to="/dashboard/admin/shu-master" className={({ isActive }) => `dl-sb-child ${isActive ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)}>
-                Master Data
-              </NavLink>
-            </div>
-          </div>
 
-          <div className="dl-sb-lbl" style={{ marginTop: 16 }}>GENERAL</div>
-          
-          <div className="dl-sb-group">
-            <button className={`dl-sb-parent ${openSections.transaction ? 'active' : ''}`} onClick={() => toggleSection('transaction')}>
-              <div className="dl-sb-parent-left">
-                <div className="dl-sb-parent-icon"><CheckSquare size={17} strokeWidth={2} /></div>
-                <span className="dl-sb-item-text" style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>Transaction</span>
+              <div className="dl-sb-lbl" style={{ marginTop: 16 }}>GENERAL</div>
+              
+              <div className="dl-sb-group">
+                <button className={`dl-sb-parent ${openSections.transaction ? 'active' : ''}`} onClick={() => toggleSection('transaction')}>
+                  <div className="dl-sb-parent-left">
+                    <div className="dl-sb-parent-icon"><CheckSquare size={17} strokeWidth={2} /></div>
+                    <span className="dl-sb-item-text" style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>Transaction</span>
+                  </div>
+                </button>
+                <div className={`dl-sb-children ${openSections.transaction ? 'open' : ''}`}>
+                  <NavLink to="/dashboard/admin/transaction/history" className={({ isActive }) => `dl-sb-child ${isActive ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)}>
+                    History
+                  </NavLink>
+                  <NavLink to="/dashboard/admin/transaction/manual" className={({ isActive }) => `dl-sb-child ${isActive ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)}>
+                    Manual Payment
+                  </NavLink>
+                </div>
               </div>
-            </button>
-            <div className={`dl-sb-children ${openSections.transaction ? 'open' : ''}`}>
-              <NavLink to="/dashboard/admin/transaction/history" className={({ isActive }) => `dl-sb-child ${isActive ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)}>
-                History
-              </NavLink>
-              <NavLink to="/dashboard/admin/transaction/manual" className={({ isActive }) => `dl-sb-child ${isActive ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)}>
-                Manual Payment
-              </NavLink>
-            </div>
-          </div>
 
-          <NavLink to="/dashboard/admin/archives" className={({ isActive }) => `dl-sb-item ${isActive ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)}>
-            <div className="dl-sb-dot"></div>
-            <Archive size={17} strokeWidth={2} />
-            <span className="dl-sb-item-text">Archives</span>
-          </NavLink>
+              <NavLink to="/dashboard/admin/archives" className={({ isActive }) => `dl-sb-item ${isActive ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)}>
+                <div className="dl-sb-dot"></div>
+                <Archive size={17} strokeWidth={2} />
+                <span className="dl-sb-item-text">Archives</span>
+              </NavLink>
+            </>
+          )}
         </nav>
 
         <div className="dl-sb-footer">
@@ -244,48 +251,30 @@ const DashboardLayout = () => {
           </div>
 
           <div className="dl-hdr-right">
-            <div 
-              className="dl-hdr-notif"
-              onClick={() => setShowNotifications(!showNotifications)}
-            >
-              <Bell size={16} strokeWidth={2} />
-              <span className="dl-notif-dot"></span>
 
-              {showNotifications && (
-                <div className="dl-notif-dropdown" onClick={(e) => e.stopPropagation()}>
-                  <div className="dl-notif-header">
-                    <h4>Notifications</h4>
-                    <span className="dl-notif-mark">Mark all as read</span>
-                  </div>
-                  <div className="dl-notif-body" style={{ maxHeight: showAllNotifs ? '400px' : 'auto', overflowY: showAllNotifs ? 'auto' : 'hidden' }}>
-                    {dummyNotifs.slice(0, showAllNotifs ? dummyNotifs.length : 3).map((notif) => (
-                      <div key={notif.id} className={`dl-notif-item ${notif.unread ? 'unread' : ''}`}>
-                        <div className={`dl-notif-icon ${notif.type}`}>
-                          {notif.type === 'success' ? <CheckCircle size={14} /> : notif.type === 'warning' ? <AlertTriangle size={14} /> : <Bell size={14} />}
-                        </div>
-                        <div className="dl-notif-content">
-                          <p><strong>{notif.title}</strong></p>
-                          <p>{notif.desc}</p>
-                          <span className="time">{notif.time}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="dl-notif-footer">
-                    <button onClick={() => setShowAllNotifs(!showAllNotifs)}>
-                      {showAllNotifs ? 'Show Less' : 'View All Notifications'}
-                    </button>
+            {roleId === 1 ? (
+              <div className="dl-avatar-btn admin-view" style={{ cursor: 'default' }}>
+                <div className="dl-avatar" style={{ background: 'linear-gradient(135deg, #4880F0, #1e3a8a)', color: '#ffffff' }}>
+                  AD
+                </div>
+                <div className="dl-avatar-info hidden-mobile">
+                  <div className="dl-avatar-name" style={{ fontWeight: 600, color: '#1e293b' }}>{user.email}</div>
+                  <div className="dl-avatar-id" style={{ color: '#4880F0', fontWeight: 600 }}>Admin Account</div>
+                </div>
+              </div>
+            ) : (
+              <button className="dl-avatar-btn" onClick={() => navigate('/dashboard/profile')}>
+                <div className="dl-avatar">
+                  {user.full_name ? user.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : 'U'}
+                </div>
+                <div className="dl-avatar-info hidden-mobile">
+                  <div className="dl-avatar-name">{user.full_name || user.email}</div>
+                  <div className="dl-avatar-id">
+                    {`ID: ${user.nik_employee || 'N/A'}`}
                   </div>
                 </div>
-              )}
-            </div>
-            <button className="dl-avatar-btn" onClick={() => navigate('/dashboard/profile')}>
-              <div className="dl-avatar">RT</div>
-              <div className="dl-avatar-info hidden-mobile">
-                <div className="dl-avatar-name">Riska Tikah</div>
-                <div className="dl-avatar-id">ID: 123-32747</div>
-              </div>
-            </button>
+              </button>
+            )}
           </div>
         </header>
 
@@ -294,12 +283,14 @@ const DashboardLayout = () => {
         </main>
       </div>
 
-      {/* Floating WhatsApp */}
-      <a href="https://wa.me/1234567890" className="dl-floating-wa" target="_blank" rel="noreferrer">
-        <svg viewBox="0 0 32 32" width="26" height="26" fill="white" xmlns="http://www.w3.org/2000/svg">
-          <path d="M16 2C8.3 2 2 8.3 2 16c0 2.5.7 4.8 1.8 6.8L2 30l7.4-1.8C11.3 29.3 13.6 30 16 30c7.7 0 14-6.3 14-14S23.7 2 16 2zm-3.7 7.5c-.3 0-.7.1-1 .5-.3.3-1.1 1.1-1.1 2.6s1.1 3 1.3 3.2c.2.2 2.2 3.5 5.4 4.8 3.2 1.3 3.2.8 3.7.8.5 0 1.7-.7 1.9-1.3.2-.6.2-1.2.1-1.3-.1-.1-.3-.2-.6-.3-.3-.2-1.7-.8-1.9-.9-.2-.1-.4-.2-.6.2-.2.3-.7.9-.9 1.1-.2.2-.3.2-.6.1-.3-.2-1.3-.5-2.5-1.5-.9-.8-1.5-1.8-1.7-2.1-.2-.3 0-.5.1-.6l.4-.5c.1-.2.2-.3.3-.5.1-.2 0-.4 0-.5s-.5-1.3-.8-1.8c-.2-.4-.5-.4-.7-.4z" />
-        </svg>
-      </a>
+      {/* Floating WhatsApp (Only for Members) */}
+      {roleId === 2 && (
+        <a href="https://wa.me/1234567890" className="dl-floating-wa" target="_blank" rel="noreferrer">
+          <svg viewBox="0 0 32 32" width="26" height="26" fill="white" xmlns="http://www.w3.org/2000/svg">
+            <path d="M16 2C8.3 2 2 8.3 2 16c0 2.5.7 4.8 1.8 6.8L2 30l7.4-1.8C11.3 29.3 13.6 30 16 30c7.7 0 14-6.3 14-14S23.7 2 16 2zm-3.7 7.5c-.3 0-.7.1-1 .5-.3.3-1.1 1.1-1.1 2.6s1.1 3 1.3 3.2c.2.2 2.2 3.5 5.4 4.8 3.2 1.3 3.2.8 3.7.8.5 0 1.7-.7 1.9-1.3.2-.6.2-1.2.1-1.3-.1-.1-.3-.2-.6-.3-.3-.2-1.7-.8-1.9-.9-.2-.1-.4-.2-.6.2-.2.3-.7.9-.9 1.1-.2.2-.3.2-.6.1-.3-.2-1.3-.5-2.5-1.5-.9-.8-1.5-1.8-1.7-2.1-.2-.3 0-.5.1-.6l.4-.5c.1-.2.2-.3.3-.5.1-.2 0-.4 0-.5s-.5-1.3-.8-1.8c-.2-.4-.5-.4-.7-.4z" />
+          </svg>
+        </a>
+      )}
     </div>
   );
 };

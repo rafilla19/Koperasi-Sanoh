@@ -19,12 +19,20 @@ const LoanDetails = () => {
   const [loading, setLoading] = useState(true);
   const [schedule, setSchedule] = useState([]);
   const [empStatus, setEmpStatus] = useState(null);
+  const [isInitiating, setIsInitiating] = useState(false);
+  const [paymentChannels, setPaymentChannels] = useState([]);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(null);
   const summaryRef = useRef(null);
 
   const handleDownloadSummary = async () => {
     try {
+      // Get member_id from user in localStorage
+      const userStr = localStorage.getItem('user');
+      const user = userStr ? JSON.parse(userStr) : null;
+      const memberId = user?.member_id || 1;
+
       // Fetch member info using the provided query endpoint
-      const memberRes = await fetch('http://127.0.0.1:8000/api/master/members/pdf_info/');
+      const memberRes = await fetch(`http://127.0.0.1:8000/api/master/members/pdf_info/?member_id=${memberId}`);
       let memberData = null;
       if (memberRes.ok) {
         memberData = await memberRes.json();
@@ -123,20 +131,30 @@ const LoanDetails = () => {
 
   useEffect(() => {
     const fetchData = async () => {
+      // Get member_id from user in localStorage
+      const userStr = localStorage.getItem('user');
+      const user = userStr ? JSON.parse(userStr) : null;
+      const memberId = user?.member_id || 1;
+
       try {
         const memberResponse = await fetch('http://127.0.0.1:8000/api/master/members/');
         if (memberResponse.ok) {
           const memberData = await memberResponse.json();
-          const currentMember = memberData.find(m => m.id === 1);
+          const currentMember = memberData.find(m => m.id === memberId);
           if (currentMember) {
             setEmpStatus(currentMember.employee_status_id);
           }
+        }
+        
+        const chanRes = await fetch('http://127.0.0.1:8000/api/loan/loans/payment_channels/');
+        if (chanRes.ok) {
+          setPaymentChannels(await chanRes.json());
         }
 
         let foundLoan = null;
         let foundStatus = '';
 
-        const activeRes = await fetch('http://127.0.0.1:8000/api/loan/loans/active_summary/');
+        const activeRes = await fetch(`http://127.0.0.1:8000/api/loan/loans/active_summary/?member_id=${memberId}`);
         if (activeRes.ok) {
           const activeData = await activeRes.json();
           const match = activeData.find(item => String(item.loan_id) === id);
@@ -147,7 +165,7 @@ const LoanDetails = () => {
         }
 
         if (!foundLoan) {
-          const completedRes = await fetch('http://127.0.0.1:8000/api/loan/loans/completed_summary/');
+          const completedRes = await fetch(`http://127.0.0.1:8000/api/loan/loans/completed_summary/?member_id=${memberId}`);
           if (completedRes.ok) {
             const completedData = await completedRes.json();
             const match = completedData.find(item => String(item.loan_id) === id);
@@ -159,7 +177,7 @@ const LoanDetails = () => {
         }
 
         if (!foundLoan) {
-          const pendingRes = await fetch('http://127.0.0.1:8000/api/loan/loan-applications/pending_summary/');
+          const pendingRes = await fetch(`http://127.0.0.1:8000/api/loan/loan-applications/pending_summary/?member_id=${memberId}`);
           if (pendingRes.ok) {
             const pendingData = await pendingRes.json();
             const match = pendingData.find(item => String(item.id) === id);
@@ -171,7 +189,7 @@ const LoanDetails = () => {
         }
 
         if (!foundLoan) {
-          const rejectedRes = await fetch('http://127.0.0.1:8000/api/loan/loan-applications/rejected_summary/');
+          const rejectedRes = await fetch(`http://127.0.0.1:8000/api/loan/loan-applications/rejected_summary/?member_id=${memberId}`);
           if (rejectedRes.ok) {
             const rejectedData = await rejectedRes.json();
             const match = rejectedData.find(item => String(item.id) === id);
@@ -185,7 +203,7 @@ const LoanDetails = () => {
         if (foundLoan) {
           setLoanData({ ...foundLoan, determinedStatus: foundStatus });
           if (foundStatus === 'Active' || foundStatus === 'Completed') {
-            const schedRes = await fetch(`http://127.0.0.1:8000/api/loan/loans/${id}/schedule/`);
+            const schedRes = await fetch(`http://127.0.0.1:8000/api/loan/loans/${id}/schedule/?member_id=${memberId}`);
             if (schedRes.ok) {
               const schedData = await schedRes.json();
               setSchedule(schedData);
@@ -200,6 +218,112 @@ const LoanDetails = () => {
     };
     fetchData();
   }, [id]);
+
+  const handleInitiatePayment = async () => {
+    if (isInitiating) return;
+    setIsInitiating(true);
+
+    // If we already have a generated pending snap_token, use it immediately!
+    if (invoiceData && invoiceData.snap_token) {
+      if (window.snap) {
+        window.snap.pay(invoiceData.snap_token, {
+          onSuccess: function(result) {
+            alert("Payment successful!");
+            setShowPaymentInvoice(false);
+            setIsInitiating(false);
+            window.location.reload();
+          },
+          onPending: function(result) {
+            alert("Payment is pending. Please complete your payment.");
+            setShowPaymentInvoice(false);
+            setIsInitiating(false);
+            window.location.reload();
+          },
+          onError: function(result) {
+            alert("Payment failed!");
+            setIsInitiating(false);
+          },
+          onClose: function() {
+            alert("You closed the payment window without finishing payment.");
+            setIsInitiating(false);
+          }
+        });
+      } else {
+        alert('Midtrans Snap SDK not loaded. Redirecting to payment page...');
+        const redirectUrl = `https://app.sandbox.midtrans.com/snap/v2/vtweb/${invoiceData.snap_token}`;
+        window.open(redirectUrl, '_blank');
+        setIsInitiating(false);
+      }
+      return;
+    }
+
+    if (!invoiceData || !invoiceData.snap_token) {
+        if (!selectedPaymentMethod) {
+            alert("Silakan pilih metode pembayaran terlebih dahulu!");
+            setIsInitiating(false);
+            return;
+        }
+    }
+
+    try {
+      const userStr = localStorage.getItem('user');
+      const user = userStr ? JSON.parse(userStr) : null;
+      const memberId = user?.member_id || 1;
+
+      const response = await fetch(`http://127.0.0.1:8000/api/loan/loans/${id}/create_payment_token/?member_id=${memberId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ payment_type: selectedPaymentMethod })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        alert(errorData.error || 'Failed to initiate payment.');
+        setIsInitiating(false);
+        return;
+      }
+
+      const data = await response.json();
+      if (data.snap_token) {
+        if (window.snap) {
+          window.snap.pay(data.snap_token, {
+            onSuccess: function(result) {
+              alert("Payment successful!");
+              setShowPaymentInvoice(false);
+              setIsInitiating(false);
+              window.location.reload();
+            },
+            onPending: function(result) {
+              alert("Payment is pending. Please complete your payment.");
+              setShowPaymentInvoice(false);
+              setIsInitiating(false);
+              window.location.reload();
+            },
+            onError: function(result) {
+              alert("Payment failed!");
+              setIsInitiating(false);
+            },
+            onClose: function() {
+              alert("You closed the payment window without finishing payment.");
+              setIsInitiating(false);
+            }
+          });
+        } else {
+          alert('Midtrans Snap SDK not loaded. Redirecting to payment page...');
+          window.open(data.redirect_url, '_blank');
+          setIsInitiating(false);
+        }
+      } else {
+        setIsInitiating(false);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Network error. Failed to initiate payment.');
+      setIsInitiating(false);
+    }
+  };
 
   const formatRupiah = (number) => {
     return new Intl.NumberFormat('id-ID', {
@@ -314,6 +438,22 @@ const LoanDetails = () => {
               <span className="lbl">REPAYMENT REQUEST</span>
               <span className="val">{loanData?.duration_months} Months Installment Request</span>
             </div>
+            {loanData?.salary_statement_file && (
+              <div className="ld-g-col">
+                <span className="lbl">SALARY STATEMENT</span>
+                <span className="val">
+                  <a 
+                    href={loanData.salary_statement_file} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="ld-document-link"
+                    style={{ color: '#0284c7', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 500 }}
+                  >
+                    <FileText size={16} /> View Document
+                  </a>
+                </span>
+              </div>
+            )}
             {status === 'Rejected' && (
               <div className="ld-g-col" style={{gridColumn: '1 / -1'}}>
                 <span className="lbl">REJECT REASON</span>
@@ -342,7 +482,10 @@ const LoanDetails = () => {
                     setShowPaymentInvoice(true);
                     setInvoiceLoading(true);
                     try {
-                      const res = await fetch(`http://127.0.0.1:8000/api/loan/loans/${id}/payment_invoice/`);
+                      const userStr = localStorage.getItem('user');
+                      const user = userStr ? JSON.parse(userStr) : null;
+                      const memberId = user?.member_id || 1;
+                      const res = await fetch(`http://127.0.0.1:8000/api/loan/loans/${id}/payment_invoice/?member_id=${memberId}`);
                       if (res.ok) {
                         const data = await res.json();
                         if (data.length > 0) {
@@ -367,6 +510,22 @@ const LoanDetails = () => {
               <span className="lbl">BUNGA (FLAT)</span>
               <span className="val">{parseFloat(loanData?.bunga || 0).toFixed(1).replace('.', ',')}%</span>
             </div>
+            {loanData?.salary_statement_file && (
+              <div className="ld-g-col">
+                <span className="lbl">SALARY STATEMENT</span>
+                <span className="val">
+                  <a 
+                    href={loanData.salary_statement_file} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="ld-document-link"
+                    style={{ color: '#0284c7', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 500 }}
+                  >
+                    <FileText size={16} /> View Document
+                  </a>
+                </span>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -413,11 +572,11 @@ const LoanDetails = () => {
                     const isPaid = status === 'Completed' || s.status_code === 'PAID' || s.status_code === 'PAID_OFF';
                     return (
                     <tr 
-                      key={s.installment_number}
+                      key={s.id || s.installment_number}
                       onDoubleClick={async () => {
                         if (isPaid) {
                           try {
-                            const res = await fetch(`http://127.0.0.1:8000/api/loan/loans/${id}/receipts/`);
+                            const res = await fetch(`http://127.0.0.1:8000/api/loan/loans/${id}/receipts/?member_id=${memberId}`);
                             if (res.ok) {
                               const receipts = await res.json();
                               const receipt = receipts.find(r => r.installment_number === s.installment_number);
@@ -508,9 +667,21 @@ const LoanDetails = () => {
               </div>
             </div>
 
-            <div className="ld-receipt-total">
-              <span className="lbl">TOTAL AMOUNT</span>
-              <span className="val">{formatRupiah(selectedReceipt.amount_paid || selectedReceipt.amount_total)}</span>
+            <div className="ld-receipt-total" style={{borderBottom: 'none', paddingBottom: '10px', display: 'flex', flexDirection: 'column', gap: '8px'}}>
+              <div className="ld-r-row">
+                <span className="lbl" style={{fontWeight: 'normal', color: '#64748b'}}>Installment Amount</span>
+                <span className="val" style={{fontWeight: 'normal', color: '#64748b'}}>{formatRupiah(selectedReceipt.amount_paid || selectedReceipt.amount_total)}</span>
+              </div>
+              {(selectedReceipt.admin_fee > 0) && (
+                <div className="ld-r-row">
+                  <span className="lbl" style={{fontWeight: 'normal', color: '#64748b'}}>Admin Fee</span>
+                  <span className="val" style={{fontWeight: 'normal', color: '#64748b'}}>{formatRupiah(selectedReceipt.admin_fee)}</span>
+                </div>
+              )}
+              <div className="ld-r-row" style={{borderTop: '1px dashed #cbd5e1', paddingTop: '12px', marginTop: '4px'}}>
+                <span className="lbl" style={{fontWeight: 'bold', fontSize: '14px'}}>TOTAL PAID</span>
+                <span className="val" style={{fontWeight: 'bold', fontSize: '18px'}}>{formatRupiah((selectedReceipt.amount_paid || selectedReceipt.amount_total) + (parseFloat(selectedReceipt.admin_fee) || 0))}</span>
+              </div>
             </div>
 
             <div className="ld-modal-actions">
@@ -543,6 +714,26 @@ const LoanDetails = () => {
                 <div style={{padding: '20px', textAlign: 'center'}}>Loading invoice details...</div>
               ) : invoiceData ? (
                 <>
+                  {invoiceData.snap_token && (
+                    <div className="m-pending-warning" style={{
+                      backgroundColor: '#fffbeb',
+                      border: '1px solid #feebc8',
+                      borderRadius: '6px',
+                      padding: '10px 12px',
+                      marginBottom: '15px',
+                      color: '#c05621',
+                      fontSize: '13px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      textAlign: 'left'
+                    }}>
+                      <AlertTriangle size={16} style={{color: '#dd6b20', flexShrink: 0}} />
+                      <span>
+                        <strong>Pending Transaction:</strong> You have an active payment session for this installment. Click <strong>Pay Now</strong> to resume.
+                      </span>
+                    </div>
+                  )}
                   <div className="m-inv-row">
                     <span className="lbl">Installment No.</span>
                     <span className="val">#{invoiceData.installment_number}</span>
@@ -560,15 +751,31 @@ const LoanDetails = () => {
                     <span className="val">{invoiceData.status_code || invoiceData.gateway_status || 'PENDING'}</span>
                   </div>
                   
-                  <div className="m-payment-options">
-                    <label>Select Payment Method:</label>
-                    <select className="m-select" defaultValue={invoiceData.payment_method?.toLowerCase() || 'bca'}>
-                      <option value="bca">BCA Virtual Account</option>
-                      <option value="mandiri">Mandiri Bill Payment</option>
-                      <option value="gopay">GoPay</option>
-                      <option value="qris">QRIS</option>
-                    </select>
-                  </div>
+                  {(!invoiceData || !invoiceData.snap_token) && (
+                    <div className="m-payment-methods">
+                      <h4 style={{marginTop: '20px', marginBottom: '10px', fontSize: '14px', color: '#1e293b'}}>Pilih Metode Pembayaran</h4>
+                      <div className="pm-grid" style={{display: 'flex', flexDirection: 'column', gap: '10px'}}>
+                        {paymentChannels.map(ch => (
+                           <div 
+                             key={ch.channel_code} 
+                             className={`pm-card ${selectedPaymentMethod === ch.channel_code ? 'selected' : ''}`} 
+                             onClick={() => setSelectedPaymentMethod(ch.channel_code)}
+                             style={{
+                               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                               padding: '12px 16px', border: selectedPaymentMethod === ch.channel_code ? '2px solid #2563eb' : '1px solid #e2e8f0',
+                               borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s ease',
+                               backgroundColor: selectedPaymentMethod === ch.channel_code ? '#eff6ff' : '#fff'
+                             }}
+                           >
+                             <span className="pm-name" style={{fontWeight: '600', color: '#334155'}}>{ch.channel_name}</span>
+                             <span className="pm-fee" style={{fontSize: '12px', color: '#64748b'}}>
+                               {ch.fee_percentage > 0 ? `${ch.fee_percentage}% /transaksi` : (ch.fee_fixed > 0 ? formatRupiah(ch.fee_fixed) : 'Gratis')}
+                             </span>
+                           </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </>
               ) : (
                 <div style={{padding: '20px', textAlign: 'center'}}>No pending invoice found.</div>
@@ -577,11 +784,10 @@ const LoanDetails = () => {
 
             {empStatus === 3 && (
               <div className="ld-modal-actions">
-                <button className="btn-modal-outline" onClick={() => setShowPaymentInvoice(false)}>Cancel</button>
-                <button className="btn-modal-blue" onClick={() => {
-                  alert('Redirecting to Midtrans Payment Gateway...');
-                  setShowPaymentInvoice(false);
-                }}>Pay Now</button>
+                <button className="btn-modal-outline" disabled={isInitiating} onClick={() => setShowPaymentInvoice(false)}>Cancel</button>
+                <button className="btn-modal-blue" disabled={isInitiating} onClick={handleInitiatePayment}>
+                  {isInitiating ? 'Processing...' : ((invoiceData && invoiceData.snap_token) ? 'Lanjutkan Pembayaran' : 'Pay Now')}
+                </button>
               </div>
             )}
           </div>

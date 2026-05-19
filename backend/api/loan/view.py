@@ -15,6 +15,7 @@ import json
 from .models import LoanApplication, LoanType, Loan, LoanInstallment
 from api.master.models import Status
 from .serializers import LoanApplicationSerializer, LoanTypeSerializer, LoanSerializer, LoanInstallmentSerializer
+from ml_service.trainer import get_prediction, trigger_model_training
 
 def add_months(sourcedate, months):
     month = sourcedate.month - 1 + months
@@ -22,6 +23,17 @@ def add_months(sourcedate, months):
     month = month % 12 + 1
     day = min(sourcedate.day, calendar.monthrange(year, month)[1])
     return datetime.date(year, month, day)
+
+def get_absolute_media_url(request, path):
+    if not path:
+        return None
+    if path.startswith('http'):
+        return path
+    base_url = request.build_absolute_uri(settings.MEDIA_URL)
+    # Ensure no double slashes if path starts with slash
+    if path.startswith('/'):
+        path = path[1:]
+    return f"{base_url}{path}"
 
 class LoanApplicationViewSet(viewsets.ModelViewSet):
     serializer_class = LoanApplicationSerializer
@@ -64,14 +76,24 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
             </div>
             """
             
-            send_mail(
+            # Notify Admin using System Email but set Reply-To to Member
+            member_email = instance.member.user.email if hasattr(instance.member, 'user') else None
+            
+            from django.core.mail import EmailMultiAlternatives
+            
+            # Forced sender name using Member's email
+            # forced_from = f"{instance.member.full_name} <{member_email}>" if hasattr(instance, 'member') and member_email else settings.DEFAULT_FROM_EMAIL
+            forced_from = settings.DEFAULT_FROM_EMAIL
+
+            email = EmailMultiAlternatives(
                 subject,
-                "", # Plain text fallback
-                settings.DEFAULT_FROM_EMAIL,
+                strip_tags(html_message),
+                forced_from,
                 [settings.ADMIN_EMAIL],
-                fail_silently=True,
-                html_message=html_message
+                reply_to=[member_email] if member_email else []
             )
+            email.attach_alternative(html_message, "text/html")
+            email.send(fail_silently=False)
 
             # Notify Member about their new loan request
             try:
@@ -105,7 +127,7 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
                         strip_tags(member_html),
                         settings.DEFAULT_FROM_EMAIL,
                         [member_email],
-                        fail_silently=True,
+                        fail_silently=False,
                         html_message=member_html
                     )
             except Exception as e:
@@ -157,6 +179,61 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
                 return Response(result)
             return Response({'error': 'Application not found'}, status=404)
 
+    @action(detail=True, methods=['get'])
+    def get_ai_suggestion(self, request, pk=None):
+        """
+        Mendapatkan saran AI untuk kelayakan pinjaman dan bunga.
+        """
+        try:
+            application = self.get_object()
+            
+            # get_prediction sekarang otomatis mengambil fitur member di dalamnya
+            prediction = get_prediction(
+                application.amount_requested,
+                application.duration_months,
+                application.member_id
+            )
+            
+            return Response({
+                'application_id': application.id,
+                'eligibility': prediction.get('eligibility', 'Medium'),
+                'confidence_score': round(prediction.get('probability', 0.5) * 100, 2),
+                'suggested_interest_rate': round(float(prediction.get('suggested_interest_rate', 1.25)), 2),
+                'member_stats': prediction.get('member_features', {}),
+                'recommendation': prediction.get('recommendation', ''),
+                'risk_factors': prediction.get('risk_factors', []),
+                'risk_scores': prediction.get('risk_scores', {})
+            })
+        except Exception as e:
+            return Response({'error': str(e)}, status=400)
+
+    @action(detail=False, methods=['post'])
+    def get_prediction_pre_submit(self, request):
+        """
+        Mendapatkan saran AI untuk simulasi sebelum pengajuan (tanpa PK).
+        """
+        try:
+            amount = request.data.get('amount')
+            duration = request.data.get('duration')
+            member_id = request.data.get('member_id')
+            
+            if not all([amount, duration, member_id]):
+                return Response({'error': 'Missing parameters'}, status=400)
+                
+            prediction = get_prediction(
+                amount,
+                duration,
+                member_id
+            )
+            
+            return Response({
+                'eligibility': prediction.get('eligibility', 'Medium'),
+                'confidence_score': round(prediction.get('probability', 0.5) * 100, 2),
+                'suggested_interest_rate': round(float(prediction.get('suggested_interest_rate', 1.25)), 2)
+            })
+        except Exception as e:
+            return Response({'error': str(e)}, status=400)
+
     @action(detail=True, methods=['post'])
     def approve(self, request, pk=None):
         try:
@@ -166,66 +243,28 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
             updated_amount = Decimal(str(request.data.get('amount_requested', application.amount_requested)))
             
             with transaction.atomic():
-                # 1. Update Application Status to APPROVED (status_id 23)
-                # Hardcoded admin_id to 1 for testing as requested
-                admin_user_id = 1
+                # 1. Update Application, Create Loan, and Generate Installments via Stored Procedure
+                admin_user_id = request.data.get('admin_id', request.user.id or 1)
                 
                 with connection.cursor() as cursor:
                     cursor.execute(
-                        "UPDATE loan_applications SET status_id = %s, duration_months = %s, amount_requested = %s, admin_id = %s WHERE id = %s",
-                        [23, repayment_term, updated_amount, admin_user_id, application.id]
+                        "CALL public.sp_loan_approve(%s, %s, %s, %s, %s)",
+                        [
+                            application.id,
+                            repayment_term,
+                            interest_rate_percent,
+                            updated_amount,
+                            admin_user_id
+                        ]
                     )
                 
                 # Refresh object to make sure it has the new status for later logic
                 application.refresh_from_db()
                 
-                # 2. Calculate values
+                # 2. Calculate values solely for the email notification
                 principal = updated_amount
-                interest_amount = principal * (interest_rate_percent / 100) * repayment_term
+                interest_amount = principal * (interest_rate_percent / 100)
                 total_amount = principal + interest_amount
-                
-                start_date = datetime.date.today()
-                end_date = add_months(start_date, repayment_term)
-                
-                active_loan_status = Status.objects.get(id=25) 
-                
-                # 3. Create Loan
-                loan = Loan.objects.create(
-                    application=application,
-                    member=application.member,
-                    principal_amount=principal,
-                    interest_amount=interest_amount,
-                    total_amount=total_amount,
-                    remaining_balance=total_amount,
-                    start_date=start_date,
-                    due_date=end_date,
-                    status=active_loan_status,
-                    created_at=timezone.now(),
-                    updated_at=timezone.now()
-                )
-                
-                # 4. Generate Installments
-                unpaid_status = Status.objects.get(id=28) 
-                inst_principal = principal / repayment_term
-                inst_interest = interest_amount / repayment_term
-                inst_total = inst_principal + inst_interest
-                
-                installments = []
-                for i in range(1, repayment_term + 1):
-                    due_date = add_months(start_date, i)
-                    installments.append(LoanInstallment(
-                        loan=loan,
-                        installment_number=i,
-                        due_date=due_date,
-                        amount_principal=inst_principal,
-                        amount_interest=inst_interest,
-                        amount_total=inst_total,
-                        status=unpaid_status,
-                        created_at=timezone.now(),
-                        updated_at=timezone.now()
-                    ))
-                
-                LoanInstallment.objects.bulk_create(installments)
                 
                 # Notify Member about approval
                 try:
@@ -266,6 +305,12 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
                 except Exception as e:
                     print(f"Failed to send member approval notification: {str(e)}")
                 
+                # Trigger ML Training in background (optional, but requested 'every data masuk')
+                try:
+                    trigger_model_training()
+                except Exception as e:
+                    print(f"ML Training failed: {str(e)}")
+                
             return Response({'message': 'Loan approved and installments generated successfully'})
         except Exception as e:
             return Response({'error': str(e)}, status=400)
@@ -276,8 +321,7 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
             application = self.get_object()
             reject_reason = request.data.get('reject_reason', 'No reason provided')
             
-            # Hardcoded admin_id to 1 for testing as requested
-            admin_user_id = 1
+            admin_user_id = request.data.get('admin_id', request.user.id or 1)
             
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -376,9 +420,7 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def pending_summary(self, request):
-        member_id = 1 # default for testing
-        if request.user.is_authenticated and hasattr(request.user, 'member'):
-            member_id = request.user.member.id
+        member_id = request.query_params.get('member_id', 1)
 
         query = """
         SELECT 
@@ -388,6 +430,7 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
             la.purpose,
             la.applied_at,
             la.duration_months,
+            la.salary_statement_file,
             s.status_code
         FROM loan_applications la
         INNER JOIN loan_types lt
@@ -403,13 +446,14 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
             columns = [col[0] for col in cursor.description]
             results = [dict(zip(columns, row)) for row in cursor.fetchall()]
             
+        for r in results:
+            if isinstance(r, dict) and 'salary_statement_file' in r:
+                r['salary_statement_file'] = get_absolute_media_url(request, r['salary_statement_file'])
         return Response(results)
 
     @action(detail=False, methods=['get'])
     def rejected_summary(self, request):
-        member_id = 1 # default for testing
-        if request.user.is_authenticated and hasattr(request.user, 'member'):
-            member_id = request.user.member.id
+        member_id = request.query_params.get('member_id', 1)
 
         query = """
         SELECT 
@@ -420,6 +464,7 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
             la.applied_at,
             la.duration_months,
             la.reject_reason,
+            la.salary_statement_file,
             la.updated_at AS admin_update
         FROM loan_applications la
         INNER JOIN loan_types lt
@@ -433,6 +478,9 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
             columns = [col[0] for col in cursor.description]
             results = [dict(zip(columns, row)) for row in cursor.fetchall()]
             
+        for r in results:
+            if isinstance(r, dict) and 'salary_statement_file' in r:
+                r['salary_statement_file'] = get_absolute_media_url(request, r['salary_statement_file'])
         return Response(results)
         
         
@@ -449,6 +497,60 @@ class LoanTypeViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         instance.deleted_at = timezone.now()
         instance.save()
+
+def sync_member_pending_payments(member_id):
+    from django.db import connection
+    import requests
+    import base64
+    from django.conf import settings
+    
+    query = """
+        SELECT pgt.gateway_transaction_id AS order_id, pgt.id AS pgt_id, lp.id AS payment_id, 'loan' as p_type
+        FROM payment_gateway_transactions pgt
+        JOIN loan_payments lp ON CAST(pgt.id AS varchar) = lp.payment_reference_id
+        JOIN loan_installments li ON li.id = lp.installment_id
+        JOIN loans l ON l.id = li.loan_id
+        WHERE l.member_id = %s AND pgt.gateway_status = 'pending'
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(query, [member_id])
+        results = [dict(zip([col[0] for col in cursor.description], row)) for row in cursor.fetchall()]
+
+    if not results:
+        return
+
+    server_key = settings.MIDTRANS_SERVER_KEY
+    is_production = settings.MIDTRANS_IS_PRODUCTION
+    auth_str = f"{server_key}:"
+    import base64
+    auth_base64 = base64.b64encode(auth_str.encode('utf-8')).decode('utf-8')
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "Authorization": f"Basic {auth_base64}"
+    }
+
+    for r in results:
+        order_id = r.get('order_id')
+        if not order_id: continue
+        status_url = f"https://api.midtrans.com/v2/{order_id}/status" if is_production else f"https://api.sandbox.midtrans.com/v2/{order_id}/status"
+        try:
+            res = requests.get(status_url, headers=headers, timeout=5)
+            if res.status_code == 200:
+                midtrans_status = res.json().get('transaction_status')
+                if midtrans_status in ['expire', 'cancel', 'deny', 'failure']:
+                    with connection.cursor() as cursor:
+                        cursor.execute("UPDATE payment_gateway_transactions SET gateway_status = %s, updated_at = NOW() WHERE id = %s", [midtrans_status, r['pgt_id']])
+                        status_id = 36 if midtrans_status == 'cancel' else 35
+                        if r['p_type'] == 'loan':
+                            cursor.execute("UPDATE loan_payments SET status_id = %s, updated_at = NOW() WHERE id = %s", [status_id, r['payment_id']])
+                elif midtrans_status in ['settlement', 'capture']:
+                    with connection.cursor() as cursor:
+                        if r['p_type'] == 'loan':
+                            cursor.execute("CALL sp_loan_gateway_payment(%s, %s)", [r['payment_id'], midtrans_status])
+        except Exception as e:
+            pass
+
     
 class LoanViewSet(viewsets.ModelViewSet):
     serializer_class = LoanSerializer
@@ -460,9 +562,8 @@ class LoanViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def active_summary(self, request):
-        member_id = 1 # default for testing
-        if request.user.is_authenticated and hasattr(request.user, 'member'):
-            member_id = request.user.member.id
+        member_id = request.query_params.get('member_id', 1)
+        sync_member_pending_payments(member_id)
 
         query = """
         SELECT 
@@ -473,6 +574,7 @@ class LoanViewSet(viewsets.ModelViewSet):
             l.principal_amount,
             la.purpose,
             la.admin_update,
+            la.salary_statement_file,
             (l.interest_amount / NULLIF(l.principal_amount, 0)) * 100 AS bunga,
             li_summary.total_installment,
             li_summary.paid_installment,
@@ -509,13 +611,14 @@ class LoanViewSet(viewsets.ModelViewSet):
             columns = [col[0] for col in cursor.description]
             results = [dict(zip(columns, row)) for row in cursor.fetchall()]
             
+        for r in results:
+            if isinstance(r, dict) and 'salary_statement_file' in r:
+                r['salary_statement_file'] = get_absolute_media_url(request, r['salary_statement_file'])
         return Response(results)
 
     @action(detail=False, methods=['get'])
     def completed_summary(self, request):
-        member_id = 1 # default for testing
-        if request.user.is_authenticated and hasattr(request.user, 'member'):
-            member_id = request.user.member.id
+        member_id = request.query_params.get('member_id', 1)
 
         query = """
         SELECT 
@@ -526,6 +629,7 @@ class LoanViewSet(viewsets.ModelViewSet):
             l.principal_amount,
             la.purpose,
             la.admin_update,
+            la.salary_statement_file,
             (l.interest_amount / NULLIF(l.principal_amount, 0)) * 100 AS bunga,
             li_summary.total_installment,
             li_summary.paid_installment,
@@ -569,6 +673,9 @@ class LoanViewSet(viewsets.ModelViewSet):
             cursor.execute(query, [member_id])
             columns = [col[0] for col in cursor.description]
             results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        for r in results:
+            if isinstance(r, dict) and 'salary_statement_file' in r:
+                r['salary_statement_file'] = get_absolute_media_url(request, r['salary_statement_file'])
         return Response(results)
 
     # @action(detail=True, methods=['get'])
@@ -603,24 +710,30 @@ class LoanViewSet(viewsets.ModelViewSet):
     def schedule(self, request, pk=None):
         query = """
         SELECT  
+            li.id,
             li.installment_number, 
             li.due_date, 
             li.amount_principal, 
             li.amount_interest, 
             li.amount_total, 
-            s.status_code  
+            s.status_code,
+            mp.proof_file_path as payment_proof
         FROM loan_installments li 
         INNER JOIN loans la ON la.id = li.loan_id 
         INNER JOIN statuses s ON s.id = li.status_id 
+        LEFT JOIN (
+            SELECT DISTINCT ON (installment_id) *
+            FROM loan_payments
+            ORDER BY installment_id, created_at DESC
+        ) lp ON lp.installment_id = li.id
+        LEFT JOIN manual_payments mp ON mp.payment_reference_id = lp.payment_reference_id
         WHERE la.id = %s
         """
         params = [pk]
         
         # If not staff, filter by member_id for security
         if not request.user.is_staff:
-            member_id = 1 # default for testing
-            if hasattr(request.user, 'member'):
-                member_id = request.user.member.id
+            member_id = request.query_params.get('member_id', 1)
             query += " AND la.member_id = %s"
             params.append(member_id)
             
@@ -631,10 +744,15 @@ class LoanViewSet(viewsets.ModelViewSet):
             columns = [col[0] for col in cursor.description]
             results = [dict(zip(columns, row)) for row in cursor.fetchall()]
             
+        for r in results:
+            if r.get('payment_proof'):
+                r['payment_proof'] = get_absolute_media_url(request, r['payment_proof'])
+            
         return Response(results)
 
     @action(detail=True, methods=['get'])
     def payment_invoice(self, request, pk=None):
+        # 1. Query for any PENDING payment for this loan
         query = """
         SELECT  
             pm.name AS payment_method,
@@ -643,21 +761,22 @@ class LoanViewSet(viewsets.ModelViewSet):
             lp.payment_date,
             li.installment_number,
             l.member_id,
-            s.status_code
+            s.status_code,
+            pgt.callback_raw_data AS raw_gateway_data,
+            pgt.gateway_transaction_id AS order_id,
+            lp.id AS payment_id,
+            pgt.id AS pgt_id
         FROM loan_payments lp
         INNER JOIN statuses s ON s.id = lp.status_id 
         JOIN payment_methods pm ON pm.id = lp.payment_method_id
         JOIN loan_installments li ON li.id = lp.installment_id
         JOIN loans l ON l.id = li.loan_id
-        LEFT JOIN payment_gateway_transactions pgt ON pgt.id = lp.id
-        WHERE l.id = %s
+        LEFT JOIN payment_gateway_transactions pgt ON CAST(pgt.id AS varchar) = lp.payment_reference_id
+        WHERE l.id = %s AND s.status_code = 'PENDING'
         """
         params = [pk]
-
         if not request.user.is_staff:
-            member_id = 1
-            if hasattr(request.user, 'member'):
-                member_id = request.user.member.id
+            member_id = request.query_params.get('member_id', 1)
             query += " AND l.member_id = %s"
             params.append(member_id)
 
@@ -665,8 +784,356 @@ class LoanViewSet(viewsets.ModelViewSet):
             cursor.execute(query, params)
             columns = [col[0] for col in cursor.description]
             results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+        # Verify live status with Midtrans API to filter out expired transactions
+        import requests
+        import base64
+        import json
+        
+        server_key = settings.MIDTRANS_SERVER_KEY
+        is_production = getattr(settings, 'MIDTRANS_IS_PRODUCTION', False)
+        auth_str = f"{server_key}:"
+        auth_bytes = auth_str.encode('utf-8')
+        auth_base64 = base64.b64encode(auth_bytes).decode('utf-8')
+        
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "Authorization": f"Basic {auth_base64}"
+        }
+        
+        valid_results = []
+        for r in results:
+            order_id = r.get('order_id')
+            if order_id:
+                status_url = f"https://api.midtrans.com/v2/{order_id}/status" if is_production else f"https://api.sandbox.midtrans.com/v2/{order_id}/status"
+                try:
+                    res = requests.get(status_url, headers=headers, timeout=5)
+                    if res.status_code == 200:
+                        midtrans_status = res.json().get('transaction_status')
+                        if midtrans_status in ['expire', 'cancel', 'deny', 'failure']:
+                            # Update records to reflect the failure/expiration
+                            with connection.cursor() as cursor:
+                                cursor.execute("UPDATE payment_gateway_transactions SET gateway_status = %s, updated_at = NOW() WHERE id = %s", [midtrans_status, r['pgt_id']])
+                                status_id = 36 if midtrans_status == 'cancel' else 35
+                                cursor.execute("UPDATE loan_payments SET status_id = %s, updated_at = NOW() WHERE id = %s", [status_id, r['payment_id']])
+                            continue
+                        elif midtrans_status in ['settlement', 'capture']:
+                            # Settle the payment in database using Stored Procedure!
+                            with connection.cursor() as cursor:
+                                cursor.execute("CALL sp_loan_gateway_payment(%s, %s)", [r['payment_id'], midtrans_status])
+                            continue
+                except:
+                    pass
             
+            # Parse snap_token if stored inside raw_gateway_data
+            snap_token = None
+            if r.get('raw_gateway_data'):
+                try:
+                    snap_token = json.loads(r['raw_gateway_data']).get('snap_token')
+                except:
+                    pass
+            r['snap_token'] = snap_token
+            valid_results.append(r)
+            
+        results = valid_results
+            
+        # 2. If no pending payment, query the earliest unpaid installment
+        if not results:
+            unpaid_query = """
+            SELECT 
+                'GATEWAY' AS payment_method,
+                'PENDING' AS gateway_status,
+                li.amount_total AS amount_paid,
+                NULL AS payment_date,
+                li.installment_number,
+                l.member_id,
+                'UNPAID' AS status_code,
+                NULL AS snap_token
+            FROM loan_installments li
+            JOIN loans l ON l.id = li.loan_id
+            WHERE l.id = %s AND li.status_id IN (28, 30)
+            """
+            unpaid_params = [pk]
+            if not request.user.is_staff:
+                member_id = request.query_params.get('member_id', 1)
+                unpaid_query += " AND l.member_id = %s"
+                unpaid_params.append(member_id)
+                
+            unpaid_query += " ORDER BY li.installment_number ASC LIMIT 1"
+            
+            with connection.cursor() as cursor:
+                cursor.execute(unpaid_query, unpaid_params)
+                columns = [col[0] for col in cursor.description]
+                results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+                
         return Response(results)
+
+    @action(detail=False, methods=['get'])
+    def payment_channels(self, request):
+        """
+        List all active payment channels and their master fees.
+        """
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT channel_code, channel_name, fee_percentage, fee_fixed FROM payment_channels WHERE is_active = TRUE ORDER BY id ASC")
+            columns = [col[0] for col in cursor.description]
+            results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        return Response(results)
+
+    @action(detail=True, methods=['post'])
+    def create_payment_token(self, request, pk=None):
+        import requests
+        import base64
+        import json
+        
+        server_key = settings.MIDTRANS_SERVER_KEY
+        is_production = getattr(settings, 'MIDTRANS_IS_PRODUCTION', False)
+        
+        auth_str = f"{server_key}:"
+        auth_bytes = auth_str.encode('utf-8')
+        auth_base64 = base64.b64encode(auth_bytes).decode('utf-8')
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Authorization": f"Basic {auth_base64}"
+        }
+        
+        # 1. Get the earliest unpaid installment for this loan
+        query_installment = """
+        SELECT li.id, li.amount_total, li.installment_number
+        FROM loan_installments li
+        JOIN loans l ON l.id = li.loan_id
+        WHERE l.id = %s AND li.status_id IN (28, 30)
+        """
+        params = [pk]
+        if not request.user.is_staff:
+            member_id = request.query_params.get('member_id', 1)
+            query_installment += " AND l.member_id = %s"
+            params.append(member_id)
+            
+        query_installment += " ORDER BY li.installment_number ASC LIMIT 1"
+        
+        with connection.cursor() as cursor:
+            cursor.execute(query_installment, params)
+            row = cursor.fetchone()
+            
+        if not row:
+            return Response({'error': 'No unpaid installments found for this loan.'}, status=400)
+            
+        installment_id, amount_total, installment_number = row
+        
+        # Determine dynamic fee SECURELY from database master data
+        payment_type = request.data.get('payment_type')
+        fee_percentage = 0.0
+        fee_fixed = 0.0
+        
+        if payment_type:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT fee_percentage, fee_fixed FROM payment_channels WHERE channel_code = %s AND is_active = TRUE", [payment_type])
+                channel_row = cursor.fetchone()
+                if channel_row:
+                    fee_percentage = float(channel_row[0])
+                    fee_fixed = float(channel_row[1])
+        
+        admin_fee = int((float(amount_total) * fee_percentage) / 100) + int(fee_fixed)
+        gross_amount = int(amount_total) + admin_fee
+        
+        # 2. Check if a PENDING loan payment already exists for this installment
+        check_pending = """
+        SELECT pgt.callback_raw_data, pgt.gateway_transaction_id, lp.id, pgt.id
+        FROM loan_payments lp
+        JOIN payment_gateway_transactions pgt ON CAST(pgt.id AS varchar) = lp.payment_reference_id
+        WHERE lp.installment_id = %s AND lp.status_id = 32
+        LIMIT 1
+        """
+        with connection.cursor() as cursor:
+            cursor.execute(check_pending, [installment_id])
+            existing = cursor.fetchone()
+            
+        if existing:
+            raw_data, order_id, payment_id, pgt_id = existing
+            
+            # Verify live status with Midtrans
+            is_expired = False
+            if order_id:
+                status_url = f"https://api.midtrans.com/v2/{order_id}/status" if is_production else f"https://api.sandbox.midtrans.com/v2/{order_id}/status"
+                try:
+                    res = requests.get(status_url, headers=headers, timeout=5)
+                    if res.status_code == 200:
+                        midtrans_status = res.json().get('transaction_status')
+                        if midtrans_status in ['expire', 'cancel', 'deny', 'failure']:
+                            with connection.cursor() as cursor:
+                                cursor.execute("UPDATE payment_gateway_transactions SET gateway_status = %s, updated_at = NOW() WHERE id = %s", [midtrans_status, pgt_id])
+                                status_id = 36 if midtrans_status == 'cancel' else 35
+                                cursor.execute("UPDATE loan_payments SET status_id = %s, updated_at = NOW() WHERE id = %s", [status_id, payment_id])
+                            is_expired = True
+                        elif midtrans_status in ['settlement', 'capture']:
+                            with connection.cursor() as cursor:
+                                cursor.execute("UPDATE payment_gateway_transactions SET gateway_status = %s, updated_at = NOW() WHERE id = %s", [midtrans_status, pgt_id])
+                                cursor.execute("UPDATE loan_payments SET status_id = 34, payment_date = NOW(), updated_at = NOW() WHERE id = %s", [payment_id])
+                                cursor.execute("UPDATE loan_installments SET status_id = 29, updated_at = NOW() WHERE id = %s", [installment_id])
+                                cursor.execute("""
+                                    UPDATE loans
+                                    SET
+                                        remaining_balance = GREATEST(remaining_balance - %s, 0),
+                                        status_id = CASE
+                                            WHEN (remaining_balance - %s) <= 0 AND NOT EXISTS (
+                                                SELECT 1 FROM loan_installments li
+                                                WHERE li.loan_id = %s AND li.status_id = 28
+                                            ) THEN 26
+                                            ELSE 25
+                                        END,
+                                        updated_at = NOW()
+                                    WHERE id = %s
+                                """, [amount_total, amount_total, pk, pk])
+                            return Response({'error': 'This installment has already been paid successfully.'}, status=400)
+                except:
+                    pass
+                    
+            if not is_expired:
+                if request.data.get('payment_type'):
+                    # Invalidate old token locally to generate a new one with correct fee/method
+                    with connection.cursor() as cursor:
+                        cursor.execute("UPDATE payment_gateway_transactions SET gateway_status = 'cancel', updated_at = NOW() WHERE id = %s", [pgt_id])
+                        cursor.execute("UPDATE loan_payments SET status_id = 36, updated_at = NOW() WHERE id = %s", [payment_id])
+                else:
+                    snap_token = None
+                    if raw_data:
+                        try:
+                            snap_token = json.loads(raw_data).get('snap_token')
+                        except:
+                            pass
+                    if snap_token:
+                        return Response({
+                            'snap_token': snap_token,
+                            'order_id': order_id,
+                            'amount': gross_amount
+                        })
+            
+        # 3. Create a new transaction with Midtrans Snap API
+        order_id = f"KOP-LOAN-{pk}-{installment_number}-{int(timezone.now().timestamp())}"
+        
+        url = "https://app.midtrans.com/snap/v1/transactions" if is_production else "https://app.sandbox.midtrans.com/snap/v1/transactions"
+        
+        # Determine customer first name and email from the loan's member data
+        first_name = ""
+        email = ""
+        
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT m.full_name, u.email, 
+                FROM loans l
+                inner join members m on l.member_id = m.id
+                inner join users u on m.user_id = u.id
+                WHERE l.id = %s
+            """, [pk])
+            member_row = cursor.fetchone()
+            if member_row:
+                first_name = member_row[0] or first_name
+                email = member_row[1] or email
+                
+        item_details = [
+            {
+                "id": f"INST-{installment_id}",
+                "price": int(amount_total),
+                "quantity": 1,
+                "name": f"Cicilan Pinjaman ke-{installment_number}"
+            }
+        ]
+        
+        if admin_fee > 0:
+            fee_label = f"Biaya Layanan ({fee_percentage}%)" if fee_percentage > 0 else "Biaya Layanan"
+            item_details.append({
+                "id": "FEE-ADMIN",
+                "price": admin_fee,
+                "quantity": 1,
+                "name": fee_label
+            })
+            
+        payload = {
+            "transaction_details": {
+                "order_id": order_id,
+                "gross_amount": gross_amount
+            },
+            "item_details": item_details,
+            "customer_details": {
+                "first_name": first_name,
+                "email": email
+            }
+        }
+        
+        if payment_type:
+            mapping = {
+                'qris': ['other_qris', 'gopay'],
+                'gopay': ['gopay'],
+                'shopeepay': ['shopeepay'],
+                'dana': ['other_qris'], # DANA typically via QRIS in Midtrans
+                'bca_va': ['bca_va'],
+                'bni_va': ['bni_va'],
+                'bri_va': ['bri_va'],
+                'mandiri_va': ['echannel'],
+                'permata_va': ['permata_va'],
+                'other_va': ['other_va']
+            }
+            payload["enabled_payments"] = mapping.get(payment_type, [payment_type])
+        
+        try:
+            response = requests.post(url, json=payload, headers=headers)
+            res_data = response.json()
+            
+            if response.status_code != 201:
+                error_msg = res_data.get('error_messages', ['Failed to create transaction with Midtrans'])[0]
+                return Response({'error': error_msg}, status=400)
+                
+            snap_token = res_data['token']
+            redirect_url = res_data['redirect_url']
+            
+            # Save snap token in callback_raw_data field
+            raw_data = json.dumps({"snap_token": snap_token})
+            
+            # 4. Save to Database (payment_gateway_transactions & loan_payments)
+            with connection.cursor() as cursor:
+                # Insert into payment_gateway_transactions
+                # payable_type_id = 2 (loan_payment)
+                cursor.execute("""
+                    INSERT INTO payment_gateway_transactions (
+                        payable_type_id,
+                        gateway_provider,
+                        gateway_transaction_id,
+                        gateway_status,
+                        callback_raw_data,
+                        created_at,
+                        updated_at
+                    ) VALUES (%s, %s, %s, %s, %s, NOW(), NOW()) RETURNING id
+                """, [2, 'MIDTRANS', order_id, 'pending', raw_data])
+                pgt_id = cursor.fetchone()[0]
+                
+                # Insert into loan_payments
+                # payment_method_id = 1 (GATEWAY)
+                # status_id = 32 (PENDING)
+                cursor.execute("""
+                    INSERT INTO loan_payments (
+                        installment_id,
+                        amount_paid,
+                        admin_fee,
+                        payment_date,
+                        payment_method_id,
+                        payment_reference_id,
+                        status_id,
+                        created_at,
+                        updated_at
+                    ) VALUES (%s, %s, %s, NOW(), %s, %s, %s, NOW(), NOW())
+                """, [installment_id, amount_total, admin_fee, 1, pgt_id, 32])
+                
+            return Response({
+                'snap_token': snap_token,
+                'redirect_url': redirect_url,
+                'order_id': order_id,
+                'amount': gross_amount
+            })
+            
+        except Exception as e:
+            return Response({'error': f"Connection to Midtrans failed: {str(e)}"}, status=500)
 
     @action(detail=True, methods=['get'])
     def receipts(self, request, pk=None):
@@ -675,6 +1142,7 @@ class LoanViewSet(viewsets.ModelViewSet):
             pm.name AS payment_method,
             pgt.gateway_status,
             lp.amount_paid,
+            COALESCE(lp.admin_fee, 0) AS admin_fee,
             lp.payment_date,
             li.installment_number,
             l.member_id,
@@ -685,15 +1153,13 @@ class LoanViewSet(viewsets.ModelViewSet):
         JOIN payment_methods pm ON pm.id = lp.payment_method_id
         JOIN loan_installments li ON li.id = lp.installment_id
         JOIN loans l ON l.id = li.loan_id
-        LEFT JOIN payment_gateway_transactions pgt ON pgt.id = lp.id
+        LEFT JOIN payment_gateway_transactions pgt ON CAST(pgt.id AS varchar) = lp.payment_reference_id
         WHERE l.id = %s
         """
         params = [pk]
 
         if not request.user.is_staff:
-            member_id = 1
-            if hasattr(request.user, 'member'):
-                member_id = request.user.member.id
+            member_id = request.query_params.get('member_id', 1)
             query += " AND l.member_id = %s"
             params.append(member_id)
 
@@ -1014,6 +1480,11 @@ class LoanViewSet(viewsets.ModelViewSet):
                 cursor.execute(query, params)
                 columns = [col[0] for col in cursor.description]
                 results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+            for r in results:
+                if 'salary_statement_file' in r:
+                    r['salary_statement_file'] = get_absolute_media_url(request, r['salary_statement_file'])
+            
             return Response(results)
         except Exception as e:
             return Response({'error': str(e)}, status=400)
@@ -1042,6 +1513,7 @@ class LoanViewSet(viewsets.ModelViewSet):
                     m.nik_employee,
                     d.department_name, 
                     la.purpose,
+                    la.salary_statement_file,
                     la.duration_months,
                     la.amount_requested, 
                     l.principal_amount,
@@ -1140,6 +1612,7 @@ class LoanViewSet(viewsets.ModelViewSet):
             COALESCE(current_month_inst.due_date, NULL) AS current_month_due_date,
             COALESCE(current_month_inst.amount_total, 0) AS current_month_amount,
             COALESCE(current_month_inst.inst_status_id, NULL) AS current_month_status_id,
+            es.status_name as employee_status,
         
             CASE 
                 WHEN COALESCE(li_summary.total_installment, 0) > 0 
@@ -1154,6 +1627,7 @@ class LoanViewSet(viewsets.ModelViewSet):
         INNER JOIN loan_types lt ON la.loan_type_id = lt.id
         INNER JOIN loans l ON l.application_id = la.id   
         INNER JOIN statuses s on s.id = l.status_id
+        LEFT JOIN employee_statuses es ON es.id = m.employee_status_id
         JOIN (
             SELECT 
                 loan_id,
@@ -1176,7 +1650,7 @@ class LoanViewSet(viewsets.ModelViewSet):
             LIMIT 1
         ) current_month_inst ON TRUE
         WHERE 
-            l.status_id = 25 
+            l.status_id IN (25, 26) 
             AND u.is_active = true 
             AND m.employee_status_id IN (1,2)
             AND current_month_inst.inst_id IS NOT NULL
@@ -1187,6 +1661,199 @@ class LoanViewSet(viewsets.ModelViewSet):
             results = [dict(zip(columns, row)) for row in cursor.fetchall()]
             
         return Response(results)
+
+    @action(detail=False, methods=['get'])
+    def payroll_savings_list(self, request):
+        period = request.query_params.get('period')
+        if not period:
+            from datetime import datetime
+            period = datetime.now().strftime('%Y-%m')
+            
+        try:
+            year, month = period.split('-')
+        except ValueError:
+            return Response({'error': 'Invalid period format. Use YYYY-MM'}, status=400)
+
+        query = """
+        SELECT 
+            m.id AS id,
+            m.id AS member_id,
+            m.full_name,
+            m.nik_employee,
+            d.department_name,
+            es.status_name AS employee_status,
+            MAX(msb.bill_period_start) AS bill_period_start,
+            MAX(msb.bill_period_end) AS bill_period_end,
+
+            -- MANDATORY
+            MAX(CASE WHEN st.id = 1 THEN msb.id END) AS mandatory_bill_id,
+            COALESCE(MAX(CASE WHEN st.id = 1 THEN msb.amount_due ELSE 0 END), 0) AS mandatory_amount,
+            COALESCE(MAX(CASE WHEN st.id = 1 AND msb.status_id = 38 THEN msb.amount_due ELSE 0 END), 0) AS mandatory_outstanding,
+
+            -- VOLUNTARY
+            MAX(CASE WHEN st.id = 2 THEN msb.id END) AS voluntary_bill_id,
+            COALESCE(MAX(CASE WHEN st.id = 2 THEN msb.amount_due ELSE 0 END), 0) AS voluntary_amount,
+            COALESCE(MAX(CASE WHEN st.id = 2 AND msb.status_id = 38 THEN msb.amount_due ELSE 0 END), 0) AS voluntary_outstanding,
+
+            -- PRINCIPAL
+            MAX(CASE WHEN st.id = 3 THEN msb.id END) AS principal_bill_id,
+            COALESCE(MAX(CASE WHEN st.id = 3 THEN msb.amount_due ELSE 0 END), 0) AS principal_amount,
+            COALESCE(MAX(CASE WHEN st.id = 3 AND msb.status_id = 38 THEN msb.amount_due ELSE 0 END), 0) AS principal_outstanding,
+
+            -- TOTALS
+            COALESCE(SUM(CASE WHEN msb.status_id = 38 THEN msb.amount_due ELSE 0 END), 0) AS total_outstanding,
+            COALESCE(SUM(msb.amount_due), 0) AS total_amount
+        FROM monthly_saving_bills msb
+        INNER JOIN members m ON m.id = msb.member_id 
+        INNER JOIN departments d ON d.id = m.department_id 
+        INNER JOIN saving_types st ON st.id = msb.saving_type_id 
+        LEFT JOIN employee_statuses es ON es.id = m.employee_status_id
+        WHERE EXTRACT(YEAR FROM msb.bill_period_start) = %s 
+          AND EXTRACT(MONTH FROM msb.bill_period_start) = %s
+        GROUP BY 
+            m.id,
+            m.full_name,
+            m.nik_employee,
+            d.department_name,
+            es.status_name
+        """
+        with connection.cursor() as cursor:
+            cursor.execute(query, [year, month])
+            columns = [col[0] for col in cursor.description]
+            results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+        # Format items to match frontend expectation perfectly
+        formatted_results = []
+        for item in results:
+            total_outstanding = float(item['total_outstanding'])
+            total_amount = float(item['total_amount'])
+            total_paid = total_amount - total_outstanding
+            is_paid = total_outstanding == 0
+            status_id = 39 if is_paid else 38
+            
+            formatted_results.append({
+                'id': item['member_id'],
+                'member_id': item['member_id'],
+                'full_name': item['full_name'],
+                'nik_employee': item['nik_employee'],
+                'department_name': item['department_name'],
+                'employee_status': item['employee_status'],
+                'pokok': float(item['principal_amount']),
+                'wajib': float(item['mandatory_amount']),
+                'sukarela': float(item['voluntary_amount']),
+                'bulat': 0, 
+                'total': total_amount,
+                'total_paid': total_paid,
+                'is_paid': is_paid,
+                'status_id': status_id,
+                'mandatory_bill_id': item['mandatory_bill_id'],
+                'voluntary_bill_id': item['voluntary_bill_id'],
+                'principal_bill_id': item['principal_bill_id'],
+                'mandatory_outstanding': float(item['mandatory_outstanding']),
+                'voluntary_outstanding': float(item['voluntary_outstanding']),
+                'principal_outstanding': float(item['principal_outstanding']),
+                'total_outstanding': total_outstanding
+            })
+            
+        return Response(formatted_results)
+
+    @action(detail=False, methods=['post'])
+    def confirm_payroll_savings(self, request):
+        saving_ids = request.data.get('saving_ids', []) 
+        period = request.data.get('period')
+
+        if not saving_ids or not period:
+            return Response({'error': 'saving_ids and period are required'}, status=400)
+
+        try:
+            year, month = period.split('-')
+        except ValueError:
+            return Response({'error': 'Invalid period format'}, status=400)
+
+        results = []
+        failed = []
+
+        with connection.cursor() as cursor:
+            for member_id in saving_ids:
+                # Find unpaid bills for this member in the selected period
+                cursor.execute("""
+                    SELECT id, saving_type_id 
+                    FROM monthly_saving_bills 
+                    WHERE member_id = %s AND status_id = 38
+                      AND EXTRACT(YEAR FROM bill_period_start) = %s
+                      AND EXTRACT(MONTH FROM bill_period_start) = %s
+                """, [member_id, year, month])
+                bills = cursor.fetchall()
+                
+                if not bills:
+                    failed.append({'member_id': member_id, 'reason': 'No pending bills found'})
+                    continue
+
+                for bill_id, saving_type_id in bills:
+                    try:
+                        with transaction.atomic():
+                            cursor.execute(
+                                "CALL public.sp_savings_payroll_transaction(%s, %s, %s)",
+                                [bill_id, member_id, saving_type_id]
+                            )
+                        results.append(bill_id)
+                    except Exception as e:
+                        error_msg = str(e).split('\n')[0].strip()
+                        failed.append({'member_id': member_id, 'bill_id': bill_id, 'reason': error_msg})
+
+        if failed:
+            return Response({
+                'message': f'Processed {len(results)} savings. {len(failed)} failed.',
+                'success': results,
+                'failed': failed
+            }, status=207)
+
+        return Response({'message': f'Successfully processed {len(results)} savings deductions.'})
+
+    @action(detail=False, methods=['post'])
+    def rollback_payroll_savings(self, request):
+        member_id = request.data.get('saving_id') 
+        period = request.data.get('period')
+
+        if not member_id or not period:
+            return Response({'error': 'saving_id and period are required'}, status=400)
+
+        try:
+            year, month = period.split('-')
+        except ValueError:
+            return Response({'error': 'Invalid period format'}, status=400)
+
+        try:
+            with transaction.atomic():
+                with connection.cursor() as cursor:
+                    # Find paid bills for this member in the selected period (status_id in (39, 40))
+                    # and which actually have a payroll transaction (payment_method_id = 2) in saving_transactions
+                    cursor.execute("""
+                        SELECT id, saving_type_id 
+                        FROM monthly_saving_bills 
+                        WHERE member_id = %s AND status_id IN (39, 40)
+                          AND EXTRACT(YEAR FROM bill_period_start) = %s
+                          AND EXTRACT(MONTH FROM bill_period_start) = %s
+                          AND id IN (
+                              SELECT monthly_saving_bill_id 
+                              FROM saving_transactions 
+                              WHERE member_id = %s AND payment_method_id = 2
+                          )
+                    """, [member_id, year, month, member_id])
+                    bills = cursor.fetchall()
+
+                    if not bills:
+                        return Response({'error': 'No paid payroll bills found for this period to rollback.'}, status=400)
+
+                    for bill_id, saving_type_id in bills:
+                        cursor.execute(
+                            "CALL public.sp_rollback_savings_payroll_transaction(%s, %s, %s)",
+                            [bill_id, member_id, saving_type_id]
+                        )
+
+            return Response({'message': 'Rollback processed successfully'})
+        except Exception as e:
+            return Response({'error': str(e)}, status=400)
 
     @action(detail=False, methods=['post'])
     def confirm_payroll_payments(self, request):
@@ -1201,12 +1868,16 @@ class LoanViewSet(viewsets.ModelViewSet):
 
         with connection.cursor() as cursor:
             for inst_id in installment_ids:
-                cursor.execute("SELECT loan_payroll_installment(%s)", [inst_id])
-                result_msg = cursor.fetchone()[0]
-                if result_msg == 'SUCCESS':
+                try:
+                    # Menggunakan subtransaksi atomic (Savepoint) agar jika satu cicilan error (RAISE EXCEPTION), 
+                    # koneksi database tidak rusak dan bisa melanjutkan ke cicilan berikutnya
+                    with transaction.atomic():
+                        cursor.execute("CALL public.sp_loan_payroll_installment(%s)", [inst_id])
                     results.append(inst_id)
-                else:
-                    failed.append({'installment_id': inst_id, 'reason': result_msg})
+                except Exception as e:
+                    # Tangkap pesan exception dari PostgreSQL (seperti 'INSTALLMENT NOT FOUND' atau 'INSTALLMENT ALREADY PAID')
+                    error_msg = str(e).split('\n')[0].strip()
+                    failed.append({'installment_id': inst_id, 'reason': error_msg})
 
         if failed:
             return Response({
@@ -1225,14 +1896,16 @@ class LoanViewSet(viewsets.ModelViewSet):
         if not installment_id:
             return Response({'error': 'installment_id is required'}, status=400)
 
-        with connection.cursor() as cursor:
-            cursor.execute("SELECT rollback_loan_payroll_installment(%s)", [installment_id])
-            result_msg = cursor.fetchone()[0]
-
-        if result_msg == 'ROLLBACK SUCCESS':
-            return Response({'message': result_msg})
-        else:
-            return Response({'error': result_msg}, status=400)
+        try:
+            # Menggunakan subtransaksi atomic (Savepoint) agar aman jika terjadi RAISE EXCEPTION
+            with transaction.atomic():
+                with connection.cursor() as cursor:
+                    cursor.execute("CALL public.sp_rollback_loan_payroll_installment(%s)", [installment_id])
+            return Response({'message': 'Rollback processed successfully'})
+        except Exception as e:
+            # Tangkap pesan exception dari PostgreSQL (seperti 'INSTALLMENT NOT FOUND' atau 'INSTALLMENT IS NOT PAID')
+            error_msg = str(e).split('\n')[0].strip()
+            return Response({'error': error_msg}, status=400)
 
     @action(detail=False, methods=['get'])
     def admin_pending_stats(self, request):
@@ -1534,7 +2207,7 @@ class LoanViewSet(viewsets.ModelViewSet):
         from django.core.mail import send_mail
         from django.conf import settings
         
-        member_id = 1
+        member_id = request.query_params.get('member_id', 1)
         
         try:
             # Get member and overdue installments
@@ -1862,11 +2535,11 @@ Sanoh Koperasi Admin
         proof_file = request.FILES.get('proof_file')
         file_path = None
         if proof_file:
-            from django.core.files.storage import FileSystemStorage
+            from django.core.files.storage import default_storage
             import os
-            fs = FileSystemStorage(location=os.path.join(settings.MEDIA_ROOT, 'manual_payments'))
-            filename = fs.save(proof_file.name, proof_file)
-            file_path = os.path.join('manual_payments', filename)
+            # Save to 'manual_payments/' folder in default storage (Cloud or Local)
+            filename = default_storage.save(f'manual_payments/{proof_file.name}', proof_file)
+            file_path = filename
 
         results = []
         errors = []
@@ -1893,16 +2566,12 @@ Sanoh Koperasi Admin
                                 """, [member_id])
                                 inst = cursor.fetchone()
                                 if inst:
-                                    cursor.execute("SELECT manual_loan_installment(%s, %s, %s, %s, %s)", 
+                                    cursor.execute("CALL public.sp_manual_loan_installment(%s, %s, %s, %s, %s)", 
                                                  [inst[0], member_id, file_path, admin_id, notes])
-                                    res_msg = cursor.fetchone()[0]
-                                    if 'SUCCESS' in res_msg: 
-                                        results.append(f"Loan: {res_msg}")
-                                    else: 
-                                        errors.append(f"Loan: {res_msg}")
-                                        raise Exception(f"Loan SP failed: {res_msg}")
+                                    results.append("Loan: Repayment processed successfully")
                                 else:
                                     errors.append("Loan: No unpaid installments found")
+                                    raise Exception("Loan SP failed: No unpaid installments found")
 
                             # 2. SAVINGS
                             elif p_type in ['mandatory', 'voluntary']:
@@ -1914,27 +2583,17 @@ Sanoh Koperasi Admin
                                 """, [member_id, s_type_id])
                                 bill = cursor.fetchone()
                                 if bill:
-                                    cursor.execute("SELECT manual_savings_transaction(%s, %s, %s, %s, %s, %s)", 
+                                    cursor.execute("CALL public.sp_manual_savings_transaction(%s, %s, %s, %s, %s, %s)", 
                                                  [bill[0], member_id, s_type_id, file_path, admin_id, notes])
-                                    res_msg = cursor.fetchone()[0]
-                                    if 'SUCCESS' in res_msg: 
-                                        results.append(f"{p_type.capitalize()}: {res_msg}")
-                                    else: 
-                                        errors.append(f"{p_type.capitalize()}: {res_msg}")
-                                        raise Exception(f"{p_type.capitalize()} SP failed: {res_msg}")
+                                    results.append(f"{p_type.capitalize()}: Repayment processed successfully")
                                 else:
                                     errors.append(f"{p_type.capitalize()}: No pending bills found")
 
                             # 3. WITHDRAWAL
                             elif p_type == 'withdrawal':
-                                cursor.execute("SELECT manual_withdrawal_transaction(%s, %s, %s, %s, %s)", 
+                                cursor.execute("CALL public.sp_manual_withdrawal_transaction(%s, %s, %s, %s, %s)", 
                                              [member_id, admin_id, p_amount, file_path, notes])
-                                res_msg = cursor.fetchone()[0]
-                                if 'SUCCESS' in res_msg or 'SUCCESS' in res_msg.upper(): 
-                                    results.append(f"Withdrawal: {res_msg}")
-                                else: 
-                                    errors.append(f"Withdrawal: {res_msg}")
-                                    raise Exception(f"Withdrawal SP failed: {res_msg}")
+                                results.append("Withdrawal: Processed successfully")
 
                         except Exception as e:
                             # If it's not our raised Exception, it's a DB/System error
@@ -2108,14 +2767,20 @@ Sanoh Koperasi Admin
         Includes saving balances, remaining loan, and total outstanding bills/installments.
         """
         if not request.user.is_authenticated or not hasattr(request.user, 'member'):
-            # Fallback member_id for development/testing if not logged in
-            member_id = request.query_params.get('member_id', 1)
+            member_id = request.query_params.get('member_id')
+            if not member_id:
+                return Response({'error': 'Authentication required or member_id missing'}, status=401)
         else:
             member_id = request.user.member.id
 
+        sync_member_pending_payments(member_id)
+
         query = """
         WITH member_info AS (
-            SELECT full_name FROM members WHERE id = %s
+            SELECT m.full_name, es.status_name as employee_status, m.employee_status_id
+            FROM members m
+            LEFT JOIN employee_statuses es ON es.id = m.employee_status_id
+            WHERE m.id = %s
         ),
         saving_data AS (
             SELECT 
@@ -2155,25 +2820,50 @@ Sanoh Koperasi Admin
                 li.amount_total as next_due_amount
             FROM loan_installments li
             JOIN active_loan al ON al.id = li.loan_id
-            WHERE li.status_id IN (27, 28)
+            WHERE li.status_id IN (27, 28, 30)
             ORDER BY li.due_date ASC
             LIMIT 1
         ),
+        total_unpaid_installments AS (
+            SELECT 
+                COALESCE(SUM(li.amount_total), 0) as total_unpaid_installments,
+                COALESCE(
+                    JSON_AGG(
+                        JSON_BUILD_OBJECT(
+                            'id', li.id,
+                            'installment_number', li.installment_number,
+                            'due_date', li.due_date,
+                            'amount_total', li.amount_total
+                        ) ORDER BY li.installment_number ASC
+                    ), '[]'::json
+                ) as unpaid_installments_list
+            FROM loan_installments li
+            JOIN active_loan al ON al.id = li.loan_id
+            WHERE li.status_id IN (27, 28, 30)
+        ),
         outstanding_bills AS (
             SELECT 
-                COALESCE(SUM(amount_due - COALESCE(amount_paid, 0)), 0) as total_unpaid_bills
+                COALESCE(SUM(amount_due - COALESCE(amount_paid, 0)), 0) as total_unpaid_bills,
+                COALESCE(
+                    JSON_AGG(
+                        JSON_BUILD_OBJECT(
+                            'id', id,
+                            'saving_type_id', saving_type_id,
+                            'bill_date', due_date,
+                            'amount_due', amount_due,
+                            'amount_paid', amount_paid
+                        ) ORDER BY due_date ASC
+                    ), '[]'::json
+                ) as unpaid_bills_list
             FROM monthly_saving_bills 
-            WHERE member_id = %s AND status_id = 38 -- Pending/Unpaid
-        ),
-        outstanding_installments AS (
-            SELECT 
-                COALESCE(SUM(amount_total), 0) as total_unpaid_installments
-            FROM loan_installments li
-            JOIN loans l ON l.id = li.loan_id
-            WHERE l.member_id = %s AND li.status_id IN (27, 28) -- Unpaid/Macet
+            WHERE member_id = %s AND status_id = 38 
+              AND saving_type_id IN (1, 2) -- Mandatory and Voluntary only
+              AND date_trunc('month', due_date) <= date_trunc('month', current_date)
         )
         SELECT 
             mi.full_name,
+            mi.employee_status,
+            mi.employee_status_id,
             sd.*, 
             sg.*,
             COALESCE(ls.principal_amount, 0) as principal_amount,
@@ -2183,20 +2873,23 @@ Sanoh Koperasi Admin
             np.next_due_date,
             np.next_due_amount,
             ob.total_unpaid_bills,
-            oi.total_unpaid_installments,
-            (COALESCE(ls.total_loan_remaining, 0) + ob.total_unpaid_bills + oi.total_unpaid_installments) as grand_total_outstanding
+            ob.unpaid_bills_list,
+            tui.total_unpaid_installments,
+            tui.unpaid_installments_list,
+            CASE WHEN ls.principal_amount IS NOT NULL THEN true ELSE false END as has_active_loan,
+            (ob.total_unpaid_bills + tui.total_unpaid_installments) as grand_total_outstanding
         FROM member_info mi
         CROSS JOIN saving_data sd
         CROSS JOIN saving_growth sg
         LEFT JOIN loan_stats ls ON true
         LEFT JOIN next_payment np ON true
+        CROSS JOIN total_unpaid_installments tui
         CROSS JOIN outstanding_bills ob
-        CROSS JOIN outstanding_installments oi
         """
 
         try:
             with connection.cursor() as cursor:
-                cursor.execute(query, [member_id, member_id, member_id, member_id, member_id, member_id])
+                cursor.execute(query, [member_id, member_id, member_id, member_id, member_id])
                 columns = [col[0] for col in cursor.description]
                 row = cursor.fetchone()
                 result = dict(zip(columns, row)) if row else {}
@@ -2210,61 +2903,100 @@ Sanoh Koperasi Admin
         Get recent transactions specifically for the logged-in member with filtering.
         """
         if not request.user.is_authenticated or not hasattr(request.user, 'member'):
-            member_id = request.query_params.get('member_id', 1)
+            member_id = request.query_params.get('member_id')
+            if not member_id:
+                return Response({'error': 'member_id is required'}, status=400)
         else:
             member_id = request.user.member.id
 
         tx_type = request.query_params.get('type', 'all')
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+        
+        if end_date and len(end_date) == 10:  # Format YYYY-MM-DD
+            end_date += ' 23:59:59'
         
         # Build individual queries
-        savings_q = """
-            SELECT st.transaction_date, tt.name AS transaction_type, st.amount, s.status_name AS status, st.payment_reference_id AS reference
-            FROM saving_transactions st
-            INNER JOIN transaction_types tt ON tt.id = st.transaction_type_id
-            INNER JOIN statuses s ON s.id = st.status_id
-            WHERE st.member_id = %s
-        """
-        
-        withdrawal_q = """
-            SELECT w.request_date AS transaction_date, 'WITHDRAWAL' AS transaction_type, w.amount, s.status_name AS status, w.payment_reference_id AS reference
-            FROM withdrawals w
-            INNER JOIN statuses s ON s.id = w.status_id
-            WHERE w.member_id = %s
-        """
-        
-        loan_q = """
-            SELECT lp.payment_date AS transaction_date, 'LOAN INSTALLMENT' AS transaction_type, lp.amount_paid AS amount, s.status_name AS status, lp.payment_reference_id AS reference
-            FROM loan_payments lp
-            INNER JOIN statuses s ON s.id = lp.status_id
-            INNER JOIN loan_installments li ON li.id = lp.installment_id
-            INNER JOIN loans l ON l.id = li.loan_id
-            WHERE l.member_id = %s
-        """
+        savings_parts = [
+            "SELECT st.transaction_date, tt.name AS transaction_type, st.amount, s.status_name AS status, st.payment_reference_id AS reference",
+            "FROM saving_transactions st",
+            "INNER JOIN transaction_types tt ON tt.id = st.transaction_type_id",
+            "INNER JOIN statuses s ON s.id = st.status_id",
+            "WHERE st.member_id = %s"
+        ]
+        savings_params = [member_id]
+        if start_date:
+            savings_parts.append("AND st.transaction_date >= %s")
+            savings_params.append(start_date)
+        if end_date:
+            savings_parts.append("AND st.transaction_date <= %s")
+            savings_params.append(end_date)
+        savings_q = " ".join(savings_parts)
+
+        withdrawal_parts = [
+            "SELECT w.request_date AS transaction_date, 'WITHDRAWAL' AS transaction_type, w.amount, s.status_name AS status, w.payment_reference_id AS reference",
+            "FROM withdrawals w",
+            "INNER JOIN statuses s ON s.id = w.status_id",
+            "WHERE w.member_id = %s"
+        ]
+        withdrawal_params = [member_id]
+        if start_date:
+            withdrawal_parts.append("AND w.request_date >= %s")
+            withdrawal_params.append(start_date)
+        if end_date:
+            withdrawal_parts.append("AND w.request_date <= %s")
+            withdrawal_params.append(end_date)
+        withdrawal_q = " ".join(withdrawal_parts)
+
+        loan_parts = [
+            """SELECT 
+                lp.payment_date AS transaction_date, 
+                'LOAN INSTALLMENT' AS transaction_type, 
+                lp.amount_paid AS amount, 
+                s.status_name AS status, 
+                CASE 
+                    WHEN lp.payment_method_id = 1 THEN COALESCE(pgt.gateway_transaction_id, lp.payment_reference_id)
+                    ELSE lp.payment_reference_id
+                END AS reference""",
+            "FROM loan_payments lp",
+            "INNER JOIN statuses s ON s.id = lp.status_id",
+            "INNER JOIN loan_installments li ON li.id = lp.installment_id",
+            "INNER JOIN loans l ON l.id = li.loan_id",
+            "LEFT JOIN payment_gateway_transactions pgt ON lp.payment_method_id = 1 AND CAST(pgt.id AS VARCHAR) = lp.payment_reference_id",
+            "WHERE l.member_id = %s"
+        ]
+        loan_params = [member_id]
+        if start_date:
+            loan_parts.append("AND lp.payment_date >= %s")
+            loan_params.append(start_date)
+        if end_date:
+            loan_parts.append("AND lp.payment_date <= %s")
+            loan_params.append(end_date)
+        loan_q = " ".join(loan_parts)
 
         queries = []
         params = []
 
         if tx_type == 'all' or tx_type == 'deposit':
             queries.append(savings_q)
-            params.append(member_id)
+            params.extend(savings_params)
         
         if tx_type == 'all' or tx_type == 'withdrawal':
             queries.append(withdrawal_q)
-            params.append(member_id)
+            params.extend(withdrawal_params)
             
         if tx_type == 'all' or tx_type == 'loan':
             queries.append(loan_q)
-            params.append(member_id)
+            params.extend(loan_params)
 
-        # Still keep support for specific ones just in case
         if tx_type in ['mandatory', 'voluntary', 'principal']:
             if tx_type == 'mandatory': st_name = 'MANDATORY'
             elif tx_type == 'voluntary': st_name = 'VOLUNTARY'
             else: st_name = 'PRINCIPLE'
             queries = [savings_q + " AND tt.name = %s"]
-            params = [member_id, st_name]
+            params = savings_params + [st_name]
 
-        full_query = " UNION ALL ".join(queries) + " ORDER BY transaction_date DESC LIMIT 10"
+        full_query = " UNION ALL ".join(queries) + " ORDER BY transaction_date DESC LIMIT 50"
 
         try:
             with connection.cursor() as cursor:

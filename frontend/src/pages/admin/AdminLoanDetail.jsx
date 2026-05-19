@@ -8,6 +8,7 @@ const AdminLoanDetail = () => {
   const { id } = useParams();
 
   const [detail, setDetail] = useState(null);
+  const [aiSuggestion, setAiSuggestion] = useState(null);
   const [repaymentTerm, setRepaymentTerm] = useState('12');
   const [interestRate, setInterestRate] = useState('0.5');
   const [amountRequested, setAmountRequested] = useState('0');
@@ -16,6 +17,7 @@ const AdminLoanDetail = () => {
   const [isEditingAmount, setIsEditingAmount] = useState(false);
 
   useEffect(() => {
+    // 1. Fetch Application Details
     fetch(`http://127.0.0.1:8000/api/loan/loan-applications/${id}/admin_application_detail/`)
       .then(res => res.json())
       .then(data => {
@@ -26,6 +28,18 @@ const AdminLoanDetail = () => {
         }
       })
       .catch(err => console.error(err));
+
+    // 2. Fetch AI Suggestion
+    fetch(`http://127.0.0.1:8000/api/loan/loan-applications/${id}/get_ai_suggestion/`)
+      .then(res => res.json())
+      .then(data => {
+        if (!data.error) {
+          setAiSuggestion(data);
+          // Auto-suggest interest if needed, or just display it
+          setInterestRate(String(data.suggested_interest_rate));
+        }
+      })
+      .catch(err => console.error('AI Suggestion Error:', err));
   }, [id]);
 
   const handleProfileClick = () => {
@@ -40,13 +54,19 @@ const AdminLoanDetail = () => {
     if (!window.confirm('Are you sure you want to approve this loan?')) return;
     
     try {
+      // Get admin_id from user in localStorage
+      const userStr = localStorage.getItem('user');
+      const user = userStr ? JSON.parse(userStr) : null;
+      const adminId = user?.id || 1;
+
       const response = await fetch(`http://127.0.0.1:8000/api/loan/loan-applications/${id}/approve/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           repayment_term: repaymentTerm,
           interest_rate: interestRate,
-          amount_requested: amountRequested
+          amount_requested: amountRequested,
+          admin_id: adminId
         })
       });
       
@@ -71,11 +91,17 @@ const AdminLoanDetail = () => {
     if (!window.confirm('Are you sure you want to reject this application?')) return;
 
     try {
+      // Get admin_id from user in localStorage
+      const userStr = localStorage.getItem('user');
+      const user = userStr ? JSON.parse(userStr) : null;
+      const adminId = user?.id || 1;
+
       const response = await fetch(`http://127.0.0.1:8000/api/loan/loan-applications/${id}/reject/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          reject_reason: rejectReason
+          reject_reason: rejectReason,
+          admin_id: adminId
         })
       });
       
@@ -116,9 +142,6 @@ const AdminLoanDetail = () => {
           <span className="aldet-badge active">Pending</span>
         </div>
         <p className="aldet-submitted">Submitted on {formatDate(detail.applied_at)}</p>
-        <button className="aldet-print-btn">
-          <Printer size={18} />
-        </button>
       </div>
 
       <div className="aldet-profile-card">
@@ -204,7 +227,7 @@ const AdminLoanDetail = () => {
                   <Edit2 size={14} />
                 </button>
               </div>
-              <div className="aldet-ib-recommend">Loan Recommendation {interestRate}%</div>
+              <div className="aldet-ib-recommend">AI Recommended: {aiSuggestion?.suggested_interest_rate || '0.5'}%</div>
               {isEditingInterest ? (
                 <div className="aldet-edit-row">
                   <input
@@ -223,8 +246,13 @@ const AdminLoanDetail = () => {
           </div>
 
           <div className="aldet-risk">
-            <span className="aldet-risk-label">Risk Rating</span>
-            <span className="aldet-risk-val low">Low</span>
+            <span className="aldet-risk-label">AI Eligibility Rating</span>
+            <span className={`aldet-risk-val ${aiSuggestion?.eligibility?.toLowerCase() || 'low'}`}>
+              {aiSuggestion?.eligibility || 'Calculating...'}
+            </span>
+            {aiSuggestion && (
+              <span className="aldet-risk-conf">Confidence: {aiSuggestion.confidence_score}%</span>
+            )}
           </div>
 
           <div className="aldet-decision">

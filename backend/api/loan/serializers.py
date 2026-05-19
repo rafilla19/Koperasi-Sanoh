@@ -9,12 +9,9 @@ class LoanTypeSerializer(serializers.ModelSerializer):
 class LoanApplicationSerializer(serializers.ModelSerializer):
     class Meta:
         model = LoanApplication
-        # exclude = ['created_at', 'updated_at', 'applied_at']
-        fields = ('id', 'amount_requested', 'duration_months', 'loan_type', 'purpose','member','salary_statement_file', 'status') 
+        fields = ('id', 'amount_requested', 'duration_months', 'loan_type', 'purpose','member','salary_statement_file', 'status', 'admin_update', 'reject_reason') 
         read_only_fields = [
             'id',
-            # 'created_at',
-            # 'updated_at',
             'status'
         ]
 

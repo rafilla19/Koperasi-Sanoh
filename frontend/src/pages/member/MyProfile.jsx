@@ -7,16 +7,60 @@ const MyProfile = () => {
   const [showClosureModal, setShowClosureModal] = useState(false);
   const [isAgreed, setIsAgreed] = useState(false);
   const [reason, setReason] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  // Get user data from localStorage
+  const userStr = localStorage.getItem('user');
+  const userLocal = userStr ? JSON.parse(userStr) : null;
+  const memberId = userLocal?.member_id || 1;
 
   const [isEditing, setIsEditing] = useState(false);
   const [profile, setProfile] = useState({
+    fullName: '',
+    nik: '',
+    joinDate: '',
     phone: '',
     email: '',
+    address: '',
     destBank: '',
     accName: '',
     accNo: '',
-    volSaving: ''
+    volSaving: '',
+    mandatoryBal: 0,
+    voluntaryBal: 0,
+    loanBal: 0
   });
+
+  React.useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const response = await fetch(`http://127.0.0.1:8000/api/loan/loan-applications/admin_member_profile/?member_id=${memberId}`);
+        if (response.ok) {
+          const data = await response.json();
+          setProfile({
+            fullName: data.full_name,
+            nik: data.nik_employee,
+            joinDate: data.join_date,
+            phone: data.phone_number,
+            email: data.email,
+            address: data.address,
+            destBank: data.bank_name || '',
+            accName: data.account_holder_name || '',
+            accNo: data.account_number || '',
+            volSaving: '0', // This would need a separate endpoint for the set value
+            mandatoryBal: data.saving_balance || 0,
+            voluntaryBal: 0, // Placeholder
+            loanBal: data.current_loan || 0
+          });
+        }
+      } catch (error) {
+        console.error('Failed to fetch profile:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProfile();
+  }, [memberId]);
 
   const reasonLength = reason.length;
   const isReasonValid = reasonLength >= 500;
@@ -50,15 +94,17 @@ const MyProfile = () => {
         </div>
         <div className="pb-content">
           <span className="pb-label">MEMBER NAME</span>
-          <h2 className="pb-name">RISKA ATIKAH RAHMAWATI</h2>
+          <h2 className="pb-name">{profile.fullName || '...'}</h2>
           <div className="pb-meta-grid">
             <div>
               <span className="pb-label">ID NUMBER</span>
-              <div className="pb-meta-val">123-32747</div>
+              <div className="pb-meta-val">{profile.nik || '...'}</div>
             </div>
             <div>
               <span className="pb-label">MEMBER SINCE</span>
-              <div className="pb-meta-val">Oct 23, 2025</div>
+              <div className="pb-meta-val">
+                {profile.joinDate ? new Date(profile.joinDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '...'}
+              </div>
             </div>
           </div>
         </div>
@@ -71,7 +117,7 @@ const MyProfile = () => {
           <div className="pf-col">
             <div className="inp-group">
               <label className="inp-label">FULL NAME</label>
-              <input type="text" className="prof-input" value="Riska Atikah Rahmawati" disabled />
+              <input type="text" className="prof-input" value={profile.fullName} disabled />
             </div>
             <div className="inp-group">
               <label className="inp-label">PHONE NUMBER</label>
@@ -83,7 +129,7 @@ const MyProfile = () => {
             </div>
             <div className="inp-group">
               <label className="inp-label">ADDRESS</label>
-              <textarea className="prof-input" disabled value="Full address..." />
+              <textarea className="prof-input" disabled value={profile.address || '...'} />
             </div>
           </div>
 
@@ -176,7 +222,7 @@ const MyProfile = () => {
                       <div className="eli-icon red"><XCircle size={14} strokeWidth={3} /></div>
                       <div className="eli-text">
                         <strong>Loan Balance is Fully Clear</strong>
-                        <span>You have an outstanding loan balance of Rp 14.000.000,00</span>
+                        <span>You have an outstanding loan balance of Rp {parseFloat(profile.loanBal).toLocaleString('id-ID')}</span>
                       </div>
                     </div>
                     <div className="eli-item">

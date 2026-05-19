@@ -633,3 +633,7 @@
     padding: 18px;
   }
 }
+
+.dl-avatar-btn.admin-view:hover {
+  background: transparent !important;
+}

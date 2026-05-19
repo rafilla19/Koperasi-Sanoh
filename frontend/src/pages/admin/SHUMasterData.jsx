@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Save, X, Building, Percent, CreditCard } from 'lucide-react';
+import { Plus, Edit2, Trash2, Save, X, Building, Percent, CreditCard, Wallet, Tags } from 'lucide-react';
 import './SHUManagement.css';
 
 const TABS = [
   { id: 'shu', label: 'SHU Components', icon: Percent, apiUrl: 'http://127.0.0.1:8000/api/master/shu-components/' },
   { id: 'dept', label: 'Departments', icon: Building, apiUrl: 'http://127.0.0.1:8000/api/master/departments/' },
   { id: 'loan_type', label: 'Loan Types', icon: CreditCard, apiUrl: 'http://127.0.0.1:8000/api/loan/loan-types/' },
+  { id: 'payment_channel', label: 'Payment Channels', icon: Wallet, apiUrl: 'http://127.0.0.1:8000/api/master/payment-channels/' },
+  { id: 'inc_exp_cat', label: 'Inc/Exp Categories', icon: Tags, apiUrl: 'http://127.0.0.1:8000/api/master/income-expense-categories/' },
 ];
 
 const SHUMasterData = () => {
@@ -24,6 +26,14 @@ const SHUMasterData = () => {
     department_name: '',
     // Loan type fields
     name: '',
+    // Payment channel fields
+    channel_code: '',
+    channel_name: '',
+    fee_percentage: '',
+    fee_fixed: '',
+    is_active: true,
+    // Income/Expense Category fields
+    category_name: '',
   });
 
   const currentTab = TABS.find(t => t.id === activeTab);
@@ -82,6 +92,16 @@ const SHUMasterData = () => {
       payload = { department_name: formData.department_name };
     } else if (activeTab === 'loan_type') {
       payload = { name: formData.name };
+    } else if (activeTab === 'payment_channel') {
+      payload = { 
+        channel_code: formData.channel_code, 
+        channel_name: formData.channel_name, 
+        fee_percentage: formData.fee_percentage, 
+        fee_fixed: formData.fee_fixed, 
+        is_active: formData.is_active 
+      };
+    } else if (activeTab === 'inc_exp_cat') {
+      payload = { category_name: formData.category_name };
     }
 
     try {
@@ -126,6 +146,16 @@ const SHUMasterData = () => {
       setFormData({ department_name: item.department_name });
     } else if (activeTab === 'loan_type') {
       setFormData({ name: item.name });
+    } else if (activeTab === 'payment_channel') {
+      setFormData({
+        channel_code: item.channel_code,
+        channel_name: item.channel_name,
+        fee_percentage: item.fee_percentage,
+        fee_fixed: item.fee_fixed,
+        is_active: item.is_active
+      });
+    } else if (activeTab === 'inc_exp_cat') {
+      setFormData({ category_name: item.category_name });
     }
     setShowForm(true);
   };
@@ -133,7 +163,9 @@ const SHUMasterData = () => {
   const resetForm = () => {
     setFormData({
       component_name: '', percentage: '', distributed_member: false,
-      department_name: '', name: ''
+      department_name: '', name: '',
+      channel_code: '', channel_name: '', fee_percentage: '', fee_fixed: '', is_active: true,
+      category_name: ''
     });
     setEditingId(null);
     setShowForm(false);
@@ -150,12 +182,14 @@ const SHUMasterData = () => {
           <h1 className="shum-title">Master Data Management</h1>
           <p className="shum-subtitle">Configure system-wide master data and settings</p>
         </div>
-        <button 
-          className="shum-add-btn"
-          onClick={() => { resetForm(); setShowForm(true); }}
-        >
-          <Plus size={18} /> Add {currentTab.label.replace('s', '')}
-        </button>
+        {activeTab !== 'payment_channel' && (
+          <button 
+            className="shum-add-btn"
+            onClick={() => { resetForm(); setShowForm(true); }}
+          >
+            <Plus size={18} /> Add {currentTab.label.replace('s', '')}
+          </button>
+        )}
       </div>
 
       <div className="shum-tabs">
@@ -237,6 +271,51 @@ const SHUMasterData = () => {
                   </div>
                 )}
 
+                {activeTab === 'payment_channel' && (
+                  <>
+                    <div className="shum-form-group">
+                      <label>Channel Name</label>
+                      <input 
+                        type="text" 
+                        value={formData.channel_name}
+                        disabled
+                      />
+                    </div>
+                    <div className="shum-form-group">
+                      <label>Fee Percentage (%)</label>
+                      <input 
+                        type="number" 
+                        step="0.01"
+                        value={formData.fee_percentage}
+                        onChange={(e) => setFormData({...formData, fee_percentage: e.target.value})}
+                        required
+                      />
+                    </div>
+                    <div className="shum-form-group">
+                      <label>Fixed Fee (Rp)</label>
+                      <input 
+                        type="number" 
+                        step="0.01"
+                        value={formData.fee_fixed}
+                        onChange={(e) => setFormData({...formData, fee_fixed: e.target.value})}
+                        required
+                      />
+                    </div>
+                  </>
+                )}
+
+                {activeTab === 'inc_exp_cat' && (
+                  <div className="shum-form-group">
+                    <label>Category Name</label>
+                    <input 
+                      type="text" 
+                      value={formData.category_name}
+                      onChange={(e) => setFormData({...formData, category_name: e.target.value})}
+                      required
+                    />
+                  </div>
+                )}
+
                 <div className="shum-form-actions">
                   <button type="button" className="btn-cancel" onClick={resetForm}>Cancel</button>
                   <button type="submit" className="btn-save">
@@ -259,8 +338,17 @@ const SHUMasterData = () => {
                 </>
               ) : activeTab === 'dept' ? (
                 <th>Department Name</th>
-              ) : (
+              ) : activeTab === 'loan_type' ? (
                 <th>Loan Type Name</th>
+              ) : activeTab === 'payment_channel' ? (
+                <>
+                  <th>Channel Code</th>
+                  <th>Channel Name</th>
+                  <th>Fee %</th>
+                  <th>Fixed Fee</th>
+                </>
+              ) : (
+                <th>Category Name</th>
               )}
               <th>Actions</th>
             </tr>
@@ -273,7 +361,11 @@ const SHUMasterData = () => {
             ) : data.map((item) => (
               <tr key={item.id}>
                 <td className="font-bold">
-                  {activeTab === 'shu' ? item.component_name : activeTab === 'dept' ? item.department_name : item.name}
+                  {activeTab === 'shu' ? item.component_name 
+                    : activeTab === 'dept' ? item.department_name 
+                    : activeTab === 'loan_type' ? item.name 
+                    : activeTab === 'payment_channel' ? item.channel_code
+                    : item.category_name}
                 </td>
                 {activeTab === 'shu' && (
                   <>
@@ -285,10 +377,19 @@ const SHUMasterData = () => {
                     </td>
                   </>
                 )}
+                {activeTab === 'payment_channel' && (
+                  <>
+                    <td>{item.channel_name}</td>
+                    <td><span className="shum-badge blue">{item.fee_percentage}%</span></td>
+                    <td>Rp {parseFloat(item.fee_fixed).toLocaleString('id-ID')}</td>
+                  </>
+                )}
                 <td>
                   <div className="shum-table-actions">
                     <button className="action-edit" onClick={() => startEdit(item)}><Edit2 size={16} /></button>
-                    <button className="action-delete" onClick={() => handleDelete(item.id)}><Trash2 size={16} /></button>
+                    {activeTab !== 'payment_channel' && (
+                      <button className="action-delete" onClick={() => handleDelete(item.id)}><Trash2 size={16} /></button>
+                    )}
                   </div>
                 </td>
               </tr>

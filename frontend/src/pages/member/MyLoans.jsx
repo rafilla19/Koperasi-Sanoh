@@ -19,19 +19,28 @@ const MyLoans = () => {
 
   useEffect(() => {
     const fetchData = async () => {
+      // Get member_id from user in localStorage
+      const userStr = localStorage.getItem('user');
+      const user = userStr ? JSON.parse(userStr) : null;
+      const memberId = user?.member_id || 1;
+
       try {
-        const response = await fetch('http://127.0.0.1:8000/api/loan/loan-applications/');
+        const response = await fetch(`http://127.0.0.1:8000/api/loan/loan-applications/?member_id=${memberId}`);
         if (response.ok) {
           const data = await response.json();
-          const active = data.some(loan => loan.member === 1 && loan.status === 25);
-          setHasActiveLoan(active);
         }
 
-        const loanResponse = await fetch('http://127.0.0.1:8000/api/loan/loans/');
+        const summaryResponse = await fetch(`http://127.0.0.1:8000/api/loan/loans/dashboard_summary/?member_id=${memberId}`);
+        if (summaryResponse.ok) {
+          const summaryData = await summaryResponse.json();
+          setHasActiveLoan(summaryData.has_active_loan);
+        }
+
+        const loanResponse = await fetch(`http://127.0.0.1:8000/api/loan/loans/?member_id=${memberId}`);
         if (loanResponse.ok) {
           const loanData = await loanResponse.json();
-          // select remaining_balance from loans where member_id = '1' and status_id = '25' and remaining_balance <> 0
-          const activeLoans = loanData.filter(loan => loan.member_id === 1 && loan.status === 25);
+          const activeLoans = loanData.filter(loan => Number(loan.member_id) === Number(memberId) && (loan.status_id === 25 || loan.status === 25));
+          
           const outstanding = activeLoans
             .filter(loan => parseFloat(loan.remaining_balance) !== 0)
             .reduce((sum, loan) => sum + parseFloat(loan.remaining_balance), 0);
@@ -52,7 +61,7 @@ const MyLoans = () => {
           }
         }
 
-        const activeSummaryResponse = await fetch('http://127.0.0.1:8000/api/loan/loans/active_summary/');
+        const activeSummaryResponse = await fetch(`http://127.0.0.1:8000/api/loan/loans/active_summary/?member_id=${memberId}`);
         if (activeSummaryResponse.ok) {
           const activeSummary = await activeSummaryResponse.json();
           const activeLoansFormatted = activeSummary.map(item => ({
@@ -71,7 +80,7 @@ const MyLoans = () => {
           setLoansData(prev => ({ ...prev, active: activeLoansFormatted }));
         }
 
-        const completedSummaryResponse = await fetch('http://127.0.0.1:8000/api/loan/loans/completed_summary/');
+        const completedSummaryResponse = await fetch(`http://127.0.0.1:8000/api/loan/loans/completed_summary/?member_id=${memberId}`);
         if (completedSummaryResponse.ok) {
           const completedSummary = await completedSummaryResponse.json();
           const completedLoansFormatted = completedSummary.map(item => ({
@@ -90,7 +99,7 @@ const MyLoans = () => {
           setLoansData(prev => ({ ...prev, completed: completedLoansFormatted }));
         }
 
-        const pendingSummaryResponse = await fetch('http://127.0.0.1:8000/api/loan/loan-applications/pending_summary/');
+        const pendingSummaryResponse = await fetch(`http://127.0.0.1:8000/api/loan/loan-applications/pending_summary/?member_id=${memberId}`);
         if (pendingSummaryResponse.ok) {
           const pendingSummary = await pendingSummaryResponse.json();
           const pendingLoansFormatted = pendingSummary.map(item => ({
@@ -111,7 +120,7 @@ const MyLoans = () => {
           setLoansData(prev => ({ ...prev, pending: pendingLoansFormatted }));
         }
 
-        const rejectedSummaryResponse = await fetch('http://127.0.0.1:8000/api/loan/loan-applications/rejected_summary/');
+        const rejectedSummaryResponse = await fetch(`http://127.0.0.1:8000/api/loan/loan-applications/rejected_summary/?member_id=${memberId}`);
         if (rejectedSummaryResponse.ok) {
           const rejectedSummary = await rejectedSummaryResponse.json();
           const rejectedLoansFormatted = rejectedSummary.map(item => ({
@@ -134,7 +143,7 @@ const MyLoans = () => {
         const memberResponse = await fetch('http://127.0.0.1:8000/api/master/members/');
         if (memberResponse.ok) {
           const memberData = await memberResponse.json();
-          const currentMember = memberData.find(m => m.id === 1);
+          const currentMember = memberData.find(m => m.id === memberId);
           if (currentMember) {
             const empStatus = currentMember.employee_status_id;
             if (empStatus === 1 || empStatus === 2) {
@@ -193,7 +202,12 @@ const MyLoans = () => {
         <button
           className="btn-apply-loan"
           onClick={handleApplyLoan}
-          style={hasActiveLoan ? { opacity: 0.6, cursor: 'not-allowed' } : {}}
+          disabled={hasActiveLoan}
+          style={hasActiveLoan ? { 
+            background: '#94a3b8', 
+            cursor: 'not-allowed',
+            color: '#f1f5f9'
+          } : {}}
         >
           <Plus size={16} strokeWidth={2.5} />
           Apply for a New Loan
@@ -204,10 +218,10 @@ const MyLoans = () => {
         <div className="ml-ov-card">
           <div className="ml-ov-label">TOTAL OUTSTANDING BALANCE</div>
           <div className="ml-ov-value">{formatRupiah(totalOutstanding)}</div>
-          <div className="ml-ov-badge up">
+          {/* <div className="ml-ov-badge up">
             <ChevronRight size={12} strokeWidth={3} style={{ transform: 'rotate(-45deg)' }} />
             Increased by 5% this month
-          </div>
+          </div> */}
         </div>
         <div className="ml-ov-card">
           <div className="ml-ov-label">NEXT PAYROLL DEDUCTION</div>

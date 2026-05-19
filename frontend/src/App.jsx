@@ -15,6 +15,7 @@ import ActivateMembership from './pages/registration/ActivateMembership';
 import PaymentSuccess from './pages/registration/PaymentSuccess';
 
 import DashboardLayout from './components/DashboardLayout';
+import DashboardIndex from './components/DashboardIndex';
 import DashboardHome from './pages/member/DashboardHome';
 import MyProfile from './pages/member/MyProfile';
 import MySaving from './pages/member/MySaving';
@@ -75,7 +76,7 @@ function App() {
 
         {/* Dashboard Routes */}
         <Route path="/dashboard" element={<DashboardLayout />}>
-          <Route index element={<DashboardHome />} />
+          <Route index element={<DashboardIndex />} />
           <Route path="profile" element={<MyProfile />} />
           <Route path="saving" element={<MySaving />} />
           <Route path="terms" element={<TermsAndConditions />} />

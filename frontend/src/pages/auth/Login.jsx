@@ -5,12 +5,41 @@ import './AuthPages.css';
 
 const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    // Navigate to dashboard 
-    navigate('/dashboard');
+    setError('');
+    setIsLoading(true);
+
+    try {
+      const response = await fetch('http://localhost:8000/api/master/auth/login/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Save user data to localStorage
+        localStorage.setItem('user', JSON.stringify(data));
+        // Navigate to dashboard
+        navigate('/dashboard');
+      } else {
+        setError(data.error || 'Login failed. Please check your credentials.');
+      }
+    } catch (err) {
+      setError('Connection error. Please try again later.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -21,6 +50,7 @@ const Login = () => {
       </div>
 
       <form className="auth-form" onSubmit={handleLogin}>
+        {error && <div className="auth-error-msg" style={{ color: '#ff4d4f', marginBottom: '1rem', textAlign: 'center', fontSize: '0.9rem' }}>{error}</div>}
         <div className="form-group">
           <label className="form-label" htmlFor="email">Email</label>
           <div className="input-container">
@@ -28,6 +58,8 @@ const Login = () => {
             <input
               type="email"
               id="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               className="form-input"
               placeholder="Email"
               required
@@ -42,6 +74,8 @@ const Login = () => {
             <input
               type={showPassword ? 'text' : 'password'}
               id="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               className="form-input"
               placeholder="Password"
               required
@@ -61,7 +95,9 @@ const Login = () => {
           <Link to="/forgot-password" className="auth-link">Forget Password?</Link>
         </div>
 
-        <button type="submit" className="btn-primary">Sign in</button>
+        <button type="submit" className="btn-primary" disabled={isLoading}>
+          {isLoading ? 'Signing in...' : 'Sign in'}
+        </button>
       </form>
 
       <div className="auth-divider">OR</div>

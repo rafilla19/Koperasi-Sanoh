@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Printer, CheckCircle, AlertTriangle, User, Calendar, CreditCard, DollarSign } from 'lucide-react';
+import { ArrowLeft, Printer, CheckCircle, AlertTriangle, User, Calendar, CreditCard, DollarSign, ExternalLink, FileText } from 'lucide-react';
 import './AdminActiveLoanDetail.css';
 
 const AdminActiveLoanDetail = () => {
@@ -155,6 +155,7 @@ const AdminActiveLoanDetail = () => {
                     <th>INTEREST</th>
                     <th>TOTAL</th>
                     <th>STATUS</th>
+                    <th>PROOF</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -169,6 +170,13 @@ const AdminActiveLoanDetail = () => {
                         <span className={`status-badge ${s.status_code?.toLowerCase()}`}>
                           {s.status_code}
                         </span>
+                      </td>
+                      <td>
+                        {s.payment_proof ? (
+                          <a href={s.payment_proof} target="_blank" rel="noopener noreferrer" style={{ color: '#4f7df3' }}>
+                            <FileText size={16} />
+                          </a>
+                        ) : '-'}
                       </td>
                     </tr>
                   ))}
@@ -198,6 +206,33 @@ const AdminActiveLoanDetail = () => {
               <div className="info-item">
                 <label>Maturity Date</label>
                 <span>{formatDate(loanData.due_date)}</span>
+              </div>
+              <div className="info-item" style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #eee' }}>
+                <label>Documents</label>
+                {loanData.salary_statement_file ? (
+                  <a 
+                    href={loanData.salary_statement_file}
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="salary-statement-link"
+                    style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '8px', 
+                      color: '#4f7df3', 
+                      textDecoration: 'none',
+                      fontSize: '14px',
+                      fontWeight: '500',
+                      marginTop: '8px'
+                    }}
+                  >
+                    <FileText size={16} />
+                    Salary Statement
+                    <ExternalLink size={14} />
+                  </a>
+                ) : (
+                  <span style={{ color: '#94a3b8', fontSize: '13px', fontStyle: 'italic' }}>No statement uploaded</span>
+                )}
               </div>
             </div>
           </div>

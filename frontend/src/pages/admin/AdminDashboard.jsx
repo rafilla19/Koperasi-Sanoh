@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { ShoppingBag, Users, Calendar, ArrowUp } from 'lucide-react';
-import { fetchHello } from '../../services/api';
 import { Line } from 'react-chartjs-2';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -29,14 +28,6 @@ ChartJS.register(
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
-  const [apiMessage, setApiMessage] = useState('');
-
-  useEffect(() => {
-    // Testing the Django Backend Connection
-    fetchHello()
-      .then(data => setApiMessage(data.message))
-      .catch(err => setApiMessage('Failed to connect to Django API'));
-  }, []);
 
   // Chart Data
   const shuData = {
@@ -81,12 +72,6 @@ const AdminDashboard = () => {
 
   return (
     <div className="ad-container">
-      {/* Backend Connection Test Banner */}
-      {apiMessage && (
-        <div style={{ background: '#DCFCE7', color: '#16A34A', padding: '12px 20px', borderRadius: '8px', fontWeight: 600, border: '1px solid #BBF7D0', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span>🚀 Backend Status:</span> {apiMessage}
-        </div>
-      )}
 
       {/* 4 Stats Cards */}
       <div className="ad-stats">

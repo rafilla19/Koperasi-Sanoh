@@ -145,6 +145,7 @@ const PayrollLoans = () => {
           name: item.full_name,
           nik: item.nik_employee,
           department: item.department_name,
+          employeeStatus: item.employee_status,
           type: item.type_name,
           progressStr: `${item.paid_installment}/${item.total_installment}`,
           cicilan: item.current_month_amount,
@@ -192,9 +193,8 @@ const PayrollLoans = () => {
       String(item.id).includes(searchQuery);
     const matchDept = filterDept === 'all' || item.department === filterDept;
     const matchStatus = filterStatus === 'all' ||
-      (filterStatus === 'paid' && item.status_id === 29) ||
-      (filterStatus === 'unpaid' && item.status_id === 28) ||
-      (filterStatus === 'overdue' && item.status_id === 30);
+      (filterStatus === 'paid' && (item.status_id === 29 || item.status_id === 30)) ||
+      (filterStatus === 'unpaid' && item.status_id === 28);
     return matchSearch && matchDept && matchStatus;
   }), [data, searchQuery, filterDept, filterStatus]);
 
@@ -281,11 +281,11 @@ const PayrollLoans = () => {
       ? data.filter(i => selectedIds.includes(i.id))
       : filteredData;
     if (rows.length === 0) { showToast('No data to export.', 'error'); return; }
-    const headers = ['Loan ID', 'Member', 'NIK', 'Department', 'Type', 'Installment No', 'Deduction', 'Remaining', 'Status'];
+    const headers = ['Loan ID', 'Member', 'NIK', 'Department', 'Employee Status', 'Type', 'Installment No', 'Deduction', 'Remaining', 'Status'];
     const statusLabel = (id) => id === 29 ? 'Paid' : id === 30 ? 'Overdue' : 'Unpaid';
     const csv = "data:text/csv;charset=utf-8,"
       + headers.join(',') + '\n'
-      + rows.map(r => `${r.id},"${r.name}","${r.nik}","${r.department}","${r.type}",${r.installment_number},${r.cicilan},${r.sisa},"${statusLabel(r.status_id)}"`).join('\n');
+      + rows.map(r => `${r.id},"${r.name}","${r.nik}","${r.department}","${r.employeeStatus || '-'}","${r.type}",${r.installment_number},${r.cicilan},${r.sisa},"${statusLabel(r.status_id)}"`).join('\n');
     const link = document.createElement('a');
     link.href = encodeURI(csv);
     link.download = `payroll_${reportingMonth}.csv`;
@@ -432,8 +432,8 @@ const PayrollLoans = () => {
               {departments.map(d => <option key={d.id} value={d.department_name}>{d.department_name}</option>)}
             </select>
             <div className="pl-status-tabs">
-              {['all', 'unpaid', 'overdue', 'paid'].map(s => (
-                <button key={s} className={`pl-status-tab ${filterStatus === s ? 'active-' + (s === 'paid' ? 'green' : s === 'overdue' ? 'orange' : s === 'unpaid' ? 'red' : 'blue') : ''} ${filterStatus === s ? 'pl-status-tab--active' : ''}`}
+              {['all', 'unpaid', 'paid'].map(s => (
+                <button key={s} className={`pl-status-tab ${filterStatus === s ? 'active-' + (s === 'paid' ? 'green' : s === 'unpaid' ? 'red' : 'blue') : ''} ${filterStatus === s ? 'pl-status-tab--active' : ''}`}
                   onClick={() => { setFilterStatus(s); setCurrentPage(1); }}>
                   {s.charAt(0).toUpperCase() + s.slice(1)}
                 </button>
