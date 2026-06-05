@@ -1,9 +1,26 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import { MapPin, Mail, Phone } from 'lucide-react';
+import { apiUrl } from '../services/api';
 import './AuthLayout.css';
 
 const AuthLayout = () => {
+  const [contact, setContact] = useState({ email: '...', phone: '...' });
+
+  useEffect(() => {
+    fetch(apiUrl('/member/members/footer_contact/'))
+      .then(res => res.json())
+      .then(data => {
+        if (data.email || data.phone || data.phone_number) {
+          setContact({
+            email: data.email || '...',
+            phone: data.phone || data.phone_number || '...'
+          });
+        }
+      })
+      .catch(err => console.error('Failed to fetch contact Info', err));
+  }, []);
+
   return (
     <div className="auth-layout">
       {/* Left side Image Pane */}
@@ -17,11 +34,11 @@ const AuthLayout = () => {
             </li>
             <li>
               <Mail size={18} />
-              <span>sanohsinergikoperasi@gmail.com</span>
+              <span>{contact.email}</span>
             </li>
             <li>
               <Phone size={18} />
-              <span>+62</span>
+              <span>{contact.phone}</span>
             </li>
           </ul>
         </div>

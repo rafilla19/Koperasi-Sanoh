@@ -2,6 +2,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Search, Calendar, RefreshCw, Upload, CheckCircle, AlertCircle, X, Loader2, RotateCcw, ChevronRight, ChevronLeft, TrendingUp, DollarSign, FileText } from 'lucide-react';
 import './PayrollSummary.css';
+import { apiUrl } from '../../services/api';
 
 // Toast Notification Component
 const Toast = ({ message, type, onClose }) => (
@@ -120,7 +121,7 @@ const PayrollSavings = () => {
   // Fetch departments for filter dropdown
   const fetchDepartments = async () => {
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/master/departments/');
+      const res = await fetch(apiUrl('/master/departments/'));
       if (res.ok) setDepartments(await res.json());
     } catch (e) { console.error('Failed to fetch departments', e); }
   };
@@ -130,7 +131,7 @@ const PayrollSavings = () => {
     setLoading(true);
     setSelectedIds([]);
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/loan/loans/payroll_savings_list/?period=${reportingMonth}`);
+      const res = await fetch(apiUrl(`/loan/loans/payroll_savings_list/?period=${reportingMonth}`));
       if (res.ok) {
         const result = await res.json();
         // Expected fields: id, member_id, full_name, nik_employee, department_name, pokok, wajib, sukarela, bulat, total, is_paid, status_id
@@ -197,7 +198,7 @@ const PayrollSavings = () => {
     const ids = data.filter(item => selectedIds.includes(item.id) && !item.isPaid).map(item => item.id);
     if (ids.length === 0) { showToast('No unpaid records selected.', 'error'); setConfirming(false); return; }
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/loan/loans/confirm_payroll_savings/', {
+      const res = await fetch(apiUrl('/loan/loans/confirm_payroll_savings/'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ saving_ids: ids, period: reportingMonth })
@@ -219,7 +220,7 @@ const PayrollSavings = () => {
   const doRollback = async row => {
     setRollbacking(true);
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/loan/loans/rollback_payroll_savings/', {
+      const res = await fetch(apiUrl('/loan/loans/rollback_payroll_savings/'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ saving_id: row.id, period: reportingMonth })

@@ -99,3 +99,15 @@
     padding: 1.5rem;
   }
 }
+
+/* Wider container for the activate-membership payment page */
+.reg-container:has(.activate-payment-page) {
+  max-width: 1040px;
+}
+
+/* If :has() is not supported, override via the page class */
+.activate-payment-page ~ .reg-card,
+.reg-card:has(.activate-payment-page) {
+  padding: 1.5rem;
+}
+

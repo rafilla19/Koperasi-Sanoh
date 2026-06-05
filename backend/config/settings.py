@@ -45,20 +45,49 @@ INSTALLED_APPS = [
     "corsheaders",
     "django_apscheduler",
     "api",
+    "api.member",
+    "api.master",
+    "api.loan",
+    "api.saving",
+    "api.shu",
     "storages",
     "ml_service",
 ]
 
 MIDDLEWARE = [
-    "django.middleware.security.SecurityMiddleware",
     "corsheaders.middleware.CorsMiddleware",
+    "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
-    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    #"django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
+
+# CORS Settings
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
+# Session & Cookie Settings for Cross-Origin
+SESSION_COOKIE_SAMESITE = 'None' if not DEBUG else 'Lax'
+SESSION_COOKIE_SECURE = False 
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+SESSION_COOKIE_DOMAIN = None
+SESSION_SAVE_EVERY_REQUEST = True
+
+CSRF_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SECURE = False
+
+X_FRAME_OPTIONS = 'SAMEORIGIN'
 
 ROOT_URLCONF = "config.urls"
 
@@ -135,8 +164,25 @@ USE_TZ = True
 STATIC_URL = "static/"
 
 CORS_ALLOW_ALL_ORIGINS = True
+try:
+    from corsheaders.defaults import default_headers
+    CORS_ALLOW_HEADERS = list(default_headers) + [
+        'x-member-id',
+        'x-user-email',
+    ]
+except Exception:
+    # fallback: allow commonly used headers
+    CORS_ALLOW_HEADERS = [
+        'accept', 'accept-encoding', 'authorization', 'content-type',
+        'dnt', 'origin', 'user-agent', 'x-csrftoken', 'x-requested-with',
+        'x-member-id', 'x-user-email'
+    ]
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Max upload size 10MB
+# DATA_UPLOAD_MAX_MEMORY_SIZE = 10485760
+# FILE_UPLOAD_MAX_MEMORY_SIZE = 10485760
 
 # Storage Configuration (Supabase S3)
 AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
@@ -145,15 +191,32 @@ AWS_STORAGE_BUCKET_NAME = os.getenv('AWS_STORAGE_BUCKET_NAME')
 AWS_S3_ENDPOINT_URL = os.getenv('AWS_S3_ENDPOINT_URL')
 AWS_S3_REGION_NAME = os.getenv('AWS_S3_REGION_NAME', 'ap-northeast-1')
 
-# Use S3 Storage (Django 4.2+ style)
-STORAGES = {
-    "default": {
-        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
-    },
-    "staticfiles": {
-        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
-    },
-}
+# Use S3 Storage (Django 4.2+ style) if boto3 is installed and credentials exist, otherwise fallback to local filesystem
+try:
+    import boto3
+    import storages
+    has_s3_deps = True
+except ImportError:
+    has_s3_deps = False
+
+if has_s3_deps and AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY and AWS_STORAGE_BUCKET_NAME:
+    STORAGES = {
+        "default": {
+            "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+        },
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        },
+    }
+else:
+    STORAGES = {
+        "default": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        },
+    }
 
 AWS_S3_SIGNATURE_VERSION = 's3v4'
 AWS_S3_FILE_OVERWRITE = False
@@ -164,7 +227,9 @@ AWS_QUERYSTRING_AUTH = False  # Set to False to get clean public URLs
 
 # Public URL for Supabase
 if AWS_S3_ENDPOINT_URL:
-    MEDIA_URL = f'{AWS_S3_ENDPOINT_URL.replace("/v1/s3", "/v1/object/public")}/{AWS_STORAGE_BUCKET_NAME}/'
+    # Use the standard project-ref.supabase.co for public objects
+    base_url = AWS_S3_ENDPOINT_URL.replace(".storage.supabase.co/storage/v1/s3", ".supabase.co")
+    MEDIA_URL = f'{base_url}/storage/v1/object/public/{AWS_STORAGE_BUCKET_NAME}/'
 else:
     MEDIA_URL = '/media/'
 
@@ -192,9 +257,15 @@ if not EMAIL_HOST or not EMAIL_HOST_PASSWORD:
 
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL')
 ADMIN_EMAIL = os.getenv('ADMIN_EMAIL')
+FRONTEND_BASE_URL = os.getenv('FRONTEND_BASE_URL')
 
 # Midtrans Configuration
 MIDTRANS_MERCHANT_ID = os.getenv('MIDTRANS_MERCHANT_ID')
 MIDTRANS_CLIENT_KEY = os.getenv('MIDTRANS_CLIENT_KEY')
 MIDTRANS_SERVER_KEY = os.getenv('MIDTRANS_SERVER_KEY')
 MIDTRANS_IS_PRODUCTION = os.getenv('MIDTRANS_IS_PRODUCTION', 'False') == 'True'
+
+# Supabase Storage — loaded from .env
+# Required keys: SUPABASE_URL, SUPABASE_SERVICE_KEY
+SUPABASE_URL = os.getenv('SUPABASE_URL', '')
+SUPABASE_SERVICE_KEY = os.getenv('SUPABASE_SERVICE_KEY', '')

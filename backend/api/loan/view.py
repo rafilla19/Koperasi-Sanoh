@@ -3,7 +3,8 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db import connection, transaction
 from django.utils import timezone
-from django.core.mail import send_mail, EmailMessage
+from django.core.mail import send_mail, EmailMessage, EmailMultiAlternatives
+from django.core.files.storage import default_storage
 from django.conf import settings
 from django.utils.html import strip_tags
 from decimal import Decimal
@@ -12,6 +13,10 @@ import calendar
 import os
 import re
 import json
+import mimetypes
+from uuid import uuid4
+from urllib.request import urlopen
+from html import escape
 from .models import LoanApplication, LoanType, Loan, LoanInstallment
 from api.master.models import Status
 from .serializers import LoanApplicationSerializer, LoanTypeSerializer, LoanSerializer, LoanInstallmentSerializer
@@ -29,11 +34,19 @@ def get_absolute_media_url(request, path):
         return None
     if path.startswith('http'):
         return path
-    base_url = request.build_absolute_uri(settings.MEDIA_URL)
-    # Ensure no double slashes if path starts with slash
     if path.startswith('/'):
         path = path[1:]
+    endpoint_url = getattr(settings, 'AWS_S3_ENDPOINT_URL', '') or ''
+    bucket_name = getattr(settings, 'AWS_STORAGE_BUCKET_NAME', '') or ''
+    if endpoint_url and bucket_name:
+        public_base = endpoint_url.replace('.storage.supabase.co/storage/v1/s3', '.supabase.co')
+        return f"{public_base}/storage/v1/object/public/{bucket_name}/{path}"
+
+    base_url = request.build_absolute_uri(settings.MEDIA_URL)
     return f"{base_url}{path}"
+
+
+from api.utils.email import build_email_html as _build_email_html
 
 class LoanApplicationViewSet(viewsets.ModelViewSet):
     serializer_class = LoanApplicationSerializer
@@ -54,27 +67,22 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
         try:
             member_name = instance.member.full_name if hasattr(instance, 'member') else "A member"
             amount = instance.amount_requested
+            duration_text = f"{instance.duration_months} months"
             
             subject = f"New Loan Request - {member_name}"
-            
-            html_message = f"""
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
-                <h2 style="color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px;">New Loan Request</h2>
-                <p style="font-size: 16px; color: #34495e;">Hello Admin,</p>
-                <p style="font-size: 15px; color: #34495e;"><strong>{member_name}</strong> has submitted a new loan request for your review.</p>
-                
-                <div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
-                    <h3 style="margin-top: 0; color: #2c3e50; font-size: 18px;">Application Details</h3>
-                    <table style="width: 100%; border-collapse: collapse;">
-                        <tr><td style="padding: 8px 0; color: #7f8c8d;">Amount</td><td style="padding: 8px 0; text-align: right;"><strong>Rp {amount:,.0f}</strong></td></tr>
-                        <tr><td style="padding: 8px 0; color: #7f8c8d;">Purpose</td><td style="padding: 8px 0; text-align: right;"><strong>{instance.purpose}</strong></td></tr>
-                        <tr><td style="padding: 8px 0; color: #7f8c8d;">Duration</td><td style="padding: 8px 0; text-align: right;"><strong>{instance.duration_months} months</strong></td></tr>
-                    </table>
-                </div>
-                
-                <p style="font-size: 14px; color: #7f8c8d; margin-top: 30px;">This is an automated notification from Koperasi Sanoh System.</p>
-            </div>
-            """
+            html_message = _build_email_html(
+                'New Loan Request',
+                f'{member_name} has submitted a new loan request for your review.',
+                details=[
+                    ('Member Name', member_name),
+                    ('Amount', f'Rp {amount:,.0f}'),
+                    ('Purpose', instance.purpose or '-'),
+                    ('Duration', duration_text),
+                    ('Status', 'Submitted'),
+                ],
+                highlight=('Action Needed', 'Please review this loan application'),
+                footer_note='This is an automated notification from Koperasi Sanoh System.',
+            )
             
             # Notify Admin using System Email but set Reply-To to Member
             member_email = instance.member.user.email if hasattr(instance.member, 'user') else None
@@ -100,28 +108,17 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
                 member_email = instance.member.user.email if hasattr(instance.member, 'user') else None
                 if member_email:
                     member_subject = "Loan Application Received - Koperasi Sanoh"
-                    member_html = f"""
-                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
-                        <h2 style="color: #0F172A; text-align: center;">Loan Application Received</h2>
-                        <p>Dear <strong>{instance.member.full_name}</strong>,</p>
-                        <p>Your loan application has been successfully submitted and is currently being reviewed by our administration team.</p>
-                        
-                        <div style="background-color: #f8fafc; padding: 15px; border-radius: 6px; margin: 20px 0; border-left: 4px solid #0284C7;">
-                            <h3 style="margin-top: 0; font-size: 16px; color: #0284C7;">Application Summary:</h3>
-                            <ul style="list-style-type: none; padding: 0;">
-                                <li><strong>Amount:</strong> Rp {amount:,.0f}</li>
-                                <li><strong>Duration:</strong> {instance.duration_months} months</li>
-                                <li><strong>Status:</strong> PENDING REVIEW</li>
-                            </ul>
-                        </div>
-                        
-                        <p>We will notify you via email once a decision has been made.</p>
-                        <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;">
-                        <p style="font-size: 12px; color: #64748b; text-align: center;">
-                            Koperasi Sanoh Sinergi Bersama - Professional Financial Management
-                        </p>
-                    </div>
-                    """
+                    member_html = _build_email_html(
+                        'Loan Application Received',
+                        f'Dear {instance.member.full_name}, your loan application has been submitted and is currently being reviewed by our administration team.',
+                        details=[
+                            ('Amount', f'Rp {amount:,.0f}'),
+                            ('Duration', duration_text),
+                            ('Status', 'Pending Review'),
+                        ],
+                        highlight=('Submission Status', 'Application received successfully'),
+                        footer_note='We will notify you via email once a decision has been made.',
+                    )
                     send_mail(
                         member_subject,
                         strip_tags(member_html),
@@ -144,7 +141,7 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
         INNER JOIN members m ON la.member_id = m.id
         INNER JOIN departments d ON m.department_id = d.id
         INNER JOIN users u ON m.user_id = u.id
-        WHERE la.status_id = 21 AND u.is_active = true
+        WHERE la.status_id = 21 AND u.is_active IS TRUE
         """
         
         with connection.cursor() as cursor:
@@ -168,7 +165,7 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
         JOIN users u ON m.user_id = u.id
         LEFT JOIN loan_types lt ON la.loan_type_id = lt.id
         LEFT JOIN users adm ON la.admin_id = adm.id
-        WHERE la.id = %s AND u.is_active = true
+        WHERE la.id = %s AND u.is_active IS TRUE
         """
         with connection.cursor() as cursor:
             cursor.execute(query, [pk])
@@ -176,6 +173,8 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
             row = cursor.fetchone()
             if row:
                 result = dict(zip(columns, row))
+                if result.get('salary_statement_file'):
+                    result['salary_statement_file'] = get_absolute_media_url(request, result['salary_statement_file'])
                 return Response(result)
             return Response({'error': 'Application not found'}, status=404)
 
@@ -246,15 +245,24 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
                 # 1. Update Application, Create Loan, and Generate Installments via Stored Procedure
                 admin_user_id = request.data.get('admin_id', request.user.id or 1)
                 
+                # allow passing an optional admin reason/ note to the stored procedure
+                reason = (
+                    request.data.get('reason') or
+                    request.data.get('reject_reason') or
+                    request.data.get('decision_note') or
+                    None
+                )
+
                 with connection.cursor() as cursor:
                     cursor.execute(
-                        "CALL public.sp_loan_approve(%s, %s, %s, %s, %s)",
+                        "CALL public.sp_loan_approve(%s, %s, %s, %s, %s, %s)",
                         [
                             application.id,
                             repayment_term,
                             interest_rate_percent,
                             updated_amount,
-                            admin_user_id
+                            admin_user_id,
+                            reason,
                         ]
                     )
                 
@@ -272,36 +280,26 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
                     member_name = application.member.full_name
                     
                     subject = "Loan Application Approved"
-                    
-                    html_message = f"""
-                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
-                        <h2 style="color: #27ae60; border-bottom: 2px solid #27ae60; padding-bottom: 10px;">Loan Approved!</h2>
-                        <p style="font-size: 16px; color: #34495e;">Dear {member_name},</p>
-                        <p style="font-size: 15px; color: #34495e;">Congratulations! Your loan application has been <strong>Approved</strong>.</p>
-                        
-                        <div style="background-color: #f4fbf7; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #27ae60;">
-                            <h3 style="margin-top: 0; color: #2c3e50; font-size: 18px;">Loan Summary</h3>
-                            <table style="width: 100%; border-collapse: collapse;">
-                                <tr><td style="padding: 8px 0; color: #7f8c8d;">Amount</td><td style="padding: 8px 0; text-align: right;"><strong>Rp {updated_amount:,.0f}</strong></td></tr>
-                                <tr><td style="padding: 8px 0; color: #7f8c8d;">Duration</td><td style="padding: 8px 0; text-align: right;"><strong>{repayment_term} months</strong></td></tr>
-                                <tr><td style="padding: 8px 0; color: #7f8c8d;">Interest Rate</td><td style="padding: 8px 0; text-align: right;"><strong>{interest_rate_percent}% / month</strong></td></tr>
-                                <tr><td style="padding: 8px 0; color: #7f8c8d; border-top: 1px solid #dcdde1; font-weight: bold;">Total Repayment</td><td style="padding: 8px 0; text-align: right; border-top: 1px solid #dcdde1;"><strong>Rp {total_amount:,.0f}</strong></td></tr>
-                            </table>
-                        </div>
-                        
-                        <p style="font-size: 15px; color: #34495e;">You can now view your repayment schedule in the dashboard.</p>
-                        <p style="font-size: 14px; color: #7f8c8d; margin-top: 30px;">Best regards,<br><strong>Koperasi Sanoh Admin</strong></p>
-                    </div>
-                    """
-                    
-                    send_mail(
-                        subject,
-                        "", # Plain text fallback
-                        settings.DEFAULT_FROM_EMAIL,
-                        [member_email],
-                        fail_silently=True,
-                        html_message=html_message
+                    html_message = _build_email_html(
+                        'Loan Approved!',
+                        f'Dear {member_name}, your loan application has been approved.',
+                        details=[
+                            ('Amount', f'Rp {updated_amount:,.0f}'),
+                            ('Duration', f'{repayment_term} months'),
+                            ('Interest Rate', f'{interest_rate_percent}% / month'),
+                            ('Total Repayment', f'Rp {total_amount:,.0f}'),
+                        ],
+                        highlight=('Status', 'Approved'),
+                        footer_note='You can now view your repayment schedule in the dashboard.'
                     )
+                    msg = EmailMultiAlternatives(
+                        subject,
+                        strip_tags(html_message),
+                        settings.DEFAULT_FROM_EMAIL,
+                        [member_email]
+                    )
+                    msg.attach_alternative(html_message, 'text/html')
+                    msg.send(fail_silently=True)
                 except Exception as e:
                     print(f"Failed to send member approval notification: {str(e)}")
                 
@@ -333,90 +331,31 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
             try:
                 member_email = application.member.user.email
                 member_name = application.member.full_name
-                
+
                 subject = "Loan Application Update"
-                
-                html_message = f"""
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
-                    <h2 style="color: #e74c3c; border-bottom: 2px solid #e74c3c; padding-bottom: 10px;">Loan Application Update</h2>
-                    <p style="font-size: 16px; color: #34495e;">Dear {member_name},</p>
-                    <p style="font-size: 15px; color: #34495e;">We have reviewed your loan application and unfortunately, it has been <strong>Rejected</strong> at this time.</p>
-                    
-                    <div style="background-color: #fef4f3; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #e74c3c;">
-                        <h3 style="margin-top: 0; color: #2c3e50; font-size: 17px;">Reason for Rejection</h3>
-                        <p style="color: #34495e; font-style: italic;">"{reject_reason}"</p>
-                    </div>
-                    
-                    <p style="font-size: 15px; color: #34495e;">If you have any questions, please contact the cooperative administration.</p>
-                    <p style="font-size: 14px; color: #7f8c8d; margin-top: 30px;">Best regards,<br><strong>Koperasi Sanoh Admin</strong></p>
-                </div>
-                """
-                
-                send_mail(
-                    subject,
-                    "", # Plain text fallback
-                    settings.DEFAULT_FROM_EMAIL,
-                    [member_email],
-                    fail_silently=True,
-                    html_message=html_message
+                html_message = _build_email_html(
+                    'Loan Application Update',
+                    f'Dear {member_name}, we have reviewed your loan application and it has been rejected.',
+                    details=[
+                        ('Reason', reject_reason),
+                    ],
+                    highlight=('Status', 'Rejected'),
+                    footer_note='If you have any questions, please contact the cooperative administration.'
                 )
+                msg = EmailMultiAlternatives(
+                    subject,
+                    strip_tags(html_message),
+                    settings.DEFAULT_FROM_EMAIL,
+                    [member_email]
+                )
+                msg.attach_alternative(html_message, 'text/html')
+                msg.send(fail_silently=True)
             except Exception as e:
                 print(f"Failed to send member rejection notification: {str(e)}")
-            
+
             return Response({'message': 'Loan application rejected', 'admin_id_updated': admin_user_id})
         except Exception as e:
             return Response({'error': str(e)}, status=400)
-
-    @action(detail=False, methods=['get'])
-    def admin_member_profile(self, request):
-        member_id = request.query_params.get('member_id')
-        if not member_id:
-            return Response({'error': 'member_id query param is required'}, status=400)
-            
-        query = """
-        SELECT 
-            m.full_name, 
-            m.id as member_id, 
-            d.department_name,
-            m.nik_employee, 
-            m.phone_number, 
-            u.email,
-            m.address,
-            m.gender,
-            l.remaining_balance as current_loan,
-            m.join_date, 
-            m.ktp_file_path, 
-            st.name as saving_type_name, 
-            sw.balance as saving_balance,
-            es.status_name as employee_status,
-            CASE 
-                WHEN u.is_active = true THEN 'ACTIVE'
-                WHEN u.is_active = false THEN 'INACTIVE'
-                ELSE 'UNKNOWN'
-            END AS active_status,
-            mb.account_number, 
-            mb.account_holder_name, 
-            b.bank_name
-        FROM members m 
-        JOIN departments d ON m.department_id = d.id
-        JOIN users u ON m.user_id = u.id
-        LEFT JOIN member_bank_accounts mb ON mb.member_id = m.id
-        LEFT JOIN banks b ON b.id = mb.bank_id
-        LEFT JOIN loans l ON l.member_id = m.id
-        LEFT JOIN saving_wallets sw ON sw.member_id = m.id 
-        LEFT JOIN saving_types st ON sw.saving_type_id = st.id
-        LEFT JOIN employee_statuses es ON es.id = m.employee_status_id
-        WHERE m.id = %s AND u.is_active = true 
-        LIMIT 1
-        """
-        with connection.cursor() as cursor:
-            cursor.execute(query, [member_id])
-            row = cursor.fetchone()
-            if row:
-                columns = [col[0] for col in cursor.description]
-                result = dict(zip(columns, row))
-                return Response(result)
-            return Response({'error': 'Member not found'}, status=404)
 
     @action(detail=False, methods=['get'])
     def pending_summary(self, request):
@@ -503,17 +442,38 @@ def sync_member_pending_payments(member_id):
     import requests
     import base64
     from django.conf import settings
+    from datetime import date
+
+    member_name = ''
+    member_email = ''
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT m.full_name, u.email
+            FROM members m
+            LEFT JOIN users u ON u.id = m.user_id
+            WHERE m.id = %s
+            LIMIT 1
+            """,
+            [member_id],
+        )
+        member_row = cursor.fetchone()
+        if member_row:
+            member_name = member_row[0] or ''
+            member_email = member_row[1] or ''
     
     query = """
-        SELECT pgt.gateway_transaction_id AS order_id, pgt.id AS pgt_id, lp.id AS payment_id, 'loan' as p_type
+        SELECT DISTINCT pgt.id AS pgt_id, pgt.gateway_transaction_id AS order_id
         FROM payment_gateway_transactions pgt
-        JOIN loan_payments lp ON CAST(pgt.id AS varchar) = lp.payment_reference_id
-        JOIN loan_installments li ON li.id = lp.installment_id
-        JOIN loans l ON l.id = li.loan_id
-        WHERE l.member_id = %s AND pgt.gateway_status = 'pending'
+        LEFT JOIN loan_payments lp ON CAST(pgt.id AS varchar) = lp.payment_reference_id
+        LEFT JOIN loan_installments li ON li.id = lp.installment_id
+        LEFT JOIN loans l ON l.id = li.loan_id
+        LEFT JOIN saving_transactions st ON CAST(pgt.id AS varchar) = st.payment_reference_id
+        WHERE (l.member_id = %s OR st.member_id = %s) AND pgt.gateway_status = 'pending'
     """
     with connection.cursor() as cursor:
-        cursor.execute(query, [member_id])
+        cursor.execute(query, [member_id, member_id])
         results = [dict(zip([col[0] for col in cursor.description], row)) for row in cursor.fetchall()]
 
     if not results:
@@ -522,7 +482,6 @@ def sync_member_pending_payments(member_id):
     server_key = settings.MIDTRANS_SERVER_KEY
     is_production = settings.MIDTRANS_IS_PRODUCTION
     auth_str = f"{server_key}:"
-    import base64
     auth_base64 = base64.b64encode(auth_str.encode('utf-8')).decode('utf-8')
     headers = {
         "Accept": "application/json",
@@ -532,6 +491,7 @@ def sync_member_pending_payments(member_id):
 
     for r in results:
         order_id = r.get('order_id')
+        pgt_id = r.get('pgt_id')
         if not order_id: continue
         status_url = f"https://api.midtrans.com/v2/{order_id}/status" if is_production else f"https://api.sandbox.midtrans.com/v2/{order_id}/status"
         try:
@@ -540,14 +500,81 @@ def sync_member_pending_payments(member_id):
                 midtrans_status = res.json().get('transaction_status')
                 if midtrans_status in ['expire', 'cancel', 'deny', 'failure']:
                     with connection.cursor() as cursor:
-                        cursor.execute("UPDATE payment_gateway_transactions SET gateway_status = %s, updated_at = NOW() WHERE id = %s", [midtrans_status, r['pgt_id']])
+                        cursor.execute("UPDATE payment_gateway_transactions SET gateway_status = %s, updated_at = NOW() WHERE id = %s", [midtrans_status, pgt_id])
                         status_id = 36 if midtrans_status == 'cancel' else 35
-                        if r['p_type'] == 'loan':
-                            cursor.execute("UPDATE loan_payments SET status_id = %s, updated_at = NOW() WHERE id = %s", [status_id, r['payment_id']])
+                        cursor.execute("UPDATE loan_payments SET status_id = %s, updated_at = NOW() WHERE payment_reference_id = %s", [status_id, str(pgt_id)])
+                        cursor.execute("UPDATE saving_transactions SET status_id = %s, updated_at = NOW() WHERE payment_reference_id = %s", [status_id, str(pgt_id)])
                 elif midtrans_status in ['settlement', 'capture']:
                     with connection.cursor() as cursor:
-                        if r['p_type'] == 'loan':
-                            cursor.execute("CALL sp_loan_gateway_payment(%s, %s)", [r['payment_id'], midtrans_status])
+                        cursor.execute("UPDATE payment_gateway_transactions SET gateway_status = %s, updated_at = NOW() WHERE id = %s", [midtrans_status, pgt_id])
+                        
+                        # 1. Process Loan Payments
+                        cursor.execute("SELECT id FROM loan_payments WHERE payment_reference_id = %s AND status_id = 32", [str(pgt_id)])
+                        loan_payments = cursor.fetchall()
+                        for lp_row in loan_payments:
+                            cursor.execute("CALL sp_loan_gateway_payment(%s, %s)", [lp_row[0], midtrans_status])
+                            
+                        # 2. Process Saving Payments
+                        cursor.execute("""
+                            SELECT id, saving_type_id, amount, COALESCE(admin_fee, 0)
+                            FROM saving_transactions
+                            WHERE payment_reference_id = %s AND status_id = 32
+                        """, [str(pgt_id)])
+                        saving_txs = cursor.fetchall()
+                        for stx_row in saving_txs:
+                            cursor.execute("CALL sp_savings_gateway_payment(%s, %s)", [stx_row[0], midtrans_status])
+
+                            saving_transaction_id = stx_row[0]
+                            saving_type_id = int(stx_row[1] or 0)
+                            principal_amount = int(stx_row[2] or 0)
+                            admin_fee = int(stx_row[3] or 0)
+
+                            if saving_type_id == 3:
+                                cursor.execute(
+                                    """
+                                    UPDATE members m
+                                    SET 
+                                        member_status_id = 8,
+                                        updated_at = NOW()
+                                    FROM users u
+                                    WHERE m.user_id = u.id
+                                    AND u.email = %s
+                                    AND COALESCE(m.member_status_id, 0) <> 6;
+                                    """,
+                                    [member_email],
+                                )
+
+                                cursor.execute(
+                                    """
+                                    UPDATE registrations
+                                    SET 
+                                        status_id = 7,
+                                        updated_at = NOW()
+                                    WHERE email = %s
+                                    AND COALESCE(status_id, 0) <> 7;
+                                    """,
+                                    [member_email],
+                                )
+
+                                admin_email = getattr(settings, 'ADMIN_EMAIL', None) or getattr(settings, 'DEFAULT_FROM_EMAIL', None)
+                                if admin_email:
+                                    subject = f'Principal Saving Paid - {member_name or member_id}'
+                                    try:
+                                        from api.utils.email import send_styled_email
+                                        send_styled_email(
+                                            subject=subject,
+                                            recipient=admin_email,
+                                            intro=f"Hello Admin, {member_name or 'A member'} has completed the principal saving payment.",
+                                            details=[
+                                                ('Member', member_name or '-'),
+                                                ('Email', member_email or '-'),
+                                                ('Principal Amount', f"Rp {principal_amount:,.0f}"),
+                                                ('Admin Fee', f"Rp {admin_fee:,.0f}"),
+                                            ],
+                                            footer_note="Registration status has been updated to active."
+                                        )
+                                    except Exception:
+                                        pass
         except Exception as e:
             pass
 
@@ -791,7 +818,7 @@ class LoanViewSet(viewsets.ModelViewSet):
         import json
         
         server_key = settings.MIDTRANS_SERVER_KEY
-        is_production = getattr(settings, 'MIDTRANS_IS_PRODUCTION', False)
+        is_production = settings.MIDTRANS_IS_PRODUCTION
         auth_str = f"{server_key}:"
         auth_bytes = auth_str.encode('utf-8')
         auth_base64 = base64.b64encode(auth_bytes).decode('utf-8')
@@ -878,6 +905,19 @@ class LoanViewSet(viewsets.ModelViewSet):
             cursor.execute("SELECT channel_code, channel_name, fee_percentage, fee_fixed FROM payment_channels WHERE is_active = TRUE ORDER BY id ASC")
             columns = [col[0] for col in cursor.description]
             results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+        # Convert Decimal values to float for JSON serialization
+        for r in results:
+            if r.get('fee_percentage') is not None:
+                try:
+                    r['fee_percentage'] = float(r['fee_percentage'])
+                except Exception:
+                    pass
+            if r.get('fee_fixed') is not None:
+                try:
+                    r['fee_fixed'] = float(r['fee_fixed'])
+                except Exception:
+                    pass
         return Response(results)
 
     @action(detail=True, methods=['post'])
@@ -887,7 +927,7 @@ class LoanViewSet(viewsets.ModelViewSet):
         import json
         
         server_key = settings.MIDTRANS_SERVER_KEY
-        is_production = getattr(settings, 'MIDTRANS_IS_PRODUCTION', False)
+        is_production = settings.MIDTRANS_IS_PRODUCTION
         
         auth_str = f"{server_key}:"
         auth_bytes = auth_str.encode('utf-8')
@@ -1064,16 +1104,10 @@ class LoanViewSet(viewsets.ModelViewSet):
         
         if payment_type:
             mapping = {
-                'qris': ['other_qris', 'gopay'],
+                'qris': ['other_qris'],
                 'gopay': ['gopay'],
                 'shopeepay': ['shopeepay'],
-                'dana': ['other_qris'], # DANA typically via QRIS in Midtrans
-                'bca_va': ['bca_va'],
-                'bni_va': ['bni_va'],
-                'bri_va': ['bri_va'],
-                'mandiri_va': ['echannel'],
-                'permata_va': ['permata_va'],
-                'other_va': ['other_va']
+                'dana': ['other_qris'],
             }
             payload["enabled_payments"] = mapping.get(payment_type, [payment_type])
         
@@ -1290,7 +1324,10 @@ class LoanViewSet(viewsets.ModelViewSet):
                     pm.name AS payment_method,
                     st.amount,
                     s.status_code AS status,
-                    st.payment_reference_id AS reference_number
+                    CASE 
+                        WHEN pm.name = 'GATEWAY' THEN COALESCE(pgt.gateway_transaction_id, st.payment_reference_id)
+                        ELSE st.payment_reference_id
+                    END AS reference_number
 
                 FROM saving_transactions st
 
@@ -1309,6 +1346,10 @@ class LoanViewSet(viewsets.ModelViewSet):
                 LEFT JOIN manual_payments mp
                     ON pm.name = 'MANUAL'
                 AND mp.payment_reference_id = st.payment_reference_id
+
+                LEFT JOIN payment_gateway_transactions pgt
+                    ON pm.name = 'GATEWAY'
+                AND CAST(pgt.id AS VARCHAR) = st.payment_reference_id
 
 
                 UNION ALL
@@ -1355,7 +1396,10 @@ class LoanViewSet(viewsets.ModelViewSet):
                     pm.name AS payment_method,
                     lp.amount_paid AS amount,
                     s.status_code AS status,
-                    lp.payment_reference_id AS reference_number
+                    CASE 
+                        WHEN pm.name = 'GATEWAY' THEN COALESCE(pgt.gateway_transaction_id, lp.payment_reference_id)
+                        ELSE lp.payment_reference_id
+                    END AS reference_number
 
                 FROM loan_payments lp
 
@@ -1377,6 +1421,10 @@ class LoanViewSet(viewsets.ModelViewSet):
                 LEFT JOIN manual_payments mp
                     ON pm.name = 'MANUAL'
                 AND mp.payment_reference_id = lp.payment_reference_id
+
+                LEFT JOIN payment_gateway_transactions pgt
+                    ON pm.name = 'GATEWAY'
+                AND CAST(pgt.id AS VARCHAR) = lp.payment_reference_id
 
             ) combined_transactions
 
@@ -2047,37 +2095,19 @@ class LoanViewSet(viewsets.ModelViewSet):
                     
                     subject = "Payment Reminder - Overdue Loan Installment"
                     
-                    # Group installments in HTML table
-                    inst_rows = ""
+                    # Group installments
+                    details = []
                     for inst in installments:
-                        inst_rows += f"<tr><td style='padding: 8px 0;'>#{inst['installment_number']}</td><td style='padding: 8px 0;'>{inst['due_date']}</td><td style='padding: 8px 0; text-align: right;'><strong>Rp {inst['amount_total']:,.0f}</strong></td></tr>"
+                        details.append((f"Installment #{inst['installment_number']} ({inst['due_date']})", f"Rp {inst['amount_total']:,.0f}"))
 
-                    html_message = f"""
-                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
-                        <h2 style="color: #f39c12; border-bottom: 2px solid #f39c12; padding-bottom: 10px;">Payment Reminder</h2>
-                        <p style="font-size: 16px; color: #34495e;">Dear {full_name},</p>
-                        <p style="font-size: 15px; color: #34495e;">This is a reminder that you have <strong>overdue</strong> loan payment(s) that require your attention.</p>
-                        
-                        <div style="background-color: #fffaf0; padding: 15px; border-radius: 5px; margin: 20px 0; border: 1px solid #f39c12;">
-                            <h3 style="margin-top: 0; color: #2c3e50; font-size: 17px;">Outstanding Installments</h3>
-                            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-                                <tr style="border-bottom: 1px solid #f39c12;"><th style="text-align: left; padding: 5px 0;">No</th><th style="text-align: left; padding: 5px 0;">Due Date</th><th style="text-align: right; padding: 5px 0;">Amount</th></tr>
-                                {inst_rows}
-                            </table>
-                        </div>
-                        
-                        <p style="font-size: 15px; color: #34495e;">Please make your payment as soon as possible to avoid additional penalties. If you have already made this payment, please disregard this message.</p>
-                        <p style="font-size: 14px; color: #7f8c8d; margin-top: 30px;">Best regards,<br><strong>Koperasi Sanoh Admin</strong></p>
-                    </div>
-                    """
-                        
-                    send_mail(
-                        subject,
-                        "", # Plain text fallback
-                        settings.DEFAULT_FROM_EMAIL,
-                        [email],
-                        fail_silently=False,
-                        html_message=html_message
+                    from api.utils.email import send_styled_email
+                    send_styled_email(
+                        subject=subject,
+                        recipient=email,
+                        intro=f"Dear {full_name}, this is a reminder that you have overdue loan payment(s) that require your attention.",
+                        details=details,
+                        highlight=("Outstanding Installments", "Please make your payment as soon as possible to avoid additional penalties."),
+                        footer_note="If you have already made this payment, please disregard this message."
                     )
                     success_count += 1
                 except Exception as e:
@@ -2153,38 +2183,20 @@ class LoanViewSet(viewsets.ModelViewSet):
                 
                 subject = "AUTOMATIC REMINDER - Overdue Loan Installment"
                 
-                # Group installments in HTML table
-                inst_rows = ""
+                # Group installments
+                details = []
                 for inst in installments:
-                    inst_rows += f"<tr><td style='padding: 8px 0;'>#{inst['installment_number']}</td><td style='padding: 8px 0;'>{inst['due_date']}</td><td style='padding: 8px 0; text-align: right;'><strong>Rp {inst['amount_total']:,.0f}</strong></td></tr>"
+                    details.append((f"Installment #{inst['installment_number']} ({inst['due_date']})", f"Rp {inst['amount_total']:,.0f}"))
 
-                html_message = f"""
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
-                    <h2 style="color: #f39c12; border-bottom: 2px solid #f39c12; padding-bottom: 10px;">Automatic System Reminder</h2>
-                    <p style="font-size: 16px; color: #34495e;">Dear {full_name},</p>
-                    <p style="font-size: 15px; color: #34495e;">This is an <strong>automated system reminder</strong> regarding your outstanding loan installments.</p>
-                    
-                    <div style="background-color: #fffaf0; padding: 15px; border-radius: 5px; margin: 20px 0; border: 1px solid #f39c12;">
-                        <h3 style="margin-top: 0; color: #2c3e50; font-size: 17px;">Overdue Installments</h3>
-                        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-                            <tr style="border-bottom: 1px solid #f39c12;"><th style="text-align: left; padding: 5px 0;">No</th><th style="text-align: left; padding: 5px 0;">Due Date</th><th style="text-align: right; padding: 5px 0;">Amount</th></tr>
-                            {inst_rows}
-                        </table>
-                    </div>
-                    
-                    <p style="font-size: 15px; color: #34495e;">Please settle these payments immediately. If you have any questions, contact the cooperative administration.</p>
-                    <p style="font-size: 14px; color: #7f8c8d; margin-top: 30px;">Best regards,<br><strong>Koperasi Sanoh System</strong></p>
-                </div>
-                """
-                
                 try:
-                    send_mail(
-                        subject, 
-                        "", 
-                        settings.DEFAULT_FROM_EMAIL, 
-                        [email], 
-                        fail_silently=False,
-                        html_message=html_message
+                    from api.utils.email import send_styled_email
+                    send_styled_email(
+                        subject=subject,
+                        recipient=email,
+                        intro=f"Dear {full_name}, this is an automated system reminder regarding your outstanding loan installments.",
+                        details=details,
+                        highlight=("Overdue Installments", "Please settle these payments immediately."),
+                        footer_note="If you have any questions, contact the cooperative administration."
                     )
                     success_count += 1
                 except:
@@ -2260,34 +2272,20 @@ class LoanViewSet(viewsets.ModelViewSet):
                 })
             
             # POST: Send email
-            installment_details = []
+            details = []
             for inst in results:
-                detail = f"Installment #{inst['installment_number']} - Due: {inst['due_date']} - Amount: Rp {inst['amount_total']:,.0f}"
-                installment_details.append(detail)
+                details.append((f"Installment #{inst['installment_number']} ({inst['due_date']})", f"Rp {inst['amount_total']:,.0f}"))
             
             subject = "Payment Reminder - Overdue Loan Installment (TEST)"
-            message = f"""
-Dear {full_name},
-
-This is a test reminder email that you have overdue loan payment(s).
-
-Outstanding Installments:
-{chr(10).join(installment_details)}
-
-Please make your payment as soon as possible to avoid additional penalties.
-
-If you have already made this payment, please disregard this message.
-
-Best regards,
-Sanoh Koperasi Admin
-            """
             
-            send_mail(
-                subject,
-                message,
-                settings.DEFAULT_FROM_EMAIL,
-                [email],
-                fail_silently=False,
+            from api.utils.email import send_styled_email
+            send_styled_email(
+                subject=subject,
+                recipient=email,
+                intro=f"Dear {full_name}, this is a test reminder email that you have overdue loan payment(s).",
+                details=details,
+                highlight=("Outstanding Installments", "Please make your payment as soon as possible to avoid additional penalties."),
+                footer_note="If you have already made this payment, please disregard this message."
             )
             
             return Response({
@@ -2534,12 +2532,18 @@ Sanoh Koperasi Admin
         # Handle File Upload
         proof_file = request.FILES.get('proof_file')
         file_path = None
+        file_url = None
         if proof_file:
-            from django.core.files.storage import default_storage
-            import os
-            # Save to 'manual_payments/' folder in default storage (Cloud or Local)
-            filename = default_storage.save(f'manual_payments/{proof_file.name}', proof_file)
-            file_path = filename
+            # Save to 'manual_payments/YYYY/MM/DD/' with a unique file name.
+            safe_name = os.path.basename(proof_file.name or 'proof_transfer')
+            date_prefix = timezone.now().strftime('%Y/%m/%d')
+            storage_path = f"manual_payments/{date_prefix}/{uuid4().hex}_{safe_name}"
+            filename = default_storage.save(storage_path, proof_file)
+            file_path = str(filename)
+            try:
+                file_url = default_storage.url(file_path)
+            except Exception:
+                file_url = get_absolute_media_url(request, file_path)
 
         results = []
         errors = []
@@ -2603,7 +2607,10 @@ Sanoh Koperasi Admin
 
             return Response({
                 'message': 'All payments processed successfully',
-                'results': results
+                'results': results,
+                'proof_file_path': file_path,
+                'proof_file_url': file_url,
+                'storage_backend': default_storage.__class__.__name__,
             })
 
         except Exception as e:
@@ -2631,7 +2638,6 @@ Sanoh Koperasi Admin
                         
                         subject = 'Payment Confirmation - Koperasi Sanoh'
                         
-                        from django.utils import timezone
                         new_date_str = timezone.now().strftime('%d %B %Y, %H:%M')
                         
                         # Calculate total amount directly from payments_data
@@ -2646,57 +2652,55 @@ Sanoh Koperasi Admin
                             except:
                                 pass
 
-                        html_message = f"""
-                        <html>
-                        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-                            <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
-                                <h2 style="color: #0F172A; text-align: center;">Payment Confirmation</h2>
-                                <p>Dear <strong>{member_name}</strong>,</p>
-                                <p>This is to confirm that your payment has been successfully processed by the administrator.</p>
-                                
-                                <div style="text-align: center; margin: 25px 0; padding: 20px; background-color: #F8FAFC; border-radius: 12px; border: 1px dashed #CBD5E1;">
-                                    <span style="display: block; font-size: 14px; color: #64748B; text-transform: uppercase; letter-spacing: 1px;">Total Amount Processed</span>
-                                    <span style="display: block; font-size: 32px; font-weight: 800; color: #0F172A; margin-top: 5px;">Rp {total_processed:,.0f}</span>
-                                </div>
+                        html_message = _build_email_html(
+                            'Payment Confirmation',
+                            f'Dear {member_name}, your manual payment has been processed successfully by the administrator.',
+                            details=[
+                                ('Total Amount Processed', f'Rp {total_processed:,.0f}'),
+                                ('Transaction Details', ', '.join(results) if results else '-'),
+                                ('Notes', notes if notes else '-'),
+                                ('Date', new_date_str),
+                                ('Proof of Transfer', 'Attached in this email' if file_path else 'Not attached'),
+                            ],
+                            highlight=('Status', 'Processed Successfully'),
+                            footer_note='This is an automated message from Koperasi Sanoh Sinergi Bersama. Please do not reply to this email.'
+                        )
 
-                                <div style="margin: 20px 0;">
-                                    <h4 style="color: #475569; margin-bottom: 10px; font-size: 14px; text-transform: uppercase;">Transaction Details:</h4>
-                                    <ul style="list-style-type: none; padding: 0;">
-                                        { "".join([f'<li style="padding: 10px; margin-bottom: 5px; background: #fff; border: 1px solid #F1F5F9; border-radius: 6px; display: flex; align-items: center;"><span style="color: #10B981; margin-right: 10px;">✔</span> {r}</li>' for r in results]) }
-                                    </ul>
-                                </div>
-                                <p><strong>Notes:</strong> {notes if notes else '-'}</p>
-                                <p><strong>Date:</strong> {new_date_str}</p>
-                                { f'<p style="color: #0284C7;"><i>*Proof of payment has been attached to this email.</i></p>' if file_path else '' }
-                                <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;">
-                                <p style="font-size: 12px; color: #64748b; text-align: center;">
-                                    This is an automated message from <strong>Koperasi Sanoh Sinergi Bersama</strong>. Please do not reply to this email.
-                                </p>
-                            </div>
-                        </body>
-                        </html>
-                        """
-                        
-                        plain_message = strip_tags(html_message)
-                        
-                        email = EmailMessage(
+                        email = EmailMultiAlternatives(
                             subject,
-                            plain_message,
+                            strip_tags(html_message),
                             settings.DEFAULT_FROM_EMAIL,
                             [member_email],
                         )
-                        email.content_subtype = "html"
-                        email.body = html_message
-                        
-                        # Attach proof file if exists
-                        if file_path:
-                            absolute_file_path = os.path.join(settings.MEDIA_ROOT, file_path)
-                            if os.path.exists(absolute_file_path):
-                                email.attach_file(absolute_file_path)
+                        email.attach_alternative(html_message, 'text/html')
 
-                        email.send(fail_silently=True)
+                        # Attach proof file from default storage (supports S3/Supabase/local)
+                        if file_path:
+                            attached = False
+                            try:
+                                with default_storage.open(file_path, 'rb') as stored_file:
+                                    file_bytes = stored_file.read()
+                                filename_only = os.path.basename(file_path) or 'proof_of_transfer'
+                                mime_type = mimetypes.guess_type(filename_only)[0] or 'application/octet-stream'
+                                email.attach(filename_only, file_bytes, mime_type)
+                                attached = True
+                            except Exception as attach_err:
+                                print(f"Failed to attach manual payment proof file: {str(attach_err)}")
+                            if not attached and file_url:
+                                try:
+                                    with urlopen(file_url) as response:
+                                        remote_bytes = response.read()
+                                    remote_name = os.path.basename(file_path) or 'proof_of_transfer'
+                                    remote_mime = mimetypes.guess_type(remote_name)[0] or 'application/octet-stream'
+                                    email.attach(remote_name, remote_bytes, remote_mime)
+                                    attached = True
+                                except Exception as url_attach_err:
+                                    print(f"Failed to attach manual payment proof file from URL: {str(url_attach_err)}")
+
+                        email.send(fail_silently=False)
                 except Exception as mail_err:
                     print(f"Failed to send manual payment email: {str(mail_err)}")
+                    
     @action(detail=False, methods=['post'])
     def update_loan_status(self, request):
         """
@@ -2897,6 +2901,250 @@ Sanoh Koperasi Admin
         except Exception as e:
             return Response({'error': str(e)}, status=400)
 
+    @action(detail=False, methods=['post'])
+    def create_bulk_payment_token(self, request):
+        import requests
+        import base64
+        import json
+        from django.utils import timezone
+        
+        server_key = settings.MIDTRANS_SERVER_KEY
+        is_production = settings.MIDTRANS_IS_PRODUCTION
+        
+        auth_str = f"{server_key}:"
+        auth_bytes = auth_str.encode('utf-8')
+        auth_base64 = base64.b64encode(auth_bytes).decode('utf-8')
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Authorization": f"Basic {auth_base64}"
+        }
+        
+        if not request.user.is_authenticated or not hasattr(request.user, 'member'):
+            member_id = request.data.get('member_id') or request.query_params.get('member_id')
+            if not member_id:
+                return Response({'error': 'Authentication required or member_id missing'}, status=401)
+        else:
+            member_id = request.user.member.id
+
+        saving_ids = request.data.get('saving_ids', [])
+        loan_ids = request.data.get('loan_ids', [])
+        payment_type = request.data.get('payment_type')
+        
+        if not saving_ids and not loan_ids:
+            return Response({'error': 'No bills selected.'}, status=400)
+
+        saving_bills = []
+        if saving_ids:
+            saving_ids = [int(x) for x in saving_ids]
+            query_savings = """
+                SELECT id, amount_due, amount_paid, saving_type_id, bill_period_end
+                FROM monthly_saving_bills
+                WHERE id IN %s AND member_id = %s AND status_id = 38
+            """
+            with connection.cursor() as cursor:
+                cursor.execute(query_savings, [tuple(saving_ids), member_id])
+                saving_bills = [dict(zip([col[0] for col in cursor.description], row)) for row in cursor.fetchall()]
+
+        loan_installments = []
+        if loan_ids:
+            loan_ids = [int(x) for x in loan_ids]
+            query_loans = """
+                SELECT li.id, li.amount_total, li.installment_number, li.loan_id
+                FROM loan_installments li
+                JOIN loans l ON l.id = li.loan_id
+                WHERE li.id IN %s AND l.member_id = %s AND li.status_id IN (28, 30)
+            """
+            with connection.cursor() as cursor:
+                cursor.execute(query_loans, [tuple(loan_ids), member_id])
+                loan_installments = [dict(zip([col[0] for col in cursor.description], row)) for row in cursor.fetchall()]
+
+        if not saving_bills and not loan_installments:
+            return Response({'error': 'Selected bills are already paid or invalid.'}, status=400)
+
+        with connection.cursor() as cursor:
+            if loan_ids:
+                cursor.execute("""
+                    SELECT DISTINCT pgt.id, pgt.gateway_transaction_id
+                    FROM loan_payments lp
+                    JOIN payment_gateway_transactions pgt ON CAST(pgt.id AS varchar) = lp.payment_reference_id
+                    WHERE lp.installment_id IN %s AND lp.status_id = 32
+                """, [tuple(loan_ids)])
+                for pgt_id, order_id in cursor.fetchall():
+                    cursor.execute("UPDATE payment_gateway_transactions SET gateway_status = 'cancel', updated_at = NOW() WHERE id = %s", [pgt_id])
+                    cursor.execute("UPDATE loan_payments SET status_id = 36, updated_at = NOW() WHERE payment_reference_id = %s", [str(pgt_id)])
+            
+            if saving_ids:
+                cursor.execute("""
+                    SELECT DISTINCT pgt.id, pgt.gateway_transaction_id
+                    FROM saving_transactions st
+                    JOIN payment_gateway_transactions pgt ON CAST(pgt.id AS varchar) = st.payment_reference_id
+                    WHERE st.monthly_saving_bill_id IN %s AND st.status_id = 32
+                """, [tuple(saving_ids)])
+                for pgt_id, order_id in cursor.fetchall():
+                    cursor.execute("UPDATE payment_gateway_transactions SET gateway_status = 'cancel', updated_at = NOW() WHERE id = %s", [pgt_id])
+                    cursor.execute("UPDATE saving_transactions SET status_id = 36, updated_at = NOW() WHERE payment_reference_id = %s", [str(pgt_id)])
+
+        subtotal = 0
+        item_details = []
+        
+        for b in saving_bills:
+            amount = int(b['amount_due'] - (b['amount_paid'] or 0))
+            subtotal += amount
+            label = "Simpanan Wajib" if b['saving_type_id'] == 1 else "Simpanan Sukarela"
+            item_details.append({
+                "id": f"SAV-{b['id']}",
+                "price": amount,
+                "quantity": 1,
+                "name": label
+            })
+            
+        for inst in loan_installments:
+            amount = int(inst['amount_total'])
+            subtotal += amount
+            item_details.append({
+                "id": f"INST-{inst['id']}",
+                "price": amount,
+                "quantity": 1,
+                "name": f"Cicilan Pinjaman ke-{inst['installment_number']}"
+            })
+
+        fee_percentage = 0.0
+        fee_fixed = 0.0
+        
+        if payment_type:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT fee_percentage, fee_fixed FROM payment_channels WHERE channel_code = %s AND is_active = TRUE", [payment_type])
+                channel_row = cursor.fetchone()
+                if channel_row:
+                    fee_percentage = float(channel_row[0])
+                    fee_fixed = float(channel_row[1])
+        
+        admin_fee = int((float(subtotal) * fee_percentage) / 100) + int(fee_fixed)
+        gross_amount = subtotal + admin_fee
+
+        if admin_fee > 0:
+            fee_label = f"Biaya Layanan ({fee_percentage}%)" if fee_percentage > 0 else "Biaya Layanan"
+            item_details.append({
+                "id": "FEE-ADMIN",
+                "price": admin_fee,
+                "quantity": 1,
+                "name": fee_label
+            })
+
+        order_id = f"KOP-BULK-{member_id}-{int(timezone.now().timestamp())}"
+        url = "https://app.midtrans.com/snap/v1/transactions" if is_production else "https://app.sandbox.midtrans.com/snap/v1/transactions"
+        
+        first_name = ""
+        email = ""
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT m.full_name, u.email 
+                FROM members m
+                inner join users u on m.user_id = u.id
+                WHERE m.id = %s
+            """, [member_id])
+            member_row = cursor.fetchone()
+            if member_row:
+                first_name = member_row[0] or first_name
+                email = member_row[1] or email
+
+        payload = {
+            "transaction_details": {
+                "order_id": order_id,
+                "gross_amount": gross_amount
+            },
+            "item_details": item_details,
+            "customer_details": {
+                "first_name": first_name,
+                "email": email
+            }
+        }
+        
+        if payment_type:
+            mapping = {
+                'qris': ['other_qris'],
+                'gopay': ['gopay'],
+                'shopeepay': ['shopeepay'],
+                'dana': ['other_qris'],
+            }
+            payload["enabled_payments"] = mapping.get(payment_type, [payment_type])
+
+        try:
+            response = requests.post(url, json=payload, headers=headers)
+            res_data = response.json()
+            
+            if response.status_code != 201:
+                error_msg = res_data.get('error_messages', ['Failed to create transaction with Midtrans'])[0]
+                return Response({'error': error_msg}, status=400)
+                
+            snap_token = res_data['token']
+            redirect_url = res_data['redirect_url']
+            raw_data = json.dumps({"snap_token": snap_token})
+            
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO payment_gateway_transactions (
+                        payable_type_id,
+                        gateway_provider,
+                        gateway_transaction_id,
+                        gateway_status,
+                        callback_raw_data,
+                        created_at,
+                        updated_at
+                    ) VALUES (%s, %s, %s, %s, %s, NOW(), NOW()) RETURNING id
+                """, [2, 'MIDTRANS', order_id, 'pending', raw_data])
+                pgt_id = cursor.fetchone()[0]
+                
+                total_items = len(saving_bills) + len(loan_installments)
+                
+                for b in saving_bills:
+                    amount = int(b['amount_due'] - (b['amount_paid'] or 0))
+                    item_fee = int((amount * fee_percentage) / 100) + int(fee_fixed / total_items) if total_items > 0 else 0
+                    cursor.execute("""
+                        INSERT INTO saving_transactions (
+                            member_id,
+                            saving_type_id,
+                            transaction_type_id,
+                            payment_method_id,
+                            amount,
+                            status_id,
+                            payment_reference_id,
+                            monthly_saving_bill_id,
+                            transaction_date,
+                            created_at,
+                            updated_at,
+                            admin_fee
+                        ) VALUES (%s, %s, 1, 1, %s, 32, %s, %s, NOW(), NOW(), NOW(), %s)
+                    """, [member_id, b['saving_type_id'], amount, pgt_id, b['id'], item_fee])
+                
+                for inst in loan_installments:
+                    amount = int(inst['amount_total'])
+                    item_fee = int((amount * fee_percentage) / 100) + int(fee_fixed / total_items) if total_items > 0 else 0
+                    cursor.execute("""
+                        INSERT INTO loan_payments (
+                            installment_id,
+                            amount_paid,
+                            admin_fee,
+                            payment_date,
+                            payment_method_id,
+                            payment_reference_id,
+                            status_id,
+                            created_at,
+                            updated_at
+                        ) VALUES (%s, %s, %s, NOW(), 1, %s, 32, NOW(), NOW())
+                    """, [inst['id'], amount, item_fee, pgt_id])
+                    
+            return Response({
+                'snap_token': snap_token,
+                'redirect_url': redirect_url,
+                'order_id': order_id,
+                'amount': gross_amount
+            })
+            
+        except Exception as e:
+            return Response({'error': f"Connection to Midtrans failed: {str(e)}"}, status=500)
+
     @action(detail=False, methods=['get'])
     def my_transactions(self, request):
         """
@@ -2918,10 +3166,19 @@ Sanoh Koperasi Admin
         
         # Build individual queries
         savings_parts = [
-            "SELECT st.transaction_date, tt.name AS transaction_type, st.amount, s.status_name AS status, st.payment_reference_id AS reference",
+            """SELECT 
+                st.transaction_date, 
+                tt.name AS transaction_type, 
+                st.amount, 
+                s.status_name AS status, 
+                CASE 
+                    WHEN st.payment_method_id = 1 THEN COALESCE(pgt.gateway_transaction_id, st.payment_reference_id)
+                    ELSE st.payment_reference_id
+                END AS reference""",
             "FROM saving_transactions st",
             "INNER JOIN transaction_types tt ON tt.id = st.transaction_type_id",
             "INNER JOIN statuses s ON s.id = st.status_id",
+            "LEFT JOIN payment_gateway_transactions pgt ON st.payment_method_id = 1 AND CAST(pgt.id AS VARCHAR) = st.payment_reference_id",
             "WHERE st.member_id = %s"
         ]
         savings_params = [member_id]

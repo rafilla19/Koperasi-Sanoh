@@ -104,6 +104,30 @@
   margin-bottom: 8px;
 }
 
+.tc-doc-icon.tc-loading {
+  animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.tc-pdf-viewer {
+  min-height: 600px;
+  width: 100%;
+  height: 100%;
+}
+
+.tc-document-viewer-content {
+  width: 100%;
+  height: 100%;
+}
+
 .tc-document-viewer-content h3 {
   font-size: 14.5px;
   color: #A0AEC0;

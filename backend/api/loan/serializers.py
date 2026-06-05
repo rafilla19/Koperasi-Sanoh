@@ -9,7 +9,7 @@ class LoanTypeSerializer(serializers.ModelSerializer):
 class LoanApplicationSerializer(serializers.ModelSerializer):
     class Meta:
         model = LoanApplication
-        fields = ('id', 'amount_requested', 'duration_months', 'loan_type', 'purpose','member','salary_statement_file', 'status', 'admin_update', 'reject_reason') 
+        fields = ('id', 'amount_requested', 'duration_months', 'loan_type', 'purpose','member','salary_statement_file', 'status', 'admin', 'reject_reason') 
         read_only_fields = [
             'id',
             'status'

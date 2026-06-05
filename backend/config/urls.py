@@ -5,14 +5,13 @@ from django.conf.urls.static import static
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    # path('api/', include('login.urls')),
-    path('api/loan/', include('api.loan.urls')),
-    path('api/master/', include('api.master.urls')),
-    path('api/ml/', include('ml_service.urls'))
+    path('api/', include('api.urls')),
+    path('api/v1/', include('api.urls')),
+    path('api/ml/', include('ml_service.urls')),
+    path('api/v1/', include('api.shu.urls')),
+    path('api/', include('api.saving.urls')),
+    path('api/', include('api.shu.urls')),
+    path('api/', include('api.master.urls')),
+    path('api/', include('api.member.urls')),
 ]
 
-# if settings.DEBUG:
-#     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-#     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
-
-#

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { User, Plus, Trash2, Calendar, Search, Upload, FileText, AlertCircle, CheckCircle } from 'lucide-react';
+import { apiUrl } from '../../services/api';
 import './ManualPayment.css';
 
 const MONTHS = [
@@ -67,7 +68,7 @@ const ManualPayment = () => {
 
   const fetchMembers = async () => {
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/loan/loans/member_list_manual_payment/');
+      const res = await fetch(apiUrl('/loan/loans/member_list_manual_payment/'));
       if (res.ok) setMembers(await res.json());
     } catch (err) { console.error(err); }
   };
@@ -76,7 +77,7 @@ const ManualPayment = () => {
     setLoading(true);
     try {
       const res = await fetch(
-        `http://127.0.0.1:8000/api/loan/loans/get_member_outstanding_detail/?member_id=${id}&month=${selectedMonth}&year=${selectedYear}`
+        apiUrl(`/loan/loans/get_member_outstanding_detail/?member_id=${id}&month=${selectedMonth}&year=${selectedYear}`)
       );
       if (res.ok) {
         const data = await res.json();
@@ -125,9 +126,9 @@ const ManualPayment = () => {
   const handleTypeChange = (idx, newType) => {
     let updated = [...payments];
 
-    // If selecting withdrawal, it must be the only row
+    // If selecting withdrawal, it must be the only row and should not auto-fill amount
     if (newType === 'withdrawal') {
-      updated = [{ type: 'withdrawal', amount: getAutoAmount('withdrawal') }];
+      updated = [{ type: 'withdrawal', amount: '' }];
     } else {
       updated[idx] = { type: newType, amount: newType ? getAutoAmount(newType) : '' };
     }
@@ -203,6 +204,11 @@ const ManualPayment = () => {
       return; 
     }
 
+    if (!proofFile) {
+      setFormError('Proof of Transfer is required before processing payment.');
+      return;
+    }
+
     setLoading(true);
     const formData = new FormData();
     formData.append('member_id', selectedMemberId);
@@ -213,7 +219,7 @@ const ManualPayment = () => {
     }
 
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/loan/loans/process_manual_payments/', {
+      const res = await fetch(apiUrl('/loan/loans/process_manual_payments/'), {
         method: 'POST',
         body: formData,
         // Don't set Content-Type header when using FormData
@@ -441,7 +447,7 @@ const ManualPayment = () => {
                     value={pay.amount}
                     onChange={e => handleAmountChange(idx, e.target.value)}
                   />
-                  {pay.type && memberDetail && (
+                  {pay.type && memberDetail && pay.type !== 'withdrawal' && (
                     <span className="mp-auto-label">auto-filled</span>
                   )}
                 </div>
@@ -476,7 +482,9 @@ const ManualPayment = () => {
 
             {/* Proof of Transfer */}
             <div className="mp-input-group">
-              <label className="mp-label">Proof of Transfer</label>
+              <label className="mp-label">
+                Proof of Transfer <span className="mp-required">*</span>
+              </label>
               <div className="mp-file-upload">
                 <input
                   type="file"

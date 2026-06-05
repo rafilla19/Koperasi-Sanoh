@@ -1,3 +1,82 @@
+.card {
+  background: rgba(255, 255, 255, 0.96);
+  border-radius: 22px;
+  padding: 24px;
+  border: 1px solid rgba(226, 232, 240, 0.92);
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.06);
+  margin-top: 18px;
+}
+
+.savings-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.savings-header h2 {
+  margin: 0;
+  font-size: clamp(26px, 3vw, 34px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: #0f172a;
+}
+
+table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: #fff;
+  border: 1px solid #e5eaf2;
+  border-radius: 18px;
+  overflow: hidden;
+}
+
+th {
+  text-align: left;
+  color: #64748b;
+  background: #f8fafc;
+  padding: 14px 12px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+td {
+  padding: 14px 12px;
+  border-top: 1px solid #eef2f7;
+  color: #0f172a;
+}
+
+tbody tr:hover td {
+  background: #f8fafc;
+}
+
+.empty {
+  text-align: center;
+  padding: 28px;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+.sub {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.total {
+  color: #1d4ed8;
+  font-weight: 800;
+}
+
+@media (max-width: 768px) {
+  .savings-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
 .savings-page {
   padding: 24px;
   background: #f5f6f8;
@@ -23,6 +102,7 @@
   margin-bottom: 16px;
 }
 
+
 .tabs {
   display: flex;
   gap: 12px;
@@ -43,14 +123,7 @@
   color: white;
 }
 
-/* 📦 card */
-.card {
-  background: white;
-  border-radius: 16px;
-  padding: 20px;
-}
-
-/* 🔍 header */
+/*  header */
 .table-header {
   display: flex;
   justify-content: space-between;
@@ -341,6 +414,69 @@ td {
   .card {
     overflow-x: auto;
   }
+  table {
+    min-width: 600px;
+  }
+}
+
+table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: #fff;
+  border: 1px solid #e5eaf2;
+  border-radius: 18px;
+  overflow: hidden;
+}
+
+th {
+  text-align: left;
+  color: #64748b;
+  background: #f8fafc;
+  padding: 14px 12px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+td {
+  padding: 14px 12px;
+  border-top: 1px solid #eef2f7;
+  color: #0f172a;
+}
+
+tbody tr:hover td {
+  background: #f8fafc;
+}
+
+.empty {
+  text-align: center;
+  padding: 28px;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+.sub {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.total {
+  color: #1d4ed8;
+  font-weight: 800;
+}
+
+@media (max-width: 768px) {
+  .savings-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .card {
+    overflow-x: auto;
+  }
+
   table {
     min-width: 600px;
   }

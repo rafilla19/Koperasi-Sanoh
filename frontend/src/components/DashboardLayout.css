@@ -199,11 +199,20 @@
   color: rgba(255, 255, 255, 0.82);
 }
 
-.dl-sb-item.active, .dl-sb-parent.active {
+.dl-sb-item.active {
   background: var(--dl-blue);
   color: #fff;
   font-weight: 600;
   box-shadow: 0 4px 12px rgba(72, 128, 240, 0.2);
+}
+
+/* Parent (accordion) active state should be subtle so it doesn't compete
+   visually with the child active item. Keep it readable but not full-blue. */
+.dl-sb-parent.active {
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: none;
 }
 
 .dl-sb-dot {
@@ -637,3 +646,15 @@
 .dl-avatar-btn.admin-view:hover {
   background: transparent !important;
 }
+
+/* WhatsApp menu */
+.dl-wa-wrapper { position: fixed; bottom: 26px; right: 26px; z-index: 70; }
+.dl-wa-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.25); z-index: 60; }
+.dl-wa-menu { position: absolute; bottom: 68px; right: 0; width: 320px; background: #fff; border-radius: 12px; box-shadow: 0 12px 32px rgba(10,22,40,0.12); border: 1px solid rgba(10,22,40,0.06); padding: 12px; z-index: 71; }
+.dl-wa-menu-header { display:flex; gap:8px; align-items:center; font-weight:700; color:#0A1628; margin-bottom:6px; }
+.dl-wa-menu-sub { margin:0 0 8px 0; font-size:13px; color:#475569; }
+.dl-wa-menu-list { list-style:none; margin:0; padding:0; max-height:220px; overflow:auto; }
+.dl-wa-menu-item { display:flex; gap:10px; align-items:center; padding:8px 10px; border-radius:8px; text-decoration:none; color:#0A1628; }
+.dl-wa-menu-item:hover { background:#F1F5F9; }
+.dl-wa-menu-item-icon { width:28px; display:inline-flex; align-items:center; justify-content:center; }
+.dl-floating-wa.active { transform: scale(0.98); box-shadow: 0 6px 14px rgba(0,0,0,0.12); }

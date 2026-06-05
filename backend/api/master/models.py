@@ -1,5 +1,19 @@
 from django.db import models
 
+from api.member.models import (
+    Member,
+    StatusCategory,
+    Role,
+    User,
+    MemberBankAccount,
+    MemberSavingObligation,
+    # Notification,
+    Withdrawal,
+    SHUComponent,
+    PaymentChannel,
+    IncomeExpenseCategory,
+)
+
 class Department(models.Model):
     department_name = models.CharField(max_length=100)
     created_at = models.DateTimeField()
@@ -11,7 +25,7 @@ class Department(models.Model):
         managed = False
 
 class Status(models.Model):
-    status_category = models.ForeignKey('api.StatusCategory', on_delete=models.RESTRICT)
+    status_category = models.ForeignKey('member.StatusCategory', on_delete=models.RESTRICT)
     status_code = models.CharField(max_length=50)
     status_name = models.CharField(max_length=100)
 
@@ -40,98 +54,31 @@ class PaymentMethod(models.Model):
     class Meta:
         db_table = 'payment_methods'
         managed = False
-    
-    
-    
-#member module
-class Member(models.Model):
-    full_name = models.CharField(max_length=100)
-    employee_status_id = models.IntegerField()
+
+class DocumentType(models.Model):
+    name = models.CharField(max_length=100)
 
     class Meta:
-        db_table = 'members'
+        db_table = 'document_types'
         managed = False
-        
-class StatusCategory(models.Model):
-    category_name = models.CharField(max_length=50)
+        ordering = ['name']
 
-    class Meta:
-        db_table = 'status_categories'
-        managed = False
-        
-class Role(models.Model):
-    role_name = models.CharField(max_length=50)
-
-    class Meta:
-        db_table = 'roles'
-        managed = False
+    def __str__(self):
+        return self.name
 
 
-class User(models.Model):
-    email = models.EmailField()
-    password = models.CharField(max_length=255)
-    role = models.ForeignKey('api.Role', on_delete=models.RESTRICT)
-    is_active = models.BooleanField()
-    created_at = models.DateTimeField()
-
-    class Meta:
-        db_table = 'users'
-        managed = False
-
-class Notification(models.Model):
-    member = models.ForeignKey('api.Member', on_delete=models.CASCADE)
+class DocumentArchive(models.Model):
     title = models.CharField(max_length=255)
-    message = models.TextField()
-    notification_type = models.CharField(max_length=50) # e.g., 'LOAN', 'WITHDRAWAL', 'PAYMENT'
-    is_read = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
+    description = models.TextField(blank=True, null=True)
+    type_id = models.IntegerField(blank=True, null=True)
+    document_url = models.URLField(max_length=1000, blank=True, null=True)
+    file_name = models.CharField(max_length=500, blank=True, null=True)
+    file_size = models.BigIntegerField(null=True, blank=True)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'notifications'
-        managed = False
+        db_table = 'document_archives'
+        ordering = ['-uploaded_at']
 
-class Withdrawal(models.Model):
-    member = models.ForeignKey('api.Member', on_delete=models.RESTRICT)
-    amount = models.DecimalField(max_digits=15, decimal_places=2)
-    status = models.ForeignKey('api.Status', on_delete=models.RESTRICT)
-    proof_file_path = models.CharField(max_length=500, null=True, blank=True)
-    request_date = models.DateTimeField()
-    paid_date = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        db_table = 'withdrawals'
-        managed = False
-
-class SHUComponent(models.Model):
-    component_name = models.CharField(max_length=100, unique=True)
-    percentage = models.DecimalField(max_digits=5, decimal_places=2)
-    distributed_member = models.BooleanField(default=False)
-    
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    deleted_at = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        db_table = 'master_configurations'
-        managed = False
-
-class PaymentChannel(models.Model):
-    channel_code = models.CharField(max_length=50)
-    channel_name = models.CharField(max_length=100)
-    fee_percentage = models.DecimalField(max_digits=5, decimal_places=2)
-    fee_fixed = models.DecimalField(max_digits=15, decimal_places=2)
-    is_active = models.BooleanField(default=True)
-
-    class Meta:
-        db_table = 'payment_channels'
-        managed = False
-
-class IncomeExpenseCategory(models.Model):
-    category_name = models.CharField(max_length=100)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    deleted_at = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        db_table = 'income_expense_categories'
-        managed = False
+    def __str__(self):
+        return self.title

@@ -1,0 +1,42 @@
+/* Shared member/admin helpers */
+
+.spinner {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.member-empty-state,
+.member-loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 32px 16px;
+  color: var(--color-text-muted, #64748b);
+}
+
+.member-loading-state p,
+.member-empty-state p {
+  margin: 0;
+}
+
+.member-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(72, 128, 240, 0.08);
+  color: #4880f0;
+  font-size: 12px;
+  font-weight: 700;
+}

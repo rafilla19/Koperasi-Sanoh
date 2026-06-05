@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Printer, CheckCircle, AlertTriangle, User, Calendar, CreditCard, DollarSign, ExternalLink, FileText } from 'lucide-react';
+import { apiUrl } from '../../services/api';
 import './AdminActiveLoanDetail.css';
 
 const AdminActiveLoanDetail = () => {
@@ -15,7 +16,7 @@ const AdminActiveLoanDetail = () => {
     const fetchData = async () => {
       try {
         // Fetch active loan summary (admin version)
-        const activeRes = await fetch('http://127.0.0.1:8000/api/loan/loans/admin_loans_list/');
+        const activeRes = await fetch(apiUrl('/loan/loans/admin_loans_list/'));
         if (activeRes.ok) {
           const activeData = await activeRes.json();
           const match = activeData.find(item => String(item.loan_id) === id);
@@ -23,7 +24,7 @@ const AdminActiveLoanDetail = () => {
             setLoanData(match);
 
             // Fetch schedule
-            const schedRes = await fetch(`http://127.0.0.1:8000/api/loan/loans/${id}/schedule/`);
+            const schedRes = await fetch(apiUrl(`/loan/loans/${id}/schedule/`));
             if (schedRes.ok) {
               const schedData = await schedRes.json();
               setSchedule(schedData);

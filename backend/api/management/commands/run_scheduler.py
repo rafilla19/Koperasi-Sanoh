@@ -17,6 +17,10 @@ def send_outsourcing_reminders():
     logger.info("Running daily outsourcing reminders (3 days before)...")
     call_command('send_outsourcing_reminders')
 
+def cleanup_temp_files():
+    logger.info("Running cleanup for expired temporary documents...")
+    call_command('cleanup_temp_files')
+
 def delete_old_job_executions(max_age=604_800):
     """This job deletes all apscheduler job executions older than `max_age` from the database."""
     DjangoJobExecution.objects.delete_old_job_executions(max_age)
@@ -47,6 +51,16 @@ class Command(BaseCommand):
             replace_existing=True,
         )
         logger.info("Added job 'send_outsourcing_reminders'.")
+
+        # Job 3: Temporary Files Cleanup - Every day at 01:00 AM
+        scheduler.add_job(
+            cleanup_temp_files,
+            trigger=CronTrigger(hour="01", minute="00"),
+            id="cleanup_temp_files",
+            max_instances=1,
+            replace_existing=True,
+        )
+        logger.info("Added job 'cleanup_temp_files'.")
 
         # Cleanup Job: Weekly on Monday
         scheduler.add_job(

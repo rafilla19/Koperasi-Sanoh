@@ -1,0 +1,32 @@
+{
+  "version": "20260528_143126",
+  "model_file": "loan_model_20260528_143126.pkl",
+  "saved_at": "2026-05-28T14:31:26.767514",
+  "feature_names": [
+    "age",
+    "member_tenure_months",
+    "employee_status_id",
+    "amount_requested",
+    "duration_months",
+    "monthly_installment_estimation",
+    "total_savings_amount",
+    "savings_loan_ratio",
+    "saving_payment_ratio",
+    "overall_risk_score"
+  ],
+  "training_date": "2026-05-28T14:31:26.423912",
+  "model_info": {
+    "classifier_roc_auc": 0.8032454361054766,
+    "classifier_f1": 0.6779661016949152,
+    "regressor_mae": 0.8221408394014138,
+    "regressor_rmse": 2.5266618988514833,
+    "regressor_mape": 5.839958400355159,
+    "training_samples": 249,
+    "test_samples": 63,
+    "imbalance_ratio": 1.1369863013698631,
+    "class_distribution": {
+      "success_ratio": 0.46794871794871795,
+      "fail_ratio": 0.532051282051282
+    }
+  }
+}

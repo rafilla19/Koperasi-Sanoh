@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Save, X, Building, Percent, CreditCard, Wallet, Tags } from 'lucide-react';
+import { apiUrl } from '../../services/api';
 import './SHUManagement.css';
 
 const TABS = [
-  { id: 'shu', label: 'SHU Components', icon: Percent, apiUrl: 'http://127.0.0.1:8000/api/master/shu-components/' },
-  { id: 'dept', label: 'Departments', icon: Building, apiUrl: 'http://127.0.0.1:8000/api/master/departments/' },
-  { id: 'loan_type', label: 'Loan Types', icon: CreditCard, apiUrl: 'http://127.0.0.1:8000/api/loan/loan-types/' },
-  { id: 'payment_channel', label: 'Payment Channels', icon: Wallet, apiUrl: 'http://127.0.0.1:8000/api/master/payment-channels/' },
-  { id: 'inc_exp_cat', label: 'Inc/Exp Categories', icon: Tags, apiUrl: 'http://127.0.0.1:8000/api/master/income-expense-categories/' },
+  { id: 'shu', label: 'SHU Components', icon: Percent, apiUrl: apiUrl('/master/shu-components/') },
+  { id: 'dept', label: 'Departments', icon: Building, apiUrl: apiUrl('/master/departments/') },
+  { id: 'loan_type', label: 'Loan Types', icon: CreditCard, apiUrl: apiUrl('/loan/loan-types/') },
+  { id: 'payment_channel', label: 'Payment Channels', icon: Wallet, apiUrl: apiUrl('/master/payment-channels/') },
+  { id: 'inc_exp_cat', label: 'Inc/Exp Categories', icon: Tags, apiUrl: apiUrl('/master/income-expense-categories/') },
 ];
 
 const SHUMasterData = () => {
@@ -34,6 +35,7 @@ const SHUMasterData = () => {
     is_active: true,
     // Income/Expense Category fields
     category_name: '',
+    type: 'INCOME',
   });
 
   const currentTab = TABS.find(t => t.id === activeTab);
@@ -101,7 +103,10 @@ const SHUMasterData = () => {
         is_active: formData.is_active 
       };
     } else if (activeTab === 'inc_exp_cat') {
-      payload = { category_name: formData.category_name };
+      payload = {
+        category_name: formData.category_name,
+        type: formData.type,
+      };
     }
 
     try {
@@ -115,8 +120,13 @@ const SHUMasterData = () => {
         fetchData();
         resetForm();
       } else {
-        const errorData = await res.json();
-        alert('Failed to save. Please check your data.');
+        const errorText = await res.text();
+        try {
+          const errorData = JSON.parse(errorText);
+          alert(errorData?.detail || errorData?.error || 'Failed to save. Please check your data.');
+        } catch {
+          alert('Failed to save. Please check your data.');
+        }
       }
     } catch (err) {
       console.error('Error saving:', err);
@@ -155,7 +165,10 @@ const SHUMasterData = () => {
         is_active: item.is_active
       });
     } else if (activeTab === 'inc_exp_cat') {
-      setFormData({ category_name: item.category_name });
+      setFormData({
+        category_name: item.category_name,
+        type: item.type || 'INCOME',
+      });
     }
     setShowForm(true);
   };
@@ -165,7 +178,7 @@ const SHUMasterData = () => {
       component_name: '', percentage: '', distributed_member: false,
       department_name: '', name: '',
       channel_code: '', channel_name: '', fee_percentage: '', fee_fixed: '', is_active: true,
-      category_name: ''
+      category_name: '', type: 'INCOME'
     });
     setEditingId(null);
     setShowForm(false);
@@ -305,15 +318,28 @@ const SHUMasterData = () => {
                 )}
 
                 {activeTab === 'inc_exp_cat' && (
-                  <div className="shum-form-group">
-                    <label>Category Name</label>
-                    <input 
-                      type="text" 
-                      value={formData.category_name}
-                      onChange={(e) => setFormData({...formData, category_name: e.target.value})}
-                      required
-                    />
-                  </div>
+                  <>
+                    <div className="shum-form-group">
+                      <label>Category Name</label>
+                      <input 
+                        type="text" 
+                        value={formData.category_name}
+                        onChange={(e) => setFormData({...formData, category_name: e.target.value})}
+                        required
+                      />
+                    </div>
+                    <div className="shum-form-group">
+                      <label>Type</label>
+                      <select
+                        value={formData.type}
+                        onChange={(e) => setFormData({...formData, type: e.target.value})}
+                        required
+                      >
+                        <option value="INCOME">Income</option>
+                        <option value="EXPENSE">Outcome</option>
+                      </select>
+                    </div>
+                  </>
                 )}
 
                 <div className="shum-form-actions">
@@ -346,6 +372,11 @@ const SHUMasterData = () => {
                   <th>Channel Name</th>
                   <th>Fee %</th>
                   <th>Fixed Fee</th>
+                </>
+              ) : activeTab === 'inc_exp_cat' ? (
+                <>
+                  <th>Category Name</th>
+                  <th>Type</th>
                 </>
               ) : (
                 <th>Category Name</th>
@@ -383,6 +414,11 @@ const SHUMasterData = () => {
                     <td><span className="shum-badge blue">{item.fee_percentage}%</span></td>
                     <td>Rp {parseFloat(item.fee_fixed).toLocaleString('id-ID')}</td>
                   </>
+                )}
+                {activeTab === 'inc_exp_cat' && (
+                  <td>
+                    <span className="shum-badge blue">{item.type === 'EXPENSE' ? 'Outcome' : 'Income'}</span>
+                  </td>
                 )}
                 <td>
                   <div className="shum-table-actions">

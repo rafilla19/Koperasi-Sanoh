@@ -5,6 +5,7 @@ import RegistrationLayout from './components/RegistrationLayout';
 
 import Login from './pages/auth/Login';
 import ForgotPassword from './pages/auth/ForgotPassword';
+import ResetPassword from './pages/auth/ResetPassword';
 import RegisterStep1 from './pages/registration/RegisterStep1';
 import RegisterStep2 from './pages/registration/RegisterStep2';
 import RegisterStep3 from './pages/registration/RegisterStep3';
@@ -50,6 +51,7 @@ import MandatorySavings from './pages/admin/MandatorySavings';
 import VoluntarySavings from  './pages/admin/VoluntarySavings';
 import WithdrawalRequests from "./pages/admin/WithdrawalRequests";
 import WithdrawalRequestDetail from "./pages/admin/WithdrawalRequestsDetail";
+import WhatsAppSettings from './pages/admin/WhatsAppSettings';
 function App() {
   return (
     <BrowserRouter>
@@ -58,6 +60,7 @@ function App() {
         <Route element={<AuthLayout />}>
           <Route path="/login" element={<Login />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/" element={<Navigate to="/login" replace />} />
         </Route>
 
@@ -98,6 +101,7 @@ function App() {
           <Route path="admin/transaction/history" element={<TransactionHistory />} />
           <Route path="admin/transaction/manual" element={<ManualPayment />} />
           <Route path="admin/archives" element={<DocumentArchives />} />
+          <Route path="admin/whatsapp-settings" element={<WhatsAppSettings />} />
           <Route path="admin/pr-loans" element={<PayrollLoans />} />
           <Route path="admin/pr-savings" element={<PayrollSavings />} />
           <Route path="admin/shu-dashboard" element={<SHUDashboard />} />

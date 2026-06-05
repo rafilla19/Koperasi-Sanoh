@@ -1,54 +1,115 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UserCheck } from 'lucide-react';
+import { CheckCircle2, BadgeCheck, ArrowRight } from 'lucide-react';
+import { apiUrl } from '../../services/api';
 import './RegistrationPages.css';
 
 const PaymentSuccess = () => {
   const navigate = useNavigate();
+  const [principalAmount, setPrincipalAmount] = useState(100000);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const res = await fetch(apiUrl('/members/saving_types_info/'));
+        if (res.ok) {
+          const data = await res.json();
+          const principalType = data.find(st => st.id === 3);
+          if (principalType) {
+            setPrincipalAmount(principalType.minimum_amount);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching principal amount:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('id-ID', {
+      style: 'currency',
+      currency: 'IDR',
+      minimumFractionDigits: 0,
+    }).format(amount);
+  };
 
   const handleDashboard = () => {
-    // Navigate to the dashboard
     navigate('/dashboard'); 
   };
 
   return (
-    <div className="success-container pt-8 pb-4 text-center">
-      <div className="mx-auto mb-6 flex justify-center">
-        <UserCheck size={80} color="var(--color-primary)" />
-      </div>
+    <div className="payment-success-page">
+      <div className="payment-success-backdrop payment-success-backdrop-left" />
+      <div className="payment-success-backdrop payment-success-backdrop-right" />
 
-      <h2 className="text-2xl font-bold bg-primary uppercase text-gray-800 tracking-wide mb-4">Account Activated!</h2>
-      
-      <p className="text-gray-500 mb-8 max-w-md mx-auto leading-relaxed">
-        Welcome to the cooperative. Your savings account is now active. You can access your cooperative account and manage your funds through the dashboard.
-      </p>
-
-      <div className="membership-box bg-gray-50 p-6 rounded-lg text-left max-w-md mx-auto mb-8 border border-gray-100 shadow-sm relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-2 h-full bg-secondary"></div>
-        <div className="flex items-center mb-4 border-b border-gray-200 pb-2">
-           <UserCheck size={20} className="mr-2 text-gray-700" />
-           <h3 className="font-bold text-gray-700 uppercase tracking-widest text-sm">Membership Details</h3>
-        </div>
-        
-        <div className="flex justify-between mt-4">
-          <div>
-            <span className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">MEMBER ID</span>
-            <span className="font-bold text-gray-800 text-lg">112</span>
+      <div className="payment-success-shell">
+        <div className="payment-success-card">
+          <div className="payment-success-hero">
+            <div className="payment-success-icon-wrap">
+              <CheckCircle2 size={34} />
+            </div>
+            <div className="payment-success-hero-copy">
+              <span className="payment-success-pill">
+                <BadgeCheck size={14} />
+                Payment Verified
+              </span>
+              <h2>Account Activated</h2>
+              <p>
+                Your principal savings payment has been received and your membership is now active.
+              </p>
+            </div>
           </div>
-          <div className="text-right">
-            <span className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">JOIN DATE</span>
-            <span className="font-bold text-gray-800 text-lg">Dec 21, 2025</span>
+
+          <div className="payment-success-message">
+            Welcome to the cooperative. You can now access your dashboard to manage your savings and account activity.
+          </div>
+
+          <div className="payment-success-summary">
+            <div className="payment-success-summary-header">
+              <div>
+                <span className="payment-success-label">Payment Summary</span>
+                <h3>Principal Savings Confirmation</h3>
+              </div>
+              <span className="payment-success-status">Verified & Processed</span>
+            </div>
+
+            <div className="payment-success-rows">
+              <div className="payment-success-row">
+                <span>Amount Paid</span>
+                <strong>{!loading ? formatCurrency(principalAmount) : 'Loading...'}</strong>
+              </div>
+              <div className="payment-success-row">
+                <span>Payment Type</span>
+                <strong>Mandatory Principal Savings</strong>
+              </div>
+              <div className="payment-success-row">
+                <span>Status</span>
+                <strong className="payment-success-status-text">Completed Successfully</strong>
+              </div>
+            </div>
+          </div>
+
+          <div className="payment-success-agreement">
+            <h4>Membership Agreement</h4>
+            <p>
+              By registering as a member of the cooperative, you agree to maintain the mandatory principal savings contribution of{' '}
+              <span>{!loading ? formatCurrency(principalAmount) : 'IDR 100,000'}</span>
+              {' '}during active membership.
+            </p>
+          </div>
+
+          <div className="payment-success-actions">
+            <button className="payment-success-btn" onClick={handleDashboard}>
+              Go to My Dashboard
+              <ArrowRight size={16} />
+            </button>
           </div>
         </div>
-      </div>
-
-      <div className="mt-8">
-        <button 
-           className="btn-secondary uppercase tracking-wider font-bold shadow-md hover:shadow-lg transition-shadow max-w-xs mx-auto text-sm px-6 py-3"
-           onClick={handleDashboard}
-        >
-          Go to My Dashboard &rarr;
-        </button>
       </div>
     </div>
   );

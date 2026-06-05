@@ -14,6 +14,7 @@ import {
 import { Line } from 'react-chartjs-2';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { apiUrl } from '../../services/api';
 import './DashboardHome.css';
 
 ChartJS.register(
@@ -39,7 +40,7 @@ const dummyChartDataMap = {
   '5Y': { labels: ['2019', '2020', '2021', '2022', '2023'], data: [200000, 310000, 450000, 680000, 950000], grow: '110.5%', total: 'Rp 450.000' },
 };
 
-const PERIODS = ['1M', '3M', 'YTD', '1Y', '3Y', '5Y'];
+const PERIODS = ['3M', 'YTD', '1Y', '3Y', '5Y'];
 
 /* ─── CHART OPTIONS ─────────────────────────────────────────────────────────── */
 const chartOptions = {
@@ -98,6 +99,10 @@ const DashboardHome = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [searchTrigger, setSearchTrigger] = useState(0);
+  const [paymentChannels, setPaymentChannels] = useState([]);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('');
+  const [isInitiating, setIsInitiating] = useState(false);
+  const [shuAnalytics, setShuAnalytics] = useState(null);
 
   const itemsPerPage = 5;
   const chartRef = useRef(null);
@@ -118,7 +123,7 @@ const DashboardHome = () => {
       }
 
       try {
-        let url = `http://127.0.0.1:8000/api/loan/loans/my_transactions/?type=${txTypeFilter}&member_id=${memberId}`;
+        let url = apiUrl(`/loan/loans/my_transactions/?type=${txTypeFilter}&member_id=${memberId}`);
         if (startDate) {
           url += `&start_date=${startDate}`;
         }
@@ -126,16 +131,22 @@ const DashboardHome = () => {
           url += `&end_date=${endDate}`;
         }
 
-        const [summaryRes, txRes] = await Promise.all([
-          fetch(`http://127.0.0.1:8000/api/loan/loans/dashboard_summary/?member_id=${memberId}`),
-          fetch(url)
+        const [summaryRes, txRes, chanRes, shuRes] = await Promise.all([
+          fetch(apiUrl(`/loan/loans/dashboard_summary/?member_id=${memberId}`)),
+          fetch(url),
+          fetch(apiUrl('/loan/loans/payment_channels/')),
+          fetch(apiUrl(`/v1/my-shu/analytics/?member_id=${memberId}`))
         ]);
 
         const summaryData = await summaryRes.json();
         const txData = await txRes.json();
+        const chanData = chanRes.ok ? await chanRes.json() : [];
+        const shuData = shuRes.ok ? await shuRes.json() : null;
 
         setSummary(summaryData);
         setTransactions(Array.isArray(txData) ? txData : []);
+        setPaymentChannels(chanData);
+        if (shuData) setShuAnalytics(shuData);
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
       } finally {
@@ -287,6 +298,71 @@ const DashboardHome = () => {
     return ((inc / total) * 100).toFixed(1);
   };
 
+  const handleInitiatePayment = async () => {
+    if (isInitiating) return;
+    if (!selectedPaymentMethod) {
+      alert("Silakan pilih metode pembayaran terlebih dahulu!");
+      return;
+    }
+    
+    setIsInitiating(true);
+    const memberId = summary?.member_id || user?.member_id;
+
+    try {
+      const res = await fetch(apiUrl('/loan/loans/create_bulk_payment_token/'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          member_id: memberId,
+          saving_ids: selectedPayments.savingIds,
+          loan_ids: selectedPayments.loanIds,
+          payment_type: selectedPaymentMethod
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Gagal membuat pembayaran.");
+        setIsInitiating(false);
+        return;
+      }
+
+      if (window.snap) {
+        window.snap.pay(data.snap_token, {
+          onSuccess: function(result) {
+            alert("Pembayaran berhasil!");
+            setShowPaymentModal(false);
+            setIsInitiating(false);
+            window.location.reload();
+          },
+          onPending: function(result) {
+            alert("Pembayaran tertunda. Harap selesaikan pembayaran Anda.");
+            setShowPaymentModal(false);
+            setIsInitiating(false);
+            window.location.reload();
+          },
+          onError: function(result) {
+            alert("Pembayaran gagal!");
+            setIsInitiating(false);
+          },
+          onClose: function() {
+            alert("Anda menutup halaman pembayaran sebelum selesai.");
+            setIsInitiating(false);
+          }
+        });
+      } else {
+        alert("Midtrans Snap belum terisi. Harap muat ulang halaman.");
+        setIsInitiating(false);
+      }
+    } catch (error) {
+      console.error("Payment initiation failed:", error);
+      alert("Koneksi gagal.");
+      setIsInitiating(false);
+    }
+  };
+
   const handleDownloadReport = () => {
     console.log('Generating report...');
     try {
@@ -423,7 +499,40 @@ const DashboardHome = () => {
     }
   };
 
-  const activeChart = dummyChartDataMap[shuFilter];
+  const getFilteredChartData = () => {
+    if (!shuAnalytics || !shuAnalytics.chart_data) {
+      return { labels: [], data: [], grow: '0%', total: 'Rp 0' };
+    }
+    
+    let filtered = [...shuAnalytics.chart_data];
+    const now = new Date();
+    
+    if (shuFilter === '3M') {
+      filtered = filtered.slice(-3);
+    } else if (shuFilter === 'YTD') {
+      const currentYear = now.getFullYear().toString();
+      filtered = filtered.filter(d => d.month.startsWith(currentYear));
+    } else if (shuFilter === '1Y') {
+      filtered = filtered.slice(-12);
+    } else if (shuFilter === '3Y') {
+      filtered = filtered.slice(-36);
+    } else if (shuFilter === '5Y') {
+      filtered = filtered.slice(-60);
+    }
+    
+    return {
+      labels: filtered.map(d => {
+          const [yy, mm] = d.month.split('-');
+          const date = new Date(parseInt(yy), parseInt(mm)-1, 1);
+          return date.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+      }),
+      data: filtered.map(d => d.total_shu),
+      grow: `${shuAnalytics.growth_percentage > 0 ? '+' : ''}${shuAnalytics.growth_percentage}%`,
+      total: formatRupiah(shuAnalytics.total_shu)
+    };
+  };
+
+  const activeChart = getFilteredChartData();
 
   /* Build gradient fill dynamically */
   const getGradient = (chart) => {
@@ -601,7 +710,7 @@ const DashboardHome = () => {
               </h4>
             </div>
             <div className="chart-metric">
-              <p className="metric-label-small">Previous Total</p>
+              <p className="metric-label-small">Total SHU</p>
               <h4 className="metric-value-big dark">{activeChart.total}</h4>
             </div>
           </div>
@@ -906,33 +1015,98 @@ const DashboardHome = () => {
                 )}
               </div>
 
-              <div className="payment-summary-box">
-                <div className="summary-row">
-                  <span>Subtotal Selected</span>
-                  <span className="summary-val">
-                    {formatRupiah(calculateTotal())}
-                  </span>
-                </div>
-                <div className="summary-row total">
-                  <span>Total Amount</span>
-                  <span className="total-val">
-                    {formatRupiah(calculateTotal())}
-                  </span>
-                </div>
+              {/* Payment Methods Section */}
+              <div className="payment-group-label" style={{ marginTop: '20px', marginBottom: '10px' }}>Pilih Metode Pembayaran</div>
+              <div className="pm-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px', marginBottom: '20px' }}>
+                {paymentChannels.map(ch => (
+                   <div 
+                     key={ch.channel_code} 
+                     className={`payment-option ${selectedPaymentMethod === ch.channel_code ? 'selected' : ''}`} 
+                     onClick={() => setSelectedPaymentMethod(ch.channel_code)}
+                     style={{ 
+                       padding: '12px 16px', 
+                       border: `2px solid ${selectedPaymentMethod === ch.channel_code ? '#E11D48' : '#F1F5F9'}`,
+                       borderRadius: '12px',
+                       cursor: 'pointer',
+                       background: selectedPaymentMethod === ch.channel_code ? '#FFF1F2' : '#FAFAFA',
+                       display: 'flex',
+                       flexDirection: 'column',
+                       gap: '4px',
+                       transition: 'all 0.2s',
+                       boxShadow: selectedPaymentMethod === ch.channel_code ? '0 4px 6px -1px rgba(225, 29, 72, 0.1)' : 'none'
+                     }}
+                   >
+                     <span style={{ fontWeight: '600', fontSize: '13px', color: '#1E293B' }}>{ch.channel_name}</span>
+                     <span style={{ fontSize: '11px', color: '#64748B' }}>
+                       {ch.fee_percentage > 0 ? `${ch.fee_percentage}%` : ''} 
+                       {ch.fee_percentage > 0 && ch.fee_fixed > 0 ? ' + ' : ''}
+                       {ch.fee_fixed > 0 ? `Rp ${ch.fee_fixed}` : ''}
+                       {ch.fee_percentage === 0 && ch.fee_fixed === 0 ? 'Gratis' : ''}
+                     </span>
+                   </div>
+                ))}
               </div>
 
-              <button 
-                className="dh-modal-pay-btn"
-                disabled={
-                  (selectedPayments.savingIds.length === 0 && selectedPayments.loanIds.length === 0) || 
-                  !isSequentialSelectionValid()
-                }
-                onClick={() => {
-                  alert(`Redirecting to Payment Gateway for ${formatRupiah(calculateTotal())}`);
-                }}
-              >
-                {!isSequentialSelectionValid() ? 'Please Select Chronologically' : 'Proceed to Payment'}
-              </button>
+              {(() => {
+                const selectedChannel = paymentChannels.find(ch => ch.channel_code === selectedPaymentMethod);
+                const feePercentage = selectedChannel ? Number(selectedChannel.fee_percentage) : 0;
+                const feeFixed = selectedChannel ? Number(selectedChannel.fee_fixed) : 0;
+                const subtotal = calculateTotal();
+                const feeTotal = Math.round((subtotal * feePercentage) / 100) + feeFixed;
+                const totalAmount = subtotal + feeTotal;
+
+                return (
+                  <>
+                    <div className="payment-summary-box" style={{ background: '#F8FAFC', borderRadius: '12px', padding: '16px', marginBottom: '20px' }}>
+                      <div className="summary-row" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#64748B', marginBottom: '8px' }}>
+                        <span>Subtotal Selected</span>
+                        <span className="summary-val" style={{ fontWeight: '500', color: '#1E293B' }}>
+                          {formatRupiah(subtotal)}
+                        </span>
+                      </div>
+                      {selectedPaymentMethod && (
+                        <div className="summary-row" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#64748B', marginBottom: '8px' }}>
+                          <span>Biaya Layanan</span>
+                          <span className="summary-val" style={{ fontWeight: '500', color: '#1E293B' }}>
+                            {formatRupiah(feeTotal)}
+                          </span>
+                        </div>
+                      )}
+                      <div className="summary-row total" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', fontWeight: '700', color: '#0F172A', borderTop: '1px solid #E2E8F0', paddingTop: '10px' }}>
+                        <span>Total Amount</span>
+                        <span className="total-val" style={{ color: '#E11D48' }}>
+                          {formatRupiah(selectedPaymentMethod ? totalAmount : subtotal)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <button 
+                      className="dh-modal-pay-btn"
+                      disabled={
+                        (selectedPayments.savingIds.length === 0 && selectedPayments.loanIds.length === 0) || 
+                        !isSequentialSelectionValid() ||
+                        !selectedPaymentMethod ||
+                        isInitiating
+                      }
+                      onClick={handleInitiatePayment}
+                      style={{
+                        width: '100%',
+                        padding: '14px',
+                        borderRadius: '12px',
+                        border: 'none',
+                        background: ((selectedPayments.savingIds.length === 0 && selectedPayments.loanIds.length === 0) || !isSequentialSelectionValid() || !selectedPaymentMethod || isInitiating) ? '#CBD5E1' : '#E11D48',
+                        color: '#FFFFFF',
+                        fontWeight: '600',
+                        cursor: ((selectedPayments.savingIds.length === 0 && selectedPayments.loanIds.length === 0) || !isSequentialSelectionValid() || !selectedPaymentMethod || isInitiating) ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.2s',
+                        textAlign: 'center'
+                      }}
+                    >
+                      {isInitiating ? 'Processing...' : (!isSequentialSelectionValid() ? 'Please Select Chronologically' : (!selectedPaymentMethod ? 'Pilih Metode Pembayaran' : 'Pay Now'))}
+                    </button>
+                  </>
+                );
+              })()}
             </div>
           </div>
         </div>

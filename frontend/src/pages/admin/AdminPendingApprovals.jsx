@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { User, ShoppingBag } from 'lucide-react';
+import { apiUrl } from '../../services/api';
 import './AdminPendingApprovals.css';
 
 const AdminPendingApprovals = () => {
@@ -18,13 +19,13 @@ const AdminPendingApprovals = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const pendingRes = await fetch('http://127.0.0.1:8000/api/loan/loan-applications/admin_pending_list/');
+        const pendingRes = await fetch(apiUrl('/loan/loan-applications/admin_pending_list/'));
         if (pendingRes.ok) {
           const pendingData = await pendingRes.json();
           setPendingList(pendingData);
         }
 
-        const statsRes = await fetch('http://127.0.0.1:8000/api/loan/loans/admin_pending_stats/');
+        const statsRes = await fetch(apiUrl('/loan/loans/admin_pending_stats/'));
         if (statsRes.ok) {
           const statsData = await statsRes.json();
           setStats(statsData);

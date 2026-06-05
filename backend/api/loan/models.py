@@ -14,17 +14,17 @@ class LoanType(models.Model):
         managed = False
         
 class LoanApplication(models.Model):
-    member = models.ForeignKey('Member', on_delete=models.RESTRICT)
+    member = models.ForeignKey(Member, on_delete=models.RESTRICT)
     loan_type = models.ForeignKey('LoanType', on_delete=models.RESTRICT)
     amount_requested = models.DecimalField(max_digits=15, decimal_places=2)
     duration_months = models.SmallIntegerField()
     purpose = models.CharField(max_length=255)
     # description = models.TextField()
-    status = models.ForeignKey('Status', on_delete=models.RESTRICT)
+    status = models.ForeignKey(Status, on_delete=models.RESTRICT)
     # approval_date = models.DateField(null=True, blank=True)
     salary_statement_file = models.FileField(upload_to='loan/slip_gaji/', null=True, blank=True)
     # salary_statement_file = models.CharField(max_length=500)
-    admin = models.ForeignKey('User', on_delete=models.RESTRICT, null=True, blank=True)
+    admin = models.ForeignKey(User, on_delete=models.RESTRICT, null=True, blank=True)
 
     reject_reason = models.CharField(max_length=255, null=True, blank=True)
 
@@ -39,7 +39,7 @@ class LoanApplication(models.Model):
         
 class Loan(models.Model):
     application = models.ForeignKey('LoanApplication', on_delete=models.RESTRICT)
-    member = models.ForeignKey('Member', on_delete=models.RESTRICT)
+    member = models.ForeignKey(Member, on_delete=models.RESTRICT)
 
     principal_amount = models.DecimalField(max_digits=15, decimal_places=2)
     interest_amount = models.DecimalField(max_digits=15, decimal_places=2)
@@ -49,7 +49,7 @@ class Loan(models.Model):
     due_date = models.DateField()
     remaining_balance = models.DecimalField(max_digits=15, decimal_places=2)
 
-    status = models.ForeignKey('Status', on_delete=models.RESTRICT)
+    status = models.ForeignKey(Status, on_delete=models.RESTRICT)
 
     created_at = models.DateTimeField()
     updated_at = models.DateTimeField()
@@ -69,7 +69,7 @@ class LoanInstallment(models.Model):
     amount_interest = models.DecimalField(max_digits=15, decimal_places=2)
     amount_total = models.DecimalField(max_digits=15, decimal_places=2)
 
-    status = models.ForeignKey('Status', on_delete=models.RESTRICT)
+    status = models.ForeignKey(Status, on_delete=models.RESTRICT)
 
     created_at = models.DateTimeField()
     updated_at = models.DateTimeField()
@@ -85,10 +85,10 @@ class LoanPayment(models.Model):
     amount_paid = models.DecimalField(max_digits=15, decimal_places=2)
     payment_date = models.DateTimeField()
 
-    payment_method = models.ForeignKey('PaymentMethod', on_delete=models.CASCADE)
+    payment_method = models.ForeignKey(PaymentMethod, on_delete=models.CASCADE)
     payment_reference_id = models.IntegerField()
 
-    status = models.ForeignKey('Status', on_delete=models.RESTRICT)
+    status = models.ForeignKey(Status, on_delete=models.RESTRICT)
 
     created_at = models.DateTimeField()
     updated_at = models.DateTimeField()

@@ -5,3 +5,4 @@ django-apscheduler
 apscheduler
 python-dotenv
 psycopg2-binary
+midtransclient

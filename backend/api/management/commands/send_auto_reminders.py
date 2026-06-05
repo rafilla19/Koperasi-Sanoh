@@ -1,5 +1,5 @@
 from django.core.management.base import BaseCommand
-from django.core.mail import send_mail
+from api.utils.email import send_styled_email
 from django.conf import settings
 from django.db import connection
 import datetime
@@ -58,38 +58,18 @@ class Command(BaseCommand):
                 
                 subject = "AUTOMATIC SYSTEM REMINDER - Overdue Loan Installment"
                 
-                # Group installments in HTML table
-                inst_rows = ""
+                details = []
                 for inst in installments:
-                    inst_rows += f"<tr><td style='padding: 8px 0;'>#{inst['installment_number']}</td><td style='padding: 8px 0;'>{inst['due_date']}</td><td style='padding: 8px 0; text-align: right;'><strong>Rp {inst['amount_total']:,.0f}</strong></td></tr>"
-
-                html_message = f"""
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
-                    <h2 style="color: #f39c12; border-bottom: 2px solid #f39c12; padding-bottom: 10px;">Automatic System Reminder</h2>
-                    <p style="font-size: 16px; color: #34495e;">Dear {full_name},</p>
-                    <p style="font-size: 15px; color: #34495e;">This is an <strong>automated system reminder</strong> regarding your outstanding loan installments.</p>
-                    
-                    <div style="background-color: #fffaf0; padding: 15px; border-radius: 5px; margin: 20px 0; border: 1px solid #f39c12;">
-                        <h3 style="margin-top: 0; color: #2c3e50; font-size: 17px;">Overdue Installments</h3>
-                        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-                            <tr style="border-bottom: 1px solid #f39c12;"><th style="text-align: left; padding: 5px 0;">No</th><th style="text-align: left; padding: 5px 0;">Due Date</th><th style="text-align: right; padding: 5px 0;">Amount</th></tr>
-                            {inst_rows}
-                        </table>
-                    </div>
-                    
-                    <p style="font-size: 15px; color: #34495e;">Please settle these payments immediately. If you have any questions, contact the cooperative administration.</p>
-                    <p style="font-size: 14px; color: #7f8c8d; margin-top: 30px;">Best regards,<br><strong>Koperasi Sanoh System</strong></p>
-                </div>
-                """
+                    details.append((f"Installment #{inst['installment_number']} ({inst['due_date']})", f"Rp {inst['amount_total']:,.0f}"))
                 
                 try:
-                    send_mail(
-                        subject, 
-                        "", 
-                        settings.DEFAULT_FROM_EMAIL, 
-                        [email], 
-                        fail_silently=False,
-                        html_message=html_message
+                    send_styled_email(
+                        subject=subject,
+                        recipient=email,
+                        intro=f"Dear {full_name}, this is an automated system reminder regarding your outstanding loan installments.",
+                        details=details,
+                        highlight=("Overdue Installments", "Please settle these payments immediately."),
+                        footer_note="If you have any questions, contact the cooperative administration."
                     )
                     success_count += 1
                     self.stdout.write(self.style.SUCCESS(f"Successfully sent to {email}"))

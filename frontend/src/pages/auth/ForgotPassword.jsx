@@ -1,12 +1,41 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { User, ArrowLeft } from 'lucide-react';
+import { apiUrl } from '../../services/api';
 import './AuthPages.css';
 
 const ForgotPassword = () => {
-  const handleReset = (e) => {
+  const [email, setEmail] = useState('');
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleReset = async (e) => {
     e.preventDefault();
-    alert("Reset link sent to your email!");
+    setError('');
+    setMessage('');
+    setIsLoading(true);
+
+    try {
+      const response = await fetch(apiUrl('/master/auth/forgot_password/'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        setMessage(data.message || 'If the email exists, a reset link has been sent.');
+      } else {
+        setError(data.error || 'Failed to send reset link.');
+      }
+    } catch (err) {
+      setError('Connection error. Please try again later.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -19,6 +48,8 @@ const ForgotPassword = () => {
       </div>
 
       <form className="auth-form" onSubmit={handleReset}>
+        {message && <div className="auth-error-msg" style={{ color: '#166534', background: '#ecfdf5', border: '1px solid #bbf7d0', marginBottom: '1rem', textAlign: 'center', fontSize: '0.9rem', padding: '0.75rem 1rem', borderRadius: '0.75rem' }}>{message}</div>}
+        {error && <div className="auth-error-msg" style={{ color: '#b91c1c', background: '#fef2f2', border: '1px solid #fecaca', marginBottom: '1rem', textAlign: 'center', fontSize: '0.9rem', padding: '0.75rem 1rem', borderRadius: '0.75rem' }}>{error}</div>}
         <div className="form-group">
           <label className="form-label" htmlFor="email">Email</label>
           <div className="input-container">
@@ -28,13 +59,15 @@ const ForgotPassword = () => {
               id="email" 
               className="form-input" 
               placeholder="Enter your registered email" 
-              required 
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
             />
           </div>
         </div>
 
-        <button type="submit" className="btn-primary" style={{ marginTop: '0.5rem' }}>
-          Send Reset Link
+        <button type="submit" className="btn-primary" style={{ marginTop: '0.5rem' }} disabled={isLoading}>
+          {isLoading ? 'Sending...' : 'Send Reset Link'}
         </button>
       </form>
 

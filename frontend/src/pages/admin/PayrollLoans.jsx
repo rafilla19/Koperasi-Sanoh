@@ -5,6 +5,7 @@ import {
   RefreshCw, FileText, RotateCcw
 } from 'lucide-react';
 import './PayrollSummary.css';
+import { apiUrl } from '../../services/api';
 
 // --- Toast Notification Component ---
 const Toast = ({ message, type, onClose }) => (
@@ -127,7 +128,7 @@ const PayrollLoans = () => {
 
   const fetchDepartments = async () => {
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/master/departments/');
+      const res = await fetch(apiUrl('/master/departments/'));
       if (res.ok) setDepartments(await res.json());
     } catch (err) { console.error('Failed to fetch departments:', err); }
   };
@@ -136,7 +137,7 @@ const PayrollLoans = () => {
     setLoading(true);
     setSelectedIds([]);
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/loan/loans/payroll_loans_list/?period=${reportingMonth}`);
+      const res = await fetch(apiUrl(`/loan/loans/payroll_loans_list/?period=${reportingMonth}`));
       if (res.ok) {
         const result = await res.json();
         setData(result.map(item => ({
@@ -224,7 +225,7 @@ const PayrollLoans = () => {
     }
 
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/loan/loans/confirm_payroll_payments/', {
+      const res = await fetch(apiUrl('/loan/loans/confirm_payroll_payments/'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ installment_ids: installmentIds, period: reportingMonth })
@@ -253,7 +254,7 @@ const PayrollLoans = () => {
   const doRollback = async (row) => {
     setRollbacking(true);
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/loan/loans/rollback_payroll_payment/', {
+      const res = await fetch(apiUrl('/loan/loans/rollback_payroll_payment/'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Info, ChevronRight } from 'lucide-react';
+import { apiUrl } from '../../services/api';
 import './MyLoans.css';
 
 const MyLoans = () => {
@@ -16,6 +17,7 @@ const MyLoans = () => {
     pending: [],
     rejected: []
   });
+  const [hasPendingClosure, setHasPendingClosure] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -25,18 +27,18 @@ const MyLoans = () => {
       const memberId = user?.member_id || 1;
 
       try {
-        const response = await fetch(`http://127.0.0.1:8000/api/loan/loan-applications/?member_id=${memberId}`);
+        const response = await fetch(apiUrl(`/loan/loan-applications/?member_id=${memberId}`));
         if (response.ok) {
           const data = await response.json();
         }
 
-        const summaryResponse = await fetch(`http://127.0.0.1:8000/api/loan/loans/dashboard_summary/?member_id=${memberId}`);
+        const summaryResponse = await fetch(apiUrl(`/loan/loans/dashboard_summary/?member_id=${memberId}`));
         if (summaryResponse.ok) {
           const summaryData = await summaryResponse.json();
           setHasActiveLoan(summaryData.has_active_loan);
         }
 
-        const loanResponse = await fetch(`http://127.0.0.1:8000/api/loan/loans/?member_id=${memberId}`);
+        const loanResponse = await fetch(apiUrl(`/loan/loans/?member_id=${memberId}`));
         if (loanResponse.ok) {
           const loanData = await loanResponse.json();
           const activeLoans = loanData.filter(loan => Number(loan.member_id) === Number(memberId) && (loan.status_id === 25 || loan.status === 25));
@@ -61,7 +63,7 @@ const MyLoans = () => {
           }
         }
 
-        const activeSummaryResponse = await fetch(`http://127.0.0.1:8000/api/loan/loans/active_summary/?member_id=${memberId}`);
+        const activeSummaryResponse = await fetch(apiUrl(`/loan/loans/active_summary/?member_id=${memberId}`));
         if (activeSummaryResponse.ok) {
           const activeSummary = await activeSummaryResponse.json();
           const activeLoansFormatted = activeSummary.map(item => ({
@@ -80,7 +82,7 @@ const MyLoans = () => {
           setLoansData(prev => ({ ...prev, active: activeLoansFormatted }));
         }
 
-        const completedSummaryResponse = await fetch(`http://127.0.0.1:8000/api/loan/loans/completed_summary/?member_id=${memberId}`);
+        const completedSummaryResponse = await fetch(apiUrl(`/loan/loans/completed_summary/?member_id=${memberId}`));
         if (completedSummaryResponse.ok) {
           const completedSummary = await completedSummaryResponse.json();
           const completedLoansFormatted = completedSummary.map(item => ({
@@ -99,7 +101,7 @@ const MyLoans = () => {
           setLoansData(prev => ({ ...prev, completed: completedLoansFormatted }));
         }
 
-        const pendingSummaryResponse = await fetch(`http://127.0.0.1:8000/api/loan/loan-applications/pending_summary/?member_id=${memberId}`);
+        const pendingSummaryResponse = await fetch(apiUrl(`/loan/loan-applications/pending_summary/?member_id=${memberId}`));
         if (pendingSummaryResponse.ok) {
           const pendingSummary = await pendingSummaryResponse.json();
           const pendingLoansFormatted = pendingSummary.map(item => ({
@@ -120,7 +122,7 @@ const MyLoans = () => {
           setLoansData(prev => ({ ...prev, pending: pendingLoansFormatted }));
         }
 
-        const rejectedSummaryResponse = await fetch(`http://127.0.0.1:8000/api/loan/loan-applications/rejected_summary/?member_id=${memberId}`);
+        const rejectedSummaryResponse = await fetch(apiUrl(`/loan/loan-applications/rejected_summary/?member_id=${memberId}`));
         if (rejectedSummaryResponse.ok) {
           const rejectedSummary = await rejectedSummaryResponse.json();
           const rejectedLoansFormatted = rejectedSummary.map(item => ({
@@ -140,7 +142,7 @@ const MyLoans = () => {
           setLoansData(prev => ({ ...prev, rejected: rejectedLoansFormatted }));
         }
 
-        const memberResponse = await fetch('http://127.0.0.1:8000/api/master/members/');
+        const memberResponse = await fetch(apiUrl('/member/members/'));
         if (memberResponse.ok) {
           const memberData = await memberResponse.json();
           const currentMember = memberData.find(m => m.id === memberId);
@@ -150,6 +152,12 @@ const MyLoans = () => {
               setShowAutoDeductBanner(true);
             }
           }
+        }
+
+        const profileResponse = await fetch(apiUrl(`/member/members/profile_detail/?member_id=${memberId}`));
+        if (profileResponse.ok) {
+          const profileData = await profileResponse.json();
+          setHasPendingClosure(profileData.has_pending_closure || false);
         }
       } catch (error) {
         console.error('Failed to fetch data:', error);
@@ -168,7 +176,9 @@ const MyLoans = () => {
   };
 
   const handleApplyLoan = () => {
-    if (hasActiveLoan) {
+    if (hasPendingClosure) {
+      alert('Anda tidak dapat mengajukan pinjaman baru karena akun Anda dalam proses penutupan.');
+    } else if (hasActiveLoan) {
       alert('Anda tidak dapat mengajukan pinjaman baru karena masih ada pinjaman yang aktif.');
     } else {
       navigate('/dashboard/loans/application');
@@ -202,8 +212,8 @@ const MyLoans = () => {
         <button
           className="btn-apply-loan"
           onClick={handleApplyLoan}
-          disabled={hasActiveLoan}
-          style={hasActiveLoan ? { 
+          disabled={hasActiveLoan || hasPendingClosure}
+          style={(hasActiveLoan || hasPendingClosure) ? { 
             background: '#94a3b8', 
             cursor: 'not-allowed',
             color: '#f1f5f9'

@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { LayoutDashboard, Wallet, CreditCard, FileText, UserCircle, LogOut, Menu, ChevronLeft, ChevronRight, Users, CheckSquare, Database, Archive } from 'lucide-react';
 import logoImg from '../assets/logo.png';
 import './DashboardLayout.css';
+import { fetchWASettings } from '../services/waApi';
 
 const DashboardLayout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -24,7 +25,7 @@ const DashboardLayout = () => {
   if (!user) return null;
 
   const roleId = parseInt(user.role_id);
-  
+
   // Admin Accordion state
   const [openSections, setOpenSections] = useState({
     member: false,
@@ -38,6 +39,28 @@ const DashboardLayout = () => {
     setOpenSections(prev => ({ ...prev, [sec]: !prev[sec] }));
   };
 
+  // WhatsApp menu state
+  const [showWAMenu, setShowWAMenu] = useState(false);
+  const [waQuestions, setWaQuestions] = useState([]);
+  const [waPhone, setWaPhone] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const data = await fetchWASettings();
+        if (cancelled) return;
+        setWaQuestions(data?.questions || []);
+        const phone = (data?.phone_number || '').replace(/\D/g, '');
+        setWaPhone(phone || '');
+      } catch (e) {
+        // ignore
+      }
+    };
+    if (roleId === 2) load();
+    return () => { cancelled = true; };
+  }, [roleId]);
+
   const handleLogout = () => {
     localStorage.removeItem('user');
     navigate('/login');
@@ -46,8 +69,45 @@ const DashboardLayout = () => {
   const currentPath = location.pathname;
   let title = 'Portal Dashboard';
   let breadcrumb = 'Overview';
-
-  if (currentPath.includes('/admin/ls-loans')) {
+  // Admin-specific page titles
+  if (currentPath.includes('/dashboard/admin/archives')) {
+    title = 'Document Archives';
+    breadcrumb = 'Admin / Archives';  } else if (currentPath.includes('/dashboard/admin/whatsapp-settings')) {
+    title = 'WhatsApp Settings';
+    breadcrumb = 'Admin / WA Settings';  } else if (currentPath.includes('/dashboard/admin/transaction/history')) {
+    title = 'Transaction History';
+    breadcrumb = 'Admin / Transaction';
+  } else if (currentPath.includes('/dashboard/admin/transaction/manual')) {
+    title = 'Manual Payment';
+    breadcrumb = 'Admin / Transaction';
+  } else if (currentPath.includes('/dashboard/admin/shu-master')) {
+    title = 'Master Data Management';
+    breadcrumb = 'Admin / SHU';
+  } else if (currentPath.includes('/dashboard/admin/pr-loans')) {
+    title = 'Payroll Loans';
+    breadcrumb = 'Admin / Payroll';
+  } else if (currentPath.includes('/dashboard/admin/pr-savings')) {
+    title = 'Payroll Savings';
+    breadcrumb = 'Admin / Payroll';
+  } else if (currentPath.includes('/dashboard/admin/members')) {
+    title = 'Member Management';
+    breadcrumb = 'Admin / Member';
+  } else if (currentPath.includes('/dashboard/admin/approvals')) {
+    title = 'Member Approvals';
+    breadcrumb = 'Admin / Member';
+  } else if (currentPath.includes('/dashboard/admin/savings-management') || currentPath.includes('/admin/savings-management')) {
+    title = 'Savings Management';
+    breadcrumb = 'Admin / Savings';
+  } else if (currentPath.includes('/dashboard/admin/mandatory-savings') || currentPath.includes('/admin/mandatory-savings')) {
+    title = 'Savings Obligations';
+    breadcrumb = 'Admin / Savings';
+  } else if (currentPath.includes('/dashboard/admin/voluntary-savings') || currentPath.includes('/admin/voluntary-savings')) {
+    title = 'Voluntary Savings';
+    breadcrumb = 'Admin / Savings';
+  } else if (currentPath.includes('/dashboard/admin/ls-savings') || currentPath.includes('/admin/ls-savings')) {
+    title = 'Savings Dashboard';
+    breadcrumb = 'Admin / Savings';
+  } else if (currentPath.includes('/admin/ls-loans')) {
     title = 'Admin Loans Dashboard';
     breadcrumb = 'Admin / Loans';
   } else if (currentPath.includes('/saving')) {
@@ -204,7 +264,7 @@ const DashboardLayout = () => {
               </div>
 
               <div className="dl-sb-lbl" style={{ marginTop: 16 }}>GENERAL</div>
-              
+
               <div className="dl-sb-group">
                 <button className={`dl-sb-parent ${openSections.transaction ? 'active' : ''}`} onClick={() => toggleSection('transaction')}>
                   <div className="dl-sb-parent-left">
@@ -227,6 +287,11 @@ const DashboardLayout = () => {
                 <Archive size={17} strokeWidth={2} />
                 <span className="dl-sb-item-text">Archives</span>
               </NavLink>
+
+              <NavLink to="/dashboard/admin/whatsapp-settings" className={({ isActive }) => `dl-sb-item ${isActive ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)}>
+                <div className="dl-sb-dot"></div>
+                <span className="dl-sb-item-text" style={{ fontSize: 14 }}>WA Settings</span>
+              </NavLink>
             </>
           )}
         </nav>
@@ -247,7 +312,7 @@ const DashboardLayout = () => {
               <Menu size={20} strokeWidth={2.5} />
             </button>
             <span className="dl-hdr-title">{title}</span>
-            <span className="dl-hdr-breadcrumb">Home / <span>{breadcrumb}</span></span>
+            {/* <span className="dl-hdr-breadcrumb">Home / <span>{breadcrumb}</span></span> */}
           </div>
 
           <div className="dl-hdr-right">
@@ -283,16 +348,60 @@ const DashboardLayout = () => {
         </main>
       </div>
 
-      {/* Floating WhatsApp (Only for Members) */}
-      {roleId === 2 && (
-        <a href="https://wa.me/1234567890" className="dl-floating-wa" target="_blank" rel="noreferrer">
-          <svg viewBox="0 0 32 32" width="26" height="26" fill="white" xmlns="http://www.w3.org/2000/svg">
-            <path d="M16 2C8.3 2 2 8.3 2 16c0 2.5.7 4.8 1.8 6.8L2 30l7.4-1.8C11.3 29.3 13.6 30 16 30c7.7 0 14-6.3 14-14S23.7 2 16 2zm-3.7 7.5c-.3 0-.7.1-1 .5-.3.3-1.1 1.1-1.1 2.6s1.1 3 1.3 3.2c.2.2 2.2 3.5 5.4 4.8 3.2 1.3 3.2.8 3.7.8.5 0 1.7-.7 1.9-1.3.2-.6.2-1.2.1-1.3-.1-.1-.3-.2-.6-.3-.3-.2-1.7-.8-1.9-.9-.2-.1-.4-.2-.6.2-.2.3-.7.9-.9 1.1-.2.2-.3.2-.6.1-.3-.2-1.3-.5-2.5-1.5-.9-.8-1.5-1.8-1.7-2.1-.2-.3 0-.5.1-.6l.4-.5c.1-.2.2-.3.3-.5.1-.2 0-.4 0-.5s-.5-1.3-.8-1.8c-.2-.4-.5-.4-.7-.4z" />
-          </svg>
-        </a>
+      {/* Floating WhatsApp */}
+      {!currentPath.includes('/admin') && roleId === 2 && (
+        <div className="dl-wa-wrapper">
+          {showWAMenu && (
+            <>
+              <div className="dl-wa-backdrop" onClick={() => setShowWAMenu(false)} />
+              <div className="dl-wa-menu">
+                <div className="dl-wa-menu-header">
+                  <svg viewBox="0 0 32 32" width="18" height="18" fill="#25D366" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M16 2C8.3 2 2 8.3 2 16c0 2.5.7 4.8 1.8 6.8L2 30l7.4-1.8C11.3 29.3 13.6 30 16 30c7.7 0 14-6.3 14-14S23.7 2 16 2zm-3.7 7.5c-.3 0-.7.1-1 .5-.3.3-1.1 1.1-1.1 2.6s1.1 3 1.3 3.2c.2.2 2.2 3.5 5.4 4.8 3.2 1.3 3.2.8 3.7.8.5 0 1.7-.7 1.9-1.3.2-.6.2-1.2.1-1.3-.1-.1-.3-.2-.6-.3-.3-.2-1.7-.8-1.9-.9-.2-.1-.4-.2-.6.2-.2.3-.7.9-.9 1.1-.2.2-.3.2-.6.1-.3-.2-1.3-.5-2.5-1.5-.9-.8-1.5-1.8-1.7-2.1-.2-.3 0-.5.1-.6l.4-.5c.1-.2.2-.3.3-.5.1-.2 0-.4 0-.5s-.5-1.3-.8-1.8c-.2-.4-.5-.4-.7-.4z" />
+                  </svg>
+                  <span>Tanya Admin Koperasi</span>
+                </div>
+                <p className="dl-wa-menu-sub">Pilih pertanyaan di bawah ini, kita bantu jawab via WhatsApp!</p>
+                <ul className="dl-wa-menu-list">
+                  {waQuestions.map((q) => (
+                    <li key={q.id}>
+                      <a
+                        href={`https://wa.me/${waPhone}?text=${encodeURIComponent(q.message)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={() => setShowWAMenu(false)}
+                        className="dl-wa-menu-item"
+                      >
+                        <span className="dl-wa-menu-item-icon">💬</span>
+                        {q.label}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </>
+          )}
+          <button
+            className={`dl-floating-wa ${showWAMenu ? 'active' : ''}`}
+            onClick={() => setShowWAMenu(v => !v)}
+            aria-label="Chat dengan Admin via WhatsApp"
+          >
+            {showWAMenu ? (
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" xmlns="http://www.w3.org/2000/svg">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 32 32" width="26" height="26" fill="white" xmlns="http://www.w3.org/2000/svg">
+                <path d="M16 2C8.3 2 2 8.3 2 16c0 2.5.7 4.8 1.8 6.8L2 30l7.4-1.8C11.3 29.3 13.6 30 16 30c7.7 0 14-6.3 14-14S23.7 2 16 2zm-3.7 7.5c-.3 0-.7.1-1 .5-.3.3-1.1 1.1-1.1 2.6s1.1 3 1.3 3.2c.2.2 2.2 3.5 5.4 4.8 3.2 1.3 3.2.8 3.7.8.5 0 1.7-.7 1.9-1.3.2-.6.2-1.2.1-1.3-.1-.1-.3-.2-.6-.3-.3-.2-1.7-.8-1.9-.9-.2-.1-.4-.2-.6.2-.2.3-.7.9-.9 1.1-.2.2-.3.2-.6.1-.3-.2-1.3-.5-2.5-1.5-.9-.8-1.5-1.8-1.7-2.1-.2-.3 0-.5.1-.6l.4-.5c.1-.2.2-.3.3-.5.1-.2 0-.4 0-.5s-.5-1.3-.8-1.8c-.2-.4-.5-.4-.7-.4z" />
+              </svg>
+            )}
+          </button>
+        </div>
       )}
     </div>
   );
 };
 
 export default DashboardLayout;
+

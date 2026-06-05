@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Filter, Calendar, ArrowRight, Download, ChevronLeft, ChevronRight } from 'lucide-react';
+import { apiUrl } from '../../services/api';
 import './TransactionHistory.css';
 
 const TransactionHistory = () => {
@@ -24,7 +25,7 @@ const TransactionHistory = () => {
     setLoading(true);
     try {
       const queryParams = new URLSearchParams(filters).toString();
-      const res = await fetch(`http://127.0.0.1:8000/api/loan/loans/transaction_history/?${queryParams}`);
+      const res = await fetch(apiUrl(`/loan/loans/transaction_history/?${queryParams}`));
       if (res.ok) {
         const data = await res.json();
         setTransactions(data);

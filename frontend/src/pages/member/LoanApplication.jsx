@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Wallet, UploadCloud } from 'lucide-react';
+import { apiUrl } from '../../services/api';
 import './LoanApplication.css';
 
 const LoanApplication = () => {
@@ -49,7 +50,7 @@ const LoanApplication = () => {
         const userStr = localStorage.getItem('user');
         const user = userStr ? JSON.parse(userStr) : null;
         if (user?.member_id) {
-          const res = await fetch(`http://127.0.0.1:8000/api/loan/loans/dashboard_summary/?member_id=${user.member_id}`);
+          const res = await fetch(apiUrl(`/loan/loans/dashboard_summary/?member_id=${user.member_id}`));
           if (res.ok) {
             const data = await res.json();
             // Use explicit boolean flag from backend
@@ -67,7 +68,7 @@ const LoanApplication = () => {
 
     const fetchLoanTypes = async () => {
       try {
-        const response = await fetch('http://127.0.0.1:8000/api/loan/loan-types/');
+        const response = await fetch(apiUrl('/loan/loan-types/'));
         if (response.ok) {
           const data = await response.json();
           setLoanTypes(data);
@@ -90,7 +91,7 @@ const LoanApplication = () => {
       const user = userStr ? JSON.parse(userStr) : null;
       const memberId = user?.member_id || 1;
 
-      const res = await fetch('http://127.0.0.1:8000/api/loan/loan-applications/get_prediction_pre_submit/', {
+      const res = await fetch(apiUrl('/loan/loan-applications/get_prediction_pre_submit/'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -138,7 +139,7 @@ const LoanApplication = () => {
         formData.append('salary_statement_file', form.salary_statement_file);
       }
 
-      const response = await fetch('http://127.0.0.1:8000/api/loan/loan-applications/', {
+      const response = await fetch(apiUrl('/loan/loan-applications/'), {
         method: 'POST',
         body: formData, 
       });
@@ -251,8 +252,8 @@ const LoanApplication = () => {
             </div>
           </div>
 
-          <button type="submit" className="la-btn-continue" disabled={loadingAi || checkingLoan}>
-            {loadingAi ? 'Processing...' : (checkingLoan ? 'Checking Profile...' : 'Continue')}
+          <button type="submit" className="la-btn-continue" disabled={loadingAi || checkingLoan || !form.salary_statement_file}>
+            {loadingAi ? 'Processing...' : (checkingLoan ? 'Checking Profile...' : (!form.salary_statement_file ? 'Upload Salary Statement First' : 'Continue'))}
           </button>
         </form>
 

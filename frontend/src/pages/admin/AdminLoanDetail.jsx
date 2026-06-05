@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { User, Printer, UploadCloud, Edit2 } from 'lucide-react';
+import { API_ORIGIN, apiUrl } from '../../services/api';
 import './AdminLoanDetail.css';
 
 const AdminLoanDetail = () => {
@@ -16,9 +17,29 @@ const AdminLoanDetail = () => {
   const [isEditingInterest, setIsEditingInterest] = useState(false);
   const [isEditingAmount, setIsEditingAmount] = useState(false);
 
+  const resolveDocumentUrl = (filePath) => {
+    if (!filePath) return '';
+    const path = String(filePath).trim();
+    if (!path) return '';
+    if (path.startsWith('http://') || path.startsWith('https://')) return path;
+    if (path.startsWith('/')) return `${API_ORIGIN}${path}`;
+    if (path.startsWith('media/')) return `${API_ORIGIN}/${path}`;
+    return `${API_ORIGIN}/media/${path}`;
+  };
+
+  const getDocumentName = (filePath) => {
+    if (!filePath) return 'Slip Gaji';
+    try {
+      const url = String(filePath).trim();
+      return url.split('/').filter(Boolean).pop() || 'Slip Gaji';
+    } catch (e) {
+      return 'Slip Gaji';
+    }
+  };
+
   useEffect(() => {
     // 1. Fetch Application Details
-    fetch(`http://127.0.0.1:8000/api/loan/loan-applications/${id}/admin_application_detail/`)
+    fetch(apiUrl(`/loan/loan-applications/${id}/admin_application_detail/`))
       .then(res => res.json())
       .then(data => {
         if (!data.error) {
@@ -30,7 +51,7 @@ const AdminLoanDetail = () => {
       .catch(err => console.error(err));
 
     // 2. Fetch AI Suggestion
-    fetch(`http://127.0.0.1:8000/api/loan/loan-applications/${id}/get_ai_suggestion/`)
+    fetch(apiUrl(`/loan/loan-applications/${id}/get_ai_suggestion/`))
       .then(res => res.json())
       .then(data => {
         if (!data.error) {
@@ -50,7 +71,14 @@ const AdminLoanDetail = () => {
 
   const [rejectReason, setRejectReason] = useState('');
 
+  const decisionNote = rejectReason.trim();
+  const isDecisionLocked = decisionNote.length === 0;
+
   const handleApprove = async () => {
+    if (isDecisionLocked) {
+      alert('Silakan isi catatan keputusan sebelum menyetujui pinjaman.');
+      return;
+    }
     if (!window.confirm('Are you sure you want to approve this loan?')) return;
     
     try {
@@ -59,7 +87,7 @@ const AdminLoanDetail = () => {
       const user = userStr ? JSON.parse(userStr) : null;
       const adminId = user?.id || 1;
 
-      const response = await fetch(`http://127.0.0.1:8000/api/loan/loan-applications/${id}/approve/`, {
+      const response = await fetch(apiUrl(`/loan/loan-applications/${id}/approve/`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -84,7 +112,7 @@ const AdminLoanDetail = () => {
   };
 
   const handleReject = async () => {
-    if (!rejectReason) {
+    if (isDecisionLocked) {
       alert('Please provide a reason for rejection in the decision notes');
       return;
     }
@@ -96,7 +124,7 @@ const AdminLoanDetail = () => {
       const user = userStr ? JSON.parse(userStr) : null;
       const adminId = user?.id || 1;
 
-      const response = await fetch(`http://127.0.0.1:8000/api/loan/loan-applications/${id}/reject/`, {
+      const response = await fetch(apiUrl(`/loan/loan-applications/${id}/reject/`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -263,6 +291,11 @@ const AdminLoanDetail = () => {
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}
             ></textarea>
+            {isDecisionLocked && (
+              <div style={{ marginTop: '8px', color: '#b91c1c', fontSize: '13px' }}>
+                Catatan keputusan diperlukan untuk menyetujui atau menolak.
+              </div>
+            )}
           </div>
 
           <div className="aldet-upload">
@@ -272,8 +305,15 @@ const AdminLoanDetail = () => {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', background: '#fcfcfc', border: '1px dashed #cbd5e1', borderRadius: '8px' }}>
                   <Printer size={24} color="#4f7df3" />
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '14px', fontWeight: '600', color: '#1a1a1a' }}>Slip_Gaji_Document</div>
-                    <a href={`http://127.0.0.1:8000/media/${detail.salary_statement_file}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: '13px', color: '#4f7df3', textDecoration: 'none' }}>Click to view document</a>
+                    <div style={{ fontSize: '14px', fontWeight: '600', color: '#1a1a1a' }}>{getDocumentName(detail.salary_statement_file)}</div>
+                    <a
+                      href={resolveDocumentUrl(detail.salary_statement_file)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ fontSize: '13px', color: '#4f7df3', textDecoration: 'none' }}
+                    >
+                      Click to view document
+                    </a>
                   </div>
                 </div>
               ) : (
@@ -285,8 +325,8 @@ const AdminLoanDetail = () => {
           </div>
 
           <div className="aldet-actions">
-            <button className="aldet-action-btn reject" onClick={handleReject}>REJECT</button>
-            <button className="aldet-action-btn approve" onClick={handleApprove}>APPROVE</button>
+            <button className="aldet-action-btn reject" onClick={handleReject} disabled={isDecisionLocked} aria-disabled={isDecisionLocked}>REJECT</button>
+            <button className="aldet-action-btn approve" onClick={handleApprove} disabled={isDecisionLocked} aria-disabled={isDecisionLocked}>APPROVE</button>
           </div>
         </div>
       </div>

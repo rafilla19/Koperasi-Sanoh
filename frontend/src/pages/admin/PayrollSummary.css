@@ -656,7 +656,7 @@
 }
 
 .pl-table thead tr {
-  background: linear-gradient(90deg, #1e3a8a, #2563eb);
+  background: #f1f5f9;
 }
 
 .pl-table th {
@@ -664,7 +664,7 @@
   padding: 16px 20px;
   font-size: 12px;
   font-weight: 700;
-  color: rgba(255,255,255,0.9);
+  color: #475569;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   white-space: nowrap;

@@ -299,6 +299,17 @@
   transition: all 0.2s;
 }
 
+.aldet-action-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: grayscale(20%);
+  box-shadow: none;
+}
+
+.aldet-action-btn:disabled:hover {
+  transform: none;
+}
+
 .aldet-action-btn.reject {
   color: white;
   background: #ff4d4f;

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { User, Lock, Eye, EyeOff } from 'lucide-react';
+import { apiUrl } from '../../services/api';
 import './AuthPages.css';
 
 const Login = () => {
@@ -17,7 +18,7 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-      const response = await fetch('http://localhost:8000/api/master/auth/login/', {
+      const response = await fetch(apiUrl('/master/auth/login/'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

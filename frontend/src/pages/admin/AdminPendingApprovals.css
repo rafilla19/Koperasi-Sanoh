@@ -1,3 +1,11 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+.admin-pending-approvals {
+  font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif;
+  letter-spacing: -0.01em;
+  color: #0f172a;
+}
+
 .admin-pending-approvals {
   padding: 24px;
   background-color: var(--bg-primary, #f9fafc);
@@ -5,15 +13,19 @@
 }
 
 .apa-header h1 {
-  font-size: 24px;
-  font-weight: 700;
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
   margin-bottom: 4px;
-  color: var(--text-color, #1a1a1a);
+  color: #0f172a;
 }
 
 .apa-breadcrumb {
-  font-size: 13px;
-  color: var(--text-color-light, #666);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: #64748b;
   margin-bottom: 24px;
 }
 
@@ -29,15 +41,16 @@
   border: 1px solid #eaeaea;
   background: white;
   font-size: 14px;
-  font-weight: 600;
-  color: #666;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #475569;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .apa-tab.active {
   background: #f7f9fa;
-  color: #1a1a1a;
+  color: #0f172a;
   border-color: #eaeaea;
 }
 
@@ -57,6 +70,7 @@
   border: 1px solid #eaeaea;
   gap: 24px;
   flex-wrap: wrap; /* Added for responsiveness */
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
 .apa-card-avatar {
@@ -77,18 +91,19 @@
 
 .apa-card-name {
   font-size: 15px;
-  font-weight: 700;
-  color: #1a1a1a;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #0f172a;
 }
 
 .apa-card-dept, .apa-card-id {
   font-size: 13px;
-  color: #666;
+  color: #64748b;
 }
 
 .apa-card-id {
   font-weight: 700;
-  color: #1a1a1a;
+  color: #334155;
   margin-top: 2px;
 }
 
@@ -106,18 +121,21 @@
 
 .apa-card-label {
   font-size: 13px;
-  font-weight: 600;
-  color: #1a1a1a;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #475569;
   margin-bottom: 4px;
 }
 
 .apa-card-value {
-  font-size: 13px;
-  color: #666;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #0f172a;
 }
 
 .apa-card-value.bold {
-  font-weight: 700;
+  font-weight: 800;
 }
 
 .apa-btn-details {
@@ -126,7 +144,8 @@
   border: 1px solid #c7d2fe;
   background: #edf2ff;
   color: #4f7df3;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: 0.01em;
   font-size: 13px;
   cursor: pointer;
   transition: all 0.2s;
@@ -156,8 +175,9 @@
 
 .apa-stat-title {
   font-size: 14px;
-  font-weight: 700;
-  color: #1a1a1a;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: #0f172a;
   margin-bottom: 12px;
 }
 
@@ -184,8 +204,9 @@
 
 .apa-stat-val {
   font-size: 18px;
-  font-weight: 700;
-  color: #1a1a1a;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #0f172a;
 }
 
 .apa-stat-val.overdue {
@@ -211,8 +232,8 @@
 
 .apa-filter-group label {
   font-size: 14px;
-  font-weight: 600;
-  color: #666;
+  font-weight: 700;
+  color: #475569;
 }
 
 .apa-filter-group select {

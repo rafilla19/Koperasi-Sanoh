@@ -5,11 +5,18 @@ import autoTable from 'jspdf-autotable';
 import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, FileText, Printer, CheckCircle, AlertTriangle, X, Download, CreditCard, Copy } from 'lucide-react';
+import { apiUrl } from '../../services/api';
 import './LoanDetails.css';
 
 const LoanDetails = () => {
   const navigate = useNavigate();
   const { id } = useParams();
+
+  const getCurrentMemberId = () => {
+    const userStr = localStorage.getItem('user');
+    const user = userStr ? JSON.parse(userStr) : null;
+    return user?.member_id ?? user?.member?.id ?? user?.member?.member_id ?? user?.id ?? 1;
+  };
 
   const [selectedReceipt, setSelectedReceipt] = useState(null);
   const [showPaymentInvoice, setShowPaymentInvoice] = useState(false);
@@ -22,17 +29,14 @@ const LoanDetails = () => {
   const [isInitiating, setIsInitiating] = useState(false);
   const [paymentChannels, setPaymentChannels] = useState([]);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(null);
+  const [hasPendingClosure, setHasPendingClosure] = useState(false);
   const summaryRef = useRef(null);
 
   const handleDownloadSummary = async () => {
     try {
-      // Get member_id from user in localStorage
-      const userStr = localStorage.getItem('user');
-      const user = userStr ? JSON.parse(userStr) : null;
-      const memberId = user?.member_id || 1;
+      const memberId = getCurrentMemberId();
 
-      // Fetch member info using the provided query endpoint
-      const memberRes = await fetch(`http://127.0.0.1:8000/api/master/members/pdf_info/?member_id=${memberId}`);
+      const memberRes = await fetch(apiUrl(`/member/members/profile_detail/?member_id=${memberId}`));
       let memberData = null;
       if (memberRes.ok) {
         memberData = await memberRes.json();
@@ -63,7 +67,7 @@ const LoanDetails = () => {
       doc.setFont("helvetica", "normal");
       doc.text(`Name: ${memberData?.full_name || '-'}`, 15, currentY);
       currentY += 6;
-      doc.text(`Member ID: ${memberData?.id || '-'}`, 15, currentY);
+      doc.text(`Member ID: ${memberData?.id || memberId || '-'}`, 15, currentY);
       currentY += 6;
       doc.text(`Member Since: ${formatDate(memberData?.join_date)}`, 15, currentY);
       currentY += 12;
@@ -131,30 +135,38 @@ const LoanDetails = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      // Get member_id from user in localStorage
-      const userStr = localStorage.getItem('user');
-      const user = userStr ? JSON.parse(userStr) : null;
-      const memberId = user?.member_id || 1;
+      const memberId = getCurrentMemberId();
 
       try {
-        const memberResponse = await fetch('http://127.0.0.1:8000/api/master/members/');
-        if (memberResponse.ok) {
-          const memberData = await memberResponse.json();
-          const currentMember = memberData.find(m => m.id === memberId);
-          if (currentMember) {
-            setEmpStatus(currentMember.employee_status_id);
-          }
-        }
-        
-        const chanRes = await fetch('http://127.0.0.1:8000/api/loan/loans/payment_channels/');
+        const chanRes = await fetch(apiUrl('/loan/loans/payment_channels/'));
         if (chanRes.ok) {
           setPaymentChannels(await chanRes.json());
+        }
+
+        const profileResponse = await fetch(apiUrl(`/member/members/profile_detail/?member_id=${memberId}`));
+        if (profileResponse.ok) {
+          const profileData = await profileResponse.json();
+          setHasPendingClosure(profileData.has_pending_closure || false);
+          // profile_detail includes employee_status_id, use it as primary source
+          if (profileData?.employee_status_id !== undefined && profileData?.employee_status_id !== null) {
+            setEmpStatus(Number(profileData.employee_status_id));
+          }
+        } else {
+          // Fallback for older API payloads where profile_detail may fail
+          const memberResponse = await fetch(apiUrl('/member/members/'));
+          if (memberResponse.ok) {
+            const memberData = await memberResponse.json();
+            const currentMember = memberData.find(m => m.id === memberId);
+            if (currentMember?.employee_status_id !== undefined && currentMember?.employee_status_id !== null) {
+              setEmpStatus(Number(currentMember.employee_status_id));
+            }
+          }
         }
 
         let foundLoan = null;
         let foundStatus = '';
 
-        const activeRes = await fetch(`http://127.0.0.1:8000/api/loan/loans/active_summary/?member_id=${memberId}`);
+        const activeRes = await fetch(apiUrl(`/loan/loans/active_summary/?member_id=${memberId}`));
         if (activeRes.ok) {
           const activeData = await activeRes.json();
           const match = activeData.find(item => String(item.loan_id) === id);
@@ -165,7 +177,7 @@ const LoanDetails = () => {
         }
 
         if (!foundLoan) {
-          const completedRes = await fetch(`http://127.0.0.1:8000/api/loan/loans/completed_summary/?member_id=${memberId}`);
+          const completedRes = await fetch(apiUrl(`/loan/loans/completed_summary/?member_id=${memberId}`));
           if (completedRes.ok) {
             const completedData = await completedRes.json();
             const match = completedData.find(item => String(item.loan_id) === id);
@@ -177,7 +189,7 @@ const LoanDetails = () => {
         }
 
         if (!foundLoan) {
-          const pendingRes = await fetch(`http://127.0.0.1:8000/api/loan/loan-applications/pending_summary/?member_id=${memberId}`);
+          const pendingRes = await fetch(apiUrl(`/loan/loan-applications/pending_summary/?member_id=${memberId}`));
           if (pendingRes.ok) {
             const pendingData = await pendingRes.json();
             const match = pendingData.find(item => String(item.id) === id);
@@ -189,7 +201,7 @@ const LoanDetails = () => {
         }
 
         if (!foundLoan) {
-          const rejectedRes = await fetch(`http://127.0.0.1:8000/api/loan/loan-applications/rejected_summary/?member_id=${memberId}`);
+          const rejectedRes = await fetch(apiUrl(`/loan/loan-applications/rejected_summary/?member_id=${memberId}`));
           if (rejectedRes.ok) {
             const rejectedData = await rejectedRes.json();
             const match = rejectedData.find(item => String(item.id) === id);
@@ -203,7 +215,7 @@ const LoanDetails = () => {
         if (foundLoan) {
           setLoanData({ ...foundLoan, determinedStatus: foundStatus });
           if (foundStatus === 'Active' || foundStatus === 'Completed') {
-            const schedRes = await fetch(`http://127.0.0.1:8000/api/loan/loans/${id}/schedule/?member_id=${memberId}`);
+            const schedRes = await fetch(apiUrl(`/loan/loans/${id}/schedule/?member_id=${memberId}`));
             if (schedRes.ok) {
               const schedData = await schedRes.json();
               setSchedule(schedData);
@@ -270,7 +282,7 @@ const LoanDetails = () => {
       const user = userStr ? JSON.parse(userStr) : null;
       const memberId = user?.member_id || 1;
 
-      const response = await fetch(`http://127.0.0.1:8000/api/loan/loans/${id}/create_payment_token/?member_id=${memberId}`, {
+      const response = await fetch(apiUrl(`/loan/loans/${id}/create_payment_token/?member_id=${memberId}`), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -478,26 +490,34 @@ const LoanDetails = () => {
                 <span className="val-large">{loanData?.next_installment_balance ? formatRupiah(loanData.next_installment_balance) : '-'}</span>
                 <span className="sub">Due - {loanData?.next_installment_due_date ? formatDate(loanData.next_installment_due_date) : ''}</span>
                 {empStatus === 3 && (
-                  <button className="btn-pay-now" onClick={async () => {
-                    setShowPaymentInvoice(true);
-                    setInvoiceLoading(true);
-                    try {
-                      const userStr = localStorage.getItem('user');
-                      const user = userStr ? JSON.parse(userStr) : null;
-                      const memberId = user?.member_id || 1;
-                      const res = await fetch(`http://127.0.0.1:8000/api/loan/loans/${id}/payment_invoice/?member_id=${memberId}`);
-                      if (res.ok) {
-                        const data = await res.json();
-                        if (data.length > 0) {
-                          setInvoiceData(data[0]); // assuming the first/latest pending payment
+                  <button 
+                    className="btn-pay-now" 
+                    disabled={hasPendingClosure}
+                    style={hasPendingClosure ? { background: '#94a3b8', cursor: 'not-allowed', opacity: 0.6 } : {}}
+                    onClick={async () => {
+                      if (hasPendingClosure) return;
+                      setShowPaymentInvoice(true);
+                      setInvoiceLoading(true);
+                      try {
+                        const userStr = localStorage.getItem('user');
+                        const user = userStr ? JSON.parse(userStr) : null;
+                        const memberId = user?.member_id || 1;
+                        const res = await fetch(apiUrl(`/loan/loans/${id}/payment_invoice/?member_id=${memberId}`));
+                        if (res.ok) {
+                          const data = await res.json();
+                          if (data.length > 0) {
+                            setInvoiceData(data[0]); // assuming the first/latest pending payment
+                          }
                         }
+                      } catch (err) {
+                        console.error(err);
+                      } finally {
+                        setInvoiceLoading(false);
                       }
-                    } catch (err) {
-                      console.error(err);
-                    } finally {
-                      setInvoiceLoading(false);
-                    }
-                  }}>PAY NOW</button>
+                    }}
+                  >
+                    PAY NOW
+                  </button>
                 )}
               </div>
             )}
@@ -576,7 +596,7 @@ const LoanDetails = () => {
                       onDoubleClick={async () => {
                         if (isPaid) {
                           try {
-                            const res = await fetch(`http://127.0.0.1:8000/api/loan/loans/${id}/receipts/?member_id=${memberId}`);
+                            const res = await fetch(apiUrl(`/loan/loans/${id}/receipts/?member_id=${memberId}`));
                             if (res.ok) {
                               const receipts = await res.json();
                               const receipt = receipts.find(r => r.installment_number === s.installment_number);
@@ -683,11 +703,6 @@ const LoanDetails = () => {
                 <span className="val" style={{fontWeight: 'bold', fontSize: '18px'}}>{formatRupiah((selectedReceipt.amount_paid || selectedReceipt.amount_total) + (parseFloat(selectedReceipt.admin_fee) || 0))}</span>
               </div>
             </div>
-
-            <div className="ld-modal-actions">
-              <button className="btn-modal-outline" onClick={() => setSelectedReceipt(null)}>Close</button>
-              <button className="btn-modal-primary">Download PDF</button>
-            </div>
           </div>
         </div>,
         document.body
@@ -746,6 +761,29 @@ const LoanDetails = () => {
                     <span className="lbl">Amount to Pay</span>
                     <span className="val">{formatRupiah(invoiceData.amount_paid)}</span>
                   </div>
+                  
+                  {(() => {
+                    const selectedChannel = paymentChannels.find(ch => ch.channel_code === selectedPaymentMethod);
+                    const feePercentage = selectedChannel ? Number(selectedChannel.fee_percentage) : 0;
+                    const feeFixed = selectedChannel ? Number(selectedChannel.fee_fixed) : 0;
+                    const subtotal = invoiceData ? Number(invoiceData.amount_paid) : 0;
+                    const feeTotal = Math.round((subtotal * feePercentage) / 100) + feeFixed;
+                    const totalAmount = subtotal + feeTotal;
+
+                    return selectedPaymentMethod ? (
+                      <>
+                        <div className="m-inv-row">
+                          <span className="lbl">Biaya Layanan</span>
+                          <span className="val">{formatRupiah(feeTotal)}</span>
+                        </div>
+                        <div className="m-inv-row amount" style={{ borderTop: '1px dashed #e2e8f0', paddingTop: '8px', marginTop: '8px' }}>
+                          <span className="lbl" style={{ fontWeight: '700', color: '#1e293b' }}>Total Pembayaran</span>
+                          <span className="val" style={{ fontWeight: '700', color: '#2563eb' }}>{formatRupiah(totalAmount)}</span>
+                        </div>
+                      </>
+                    ) : null;
+                  })()}
+
                   <div className="m-inv-row">
                     <span className="lbl">Status</span>
                     <span className="val">{invoiceData.status_code || invoiceData.gateway_status || 'PENDING'}</span>

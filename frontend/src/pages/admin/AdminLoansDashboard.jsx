@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ShoppingBag, Search, Printer, MoreHorizontal, Calendar } from 'lucide-react';
+import { apiUrl } from '../../services/api';
 import './AdminLoansDashboard.css';
 
 const AdminLoansDashboard = () => {
@@ -57,9 +58,9 @@ const AdminLoansDashboard = () => {
         };
 
         // Fetch both stats endpoints
-        const response = await fetch('http://127.0.0.1:8000/api/loan/loans/admin_dashboard_stats/');
+        const response = await fetch(apiUrl('/loan/loans/admin_dashboard_stats/'));
         const response2 = await fetch(
-          `http://127.0.0.1:8000/api/loan/loans/admin_pending_stats/?month=${selectedMonth}&year=${selectedYear}`
+          apiUrl(`/loan/loans/admin_pending_stats/?month=${selectedMonth}&year=${selectedYear}`)
         );
 
         let row1Stats = [];
@@ -87,14 +88,14 @@ const AdminLoansDashboard = () => {
         // Combine both rows into one setStats call
         setStats([...row1Stats, ...row2Stats]);
 
-        const pendingRes = await fetch('http://127.0.0.1:8000/api/loan/loan-applications/admin_pending_list/');
+        const pendingRes = await fetch(apiUrl('/loan/loan-applications/admin_pending_list/'));
         if (pendingRes.ok) {
           const pendingData = await pendingRes.json();
           setPendingList(pendingData);
         }
 
         const activeLoansRes = await fetch(
-          `http://127.0.0.1:8000/api/loan/loans/admin_loans_list/?month=${selectedMonth}&year=${selectedYear}`
+          apiUrl(`/loan/loans/admin_loans_list/?month=${selectedMonth}&year=${selectedYear}`)
         );
         if (activeLoansRes.ok) {
           const activeLoansData = await activeLoansRes.json();
@@ -226,7 +227,7 @@ const AdminLoansDashboard = () => {
     }
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/loan/loans/send_reminder_email/', {
+      const response = await fetch(apiUrl('/loan/loans/send_reminder_email/'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -255,7 +256,7 @@ const AdminLoansDashboard = () => {
     if (!window.confirm('This will send reminder emails to ALL members with overdue installments. Continue?')) return;
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/loan/loans/send_auto_all_reminders/', {
+      const response = await fetch(apiUrl('/loan/loans/send_auto_all_reminders/'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       });

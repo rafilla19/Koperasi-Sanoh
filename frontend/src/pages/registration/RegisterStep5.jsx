@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ShieldCheck, Eye, EyeOff } from 'lucide-react';
+import { apiUrl } from '../../services/api';
 import './RegistrationPages.css';
 
 const RegisterStep5 = () => {
@@ -10,17 +11,70 @@ const RegisterStep5 = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (password !== confirmPassword) {
       alert("Passwords do not match");
       return;
     }
-    // Simulate encryption before saving to database
-    const encryptedPassword = btoa(password);
-    console.log("Encrypted Password Saved:", encryptedPassword);
-    
-    navigate('/register/under-review');
+
+    const step1 = JSON.parse(sessionStorage.getItem('regStep1') || '{}');
+    const step2 = JSON.parse(sessionStorage.getItem('regStep2') || '{}');
+    const step3 = JSON.parse(sessionStorage.getItem('regStep3') || '{}');
+
+    if (!step2.npwpPath || !step2.ktpPath) {
+      alert("Document files (NPWP/KTP) are missing. Please go back to Step 2 and re-upload your documents.");
+      navigate('/register/step-2');
+      return;
+    }
+
+    if (!step1.nik || !step2.email) {
+      alert("Registration data is incomplete. Please restart registration.");
+      return;
+    }
+
+    try {
+      const response = await fetch(apiUrl('/member/members/register_member/'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nik: step1.nik,
+          fullName: step1.fullName,
+          nikEmployee: step1.nikEmployee,
+          noNpwp: step1.npwp,
+          placeOfBirth: step1.placeOfBirth,
+          dateOfBirth: step1.dob,
+          gender: step1.gender,
+          address: step1.address,
+          phoneNumber: step2.mobilePhone,
+          email: step2.email,
+          employeeStatusId: step2.employeeStatus,
+          departmentId: step2.department,
+          voluntarySaving: step2.voluntarySaving || 0,
+          contractEndDate: step2.contractEndDate || '',
+          payrollAgreement: step2.payrollAgree,
+          tncAgreement: step3.tncAgreement || false,
+          password: password,
+          npwpPath: step2.npwpPath,
+          ktpPath: step2.ktpPath
+        })
+      });
+
+      const result = await response.json();
+      if (!response.ok) {
+        alert(result.message || 'Registration failed. Please try again.');
+        return;
+      }
+
+      sessionStorage.removeItem('regStep1');
+      sessionStorage.removeItem('regStep2');
+      sessionStorage.removeItem('regStep3');
+      sessionStorage.removeItem('verifyEmail');
+      navigate('/register/under-review');
+    } catch (error) {
+      console.error('Registration failed', error);
+      alert('Registration failed. Please try again.');
+    }
   };
 
   // Password criteria visual checks

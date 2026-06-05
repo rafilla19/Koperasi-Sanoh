@@ -912,17 +912,17 @@
   overflow-x: auto;
 }
 
-.table-excel {
+.tx-table {
   width: 100%;
   border-collapse: collapse;
   border: 1px solid var(--dh-border);
 }
 
-.table-excel thead tr {
+.tx-table thead tr {
   background: var(--dh-surface-2);
 }
 
-.table-excel th {
+.tx-table th {
   padding: 13px 20px;
   text-align: left;
   font-size: 10.5px;
@@ -934,30 +934,30 @@
   white-space: nowrap;
 }
 
-.table-excel th:not(:last-child) {
+.tx-table th:not(:last-child) {
   border-right: 1px solid var(--dh-border);
 }
 
-.table-excel td {
+.tx-table td {
   padding: 14px 20px;
   border-bottom: 1px solid var(--dh-border);
   vertical-align: middle;
 }
 
-.table-excel td:not(:last-child) {
+.tx-table td:not(:last-child) {
   border-right: 1px solid var(--dh-border);
 }
 
-.table-excel tbody tr {
+.tx-table tbody tr {
   transition: background 0.14s;
   cursor: pointer;
 }
 
-.table-excel tbody tr:hover {
+.tx-table tbody tr:hover {
   background: rgba(45, 107, 228, 0.03);
 }
 
-.table-excel tbody tr:last-child td {
+.tx-table tbody tr:last-child td {
   border-bottom: none;
 }
 

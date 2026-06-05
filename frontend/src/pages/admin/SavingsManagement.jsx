@@ -1,252 +1,213 @@
-import { useState } from "react";
-import { NavLink } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { apiUrl } from "../../services/api";
+import "./SavingsManagement.css";
+import SavingsTabNav from "../../components/SavingsTabNav";
+
+const formatRupiah = (num) => "Rp " + Number(num || 0).toLocaleString("id-ID");
+
+const exportToExcel = (headers, rows, filename) => {
+  const html = [
+    '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">',
+    '<head><meta charset="UTF-8"></head><body><table>',
+    '<tr>' + headers.map(h => `<th>${h}</th>`).join('') + '</tr>',
+    ...rows.map(r => '<tr>' + r.map(c => `<td>${c ?? ''}</td>`).join('') + '</tr>'),
+    '</table></body></html>',
+  ].join('');
+  const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${filename}.xls`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
+
+// saving_type_id: 1 = wajib, 2 = sukarela, 3 = pokok
+const getWalletBalance = (wallets, typeId) => {
+  const w = (wallets || []).find(w => w.saving_type_id === typeId);
+  return w ? Number(w.balance) : 0;
+};
 
 export default function SavingsManagement() {
   const [search, setSearch] = useState("");
+  const [department, setDepartment] = useState("");
+  const [departments, setDepartments] = useState([]);
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
 
-  const [month, setMonth] = useState("July");
-const [year, setYear] = useState("2025");
- const data = [
-  {
-    id: "00012782",
-    name: "Rafilla Shalwa",
-    dept: "Engineering",
-    withdraw: 300000,
-    pokok: 1000000,
-    wajib: 2500000,
-    sukarela: 2500000,
-    month: "July",
-    year: "2025",
-  },
-  {
-    id: "00055521",
-    name: "Andi Saputra",
-    dept: "Finance",
-    withdraw: 200000,
-    pokok: 1000000,
-    wajib: 2000000,
-    sukarela: 1000000,
-    month: "June",
-    year: "2025",
-  },
-];
+  useEffect(() => {
+    fetch(apiUrl('/admin/departments/'))
+      .then(r => r.json())
+      .then(d => setDepartments(Array.isArray(d) ? d : []))
+      .catch(() => setDepartments([]));
+  }, []);
 
-  const formatRupiah = (num) => {
-    return "Rp " + num.toLocaleString("id-ID");
+  const fetchData = (searchVal, deptId) => {
+    setLoading(true);
+    const params = new URLSearchParams();
+    if (searchVal) params.append('search', searchVal);
+    if (deptId) params.append('department_id', deptId);
+    fetch(apiUrl(`/admin/savings/member-wallets/?${params}`))
+      .then(r => r.json())
+      .then(d => setData(Array.isArray(d) ? d : []))
+      .catch(() => setData([]))
+      .finally(() => setLoading(false));
   };
-const [selectedIds, setSelectedIds] = useState([]);
-const [generatedData, setGeneratedData] = useState([]);
-const [isGenerated, setIsGenerated] = useState(false);
-const [generatedDate, setGeneratedDate] = useState("");
-const handleCheckbox = (id) => {
-  setSelectedIds((prev) =>
-    prev.includes(id)
-      ? prev.filter((item) => item !== id)
-      : [...prev, id]
-  );
-};
- const filteredData = data.filter((item) => {
-  const keyword = search.toLowerCase();
 
-  const matchSearch =
-    item.name.toLowerCase().includes(keyword) ||
-    item.id.includes(keyword) ||
-    item.dept.toLowerCase().includes(keyword);
+  useEffect(() => { fetchData('', ''); }, []);
 
-  const matchDate =
-    item.month === month && item.year === year;
+  const handleSearch = () => { setCurrentPage(1); fetchData(search, department); };
+  const handleClear = () => { setSearch(''); setDepartment(''); setCurrentPage(1); fetchData('', ''); };
 
-  return matchSearch && matchDate;
-});
+  const totalPages = Math.ceil(data.length / rowsPerPage);
+  const paginatedData = data.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage);
 
-  
+  const handleDepartmentChange = (e) => {
+    const val = e.target.value;
+    setDepartment(val);
+    fetchData(search, val);
+  };
 
- return (
-  <div className="card">
+  return (
+    <div className="card">
+      <div className="savings-header">
+        <h2>Savings Management</h2>
+        <SavingsTabNav />
+      </div>
 
-    {/* 🔙 BACK */}
-    <div className="breadcrumb">
-      <NavLink to="/dashboard/admin/ls-savings">
-        ← Kembali ke Savings Dashboard
-      </NavLink>
-    </div>
-
-    <div className="savings-header">
-      <h2>Savings Management</h2>
-    </div>
-
-    {/* TABS */}
-    <div className="tabs">
-      <NavLink to="/dashboard/admin/savings-management" end className={({ isActive }) => `tab ${isActive ? "active" : ""}`}>
-        Savings Management
-      </NavLink>
-      <NavLink to="/dashboard/admin/mandatory-savings" end className={({ isActive }) => `tab ${isActive ? "active" : ""}`}>
-        Mandatory Savings
-      </NavLink>
-      <NavLink to="/dashboard/admin/voluntary-savings" end className={({ isActive }) => `tab ${isActive ? "active" : ""}`}>
-        Voluntary Savings & Withdrawal
-      </NavLink>
-      <NavLink to="/dashboard/admin/withdrawal-requests" end className={({ isActive }) => `tab ${isActive ? "active" : ""}`}>
-        Withdrawal Requests
-      </NavLink>
-    </div>
-
-    {/* HEADER */}
-    <div className="table-header">
-      <div className="search-box">
+      {/* SEARCH & FILTER */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
         <input
+          style={{
+            flex: 1,
+            minWidth: 180,
+            padding: '10px 14px',
+            borderRadius: 10,
+            border: '1px solid #e5e7eb',
+            fontSize: 13,
+            outline: 'none',
+          }}
           placeholder="Search by name, NIK, or Loan ID..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
         />
-      </div>
-
-      <div className="filter-box">
-        <select value={month} onChange={(e) => setMonth(e.target.value)}>
-          <option>January</option>
-          <option>February</option>
-          <option>March</option>
-          <option>April</option>
-          <option>May</option>
-          <option>June</option>
-          <option>July</option>
-          <option>August</option>
-          <option>September</option>
-          <option>October</option>
-          <option>November</option>
-          <option>December</option>
+        <select
+          style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid #e5e7eb', fontSize: 13, cursor: 'pointer' }}
+          value={department}
+          onChange={handleDepartmentChange}
+        >
+          <option value="">Semua Department</option>
+          {departments.map(d => (
+            <option key={d.id} value={d.id}>{d.department_name || d.name}</option>
+          ))}
         </select>
-
-        <select value={year} onChange={(e) => setYear(e.target.value)}>
-          <option>2024</option>
-          <option>2025</option>
-          <option>2026</option>
-        </select>
-      </div>
-    </div>
-
-    {/* ACTION */}
-    <div className="action-bar">
-      {!isGenerated ? (
         <button
-          className={`btn-generate ${selectedIds.length ? "active" : ""}`}
-          disabled={!selectedIds.length}
+          disabled={loading || data.length === 0}
           onClick={() => {
-            const selectedData = filteredData.filter((item) =>
-              selectedIds.includes(item.id)
-            );
-
-            setGeneratedData(selectedData);
-            setIsGenerated(true);
-            setGeneratedDate(new Date().toLocaleDateString("id-ID"));
-
-            alert("Bills berhasil di-generate ✅");
+            const headers = ['No', 'Nama Anggota', 'NIK', 'Department', 'Withdrawal', 'Simp. Pokok', 'Simp. Wajib', 'Simp. Sukarela', 'Total'];
+            const rows = data.map((item, i) => {
+              const wajib      = getWalletBalance(item.wallets, 1);
+              const sukarela   = getWalletBalance(item.wallets, 2);
+              const pokok      = getWalletBalance(item.wallets, 3);
+              const withdrawal = Number(item.total_withdrawal || 0);
+              const total      = pokok + wajib + sukarela - withdrawal;
+              return [
+                i + 1, item.member_name, item.member_nik || '-', item.department_name || '-',
+                withdrawal, pokok, wajib, sukarela, total,
+              ];
+            });
+            exportToExcel(headers, rows, 'savings_management');
+          }}
+          style={{
+            padding: '10px 16px', borderRadius: 10, border: '1px solid #d1d5db',
+            background: data.length === 0 ? '#f3f4f6' : '#fff',
+            color: data.length === 0 ? '#9ca3af' : '#374151',
+            fontSize: 13, fontWeight: 500, cursor: data.length === 0 ? 'not-allowed' : 'pointer',
+            display: 'flex', alignItems: 'center', gap: 6,
           }}
         >
-          Generate Bills
+          ⬇ Export Excel
         </button>
-      ) : (
-        <button
-          className="btn-print active"
-          onClick={() => window.print()}
-        >
-          🖨️ Print
-        </button>
-      )}
-    </div>
+      </div>
 
-    {/* ✅ PRINT AREA (DI LUAR TABLE) */}
-    {isGenerated && (
-      <div className="print-area">
-        <h2>Koperasi Sanoh</h2>
-        <p>Tanggal Generate: {generatedDate}</p>
-        <p>Periode: {month} {year}</p>
-
-        <table>
-          <thead>
-            <tr>
-              <th>Nama</th>
-              <th>ID</th>
-              <th>Department</th>
-              <th>Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {generatedData.map((item) => {
-              const total =
-                item.pokok + item.wajib + item.sukarela - item.withdraw;
+      {/* TABLE */}
+      <table>
+        <thead>
+          <tr>
+            <th style={{ width: 40 }}>No</th>
+            <th>Anggota</th>
+            <th>Department</th>
+            <th>Withdraw</th>
+            <th>Simp Pokok</th>
+            <th>Simp Wajib</th>
+            <th>Simp Sukarela</th>
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {loading ? (
+            <tr><td colSpan="8" className="empty">Memuat...</td></tr>
+          ) : data.length === 0 ? (
+            <tr><td colSpan="8" className="empty">Data tidak ditemukan</td></tr>
+          ) : (
+            paginatedData.map((item, index) => {
+              const wajib      = getWalletBalance(item.wallets, 1);
+              const sukarela   = getWalletBalance(item.wallets, 2);
+              const pokok      = getWalletBalance(item.wallets, 3);
+              const withdrawal = Number(item.total_withdrawal || 0);
+              const total      = pokok + wajib + sukarela - withdrawal;
 
               return (
-                <tr key={item.id}>
-                  <td>{item.name}</td>
-                  <td>{item.id}</td>
-                  <td>{item.dept}</td>
-                  <td>{formatRupiah(total)}</td>
+                <tr key={item.member_id}>
+                  <td style={{ color: '#94a3b8', fontSize: 12 }}>{(currentPage - 1) * rowsPerPage + index + 1}</td>
+                  <td>
+                    {item.member_name}<br />
+                    <span className="sub">{item.member_nik || '-'}</span>
+                  </td>
+                  <td>{item.department_name || '-'}</td>
+                  <td>{formatRupiah(withdrawal)}</td>
+                  <td>{formatRupiah(pokok)}</td>
+                  <td>{formatRupiah(wajib)}</td>
+                  <td>{formatRupiah(sukarela)}</td>
+                  <td className="total">{formatRupiah(total)}</td>
                 </tr>
               );
-            })}
-          </tbody>
-        </table>
-      </div>
-    )}
+            })
+          )}
+        </tbody>
+      </table>
 
-    {/* TABLE */}
-    <table>
-      <thead>
-        <tr>
-          <th></th>
-          <th>Anggota</th>
-          <th>Department</th>
-          <th>Withdraw</th>
-          <th>Simp Pokok</th>
-          <th>Simp Wajib</th>
-          <th>Simp Sukarela</th>
-          <th>Total</th>
-        </tr>
-      </thead>
-
-      <tbody>
-        {filteredData.length > 0 ? (
-          filteredData.map((item) => {
-            const total =
-              item.pokok + item.wajib + item.sukarela - item.withdraw;
-
-            return (
-              <tr key={item.id}>
-                {/* ✅ FIX CHECKBOX */}
-                <td>
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.includes(item.id)}
-                    onChange={() => handleCheckbox(item.id)}
-                  />
-                </td>
-
-                <td>
-                  {item.name} <br />
-                  <span className="sub">{item.id}</span>
-                </td>
-
-                <td>{item.dept}</td>
-                <td>{formatRupiah(item.withdraw)}</td>
-                <td>{formatRupiah(item.pokok)}</td>
-                <td>{formatRupiah(item.wajib)}</td>
-                <td>{formatRupiah(item.sukarela)}</td>
-
-                <td className="total">{formatRupiah(total)}</td>
-              </tr>
-            );
-          })
-        ) : (
-          <tr>
-            <td colSpan="8" className="empty">
-              Data tidak ditemukan
-            </td>
-          </tr>
-        )}
-      </tbody>
-    </table>
-  </div>
-);
-
+      {/* PAGINATION */}
+      {!loading && data.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, flexWrap: 'wrap', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#6b7280' }}>
+            <span>Baris per halaman:</span>
+            <select
+              value={rowsPerPage}
+              onChange={e => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+              style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: 13 }}
+            >
+              {[10, 25, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#6b7280' }}>
+            <span>{(currentPage - 1) * rowsPerPage + 1}–{Math.min(currentPage * rowsPerPage, data.length)} dari {data.length}</span>
+            <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
+              style={{ padding: '4px 12px', borderRadius: 6, border: '1px solid #d1d5db', background: currentPage === 1 ? '#f3f4f6' : '#fff', cursor: currentPage === 1 ? 'not-allowed' : 'pointer' }}>
+              Prev
+            </button>
+            <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
+              style={{ padding: '4px 12px', borderRadius: 6, border: '1px solid #d1d5db', background: currentPage === totalPages ? '#f3f4f6' : '#fff', cursor: currentPage === totalPages ? 'not-allowed' : 'pointer' }}>
+              Next
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }

@@ -1,22 +1,72 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Upload } from 'lucide-react';
+import { apiUrl } from '../../services/api';
 import './RegistrationPages.css';
 
 const RegisterStep2 = () => {
   const navigate = useNavigate();
+  const defaultFormData = {
+    mobilePhone: '',
+    email: '',
+    employeeStatus: '',
+    department: '',
+    voluntarySaving: '',
+    contractEndDate: '',
+    defaultAgree: false,
+    payrollAgree: false,
+    npwpFileName: '',
+    ktpFileName: '',
+    npwpPath: '',
+    ktpPath: ''
+  };
+
   const [formData, setFormData] = useState(() => {
     const saved = sessionStorage.getItem('regStep2');
-    return saved ? JSON.parse(saved) : {
-      mobilePhone: '', email: '', employeeStatus: '', department: '', voluntarySaving: '', defaultAgree: false, payrollAgree: false
+    const parsed = saved ? JSON.parse(saved) : {};
+    return {
+      mobilePhone: parsed.mobilePhone ?? '',
+      email: parsed.email ?? '',
+      employeeStatus: parsed.employeeStatus ?? '',
+      department: parsed.department ?? '',
+      voluntarySaving: parsed.voluntarySaving ?? '',
+      contractEndDate: parsed.contractEndDate ?? '',
+      defaultAgree: parsed.defaultAgree ?? false,
+      payrollAgree: parsed.payrollAgree ?? false,
+      npwpFileName: parsed.npwpFileName ?? '',
+      ktpFileName: parsed.ktpFileName ?? '',
+      npwpPath: parsed.npwpPath ?? '',
+      ktpPath: parsed.ktpPath ?? ''
     };
   });
 
-  const [files, setFiles] = useState({ npwp: null, ktp: null });
+  const [departments, setDepartments] = useState([]);
+  const [employeeStatuses, setEmployeeStatuses] = useState([]);
 
   useEffect(() => {
     sessionStorage.setItem('regStep2', JSON.stringify(formData));
   }, [formData]);
+
+  useEffect(() => {
+    const fetchOptions = async () => {
+      try {
+        const [deptRes, statusRes] = await Promise.all([
+          fetch(apiUrl('/member/members/departments/')),
+          fetch(apiUrl('/member/members/employee_statuses/'))
+        ]);
+
+        const deptData = await deptRes.json();
+        const statusData = await statusRes.json();
+
+        if (deptRes.ok) setDepartments(deptData);
+        if (statusRes.ok) setEmployeeStatuses(statusData);
+      } catch (error) {
+        console.error('Failed to load registration options', error);
+      }
+    };
+
+    fetchOptions();
+  }, []);
 
   const handleChange = (field, validator) => (e) => {
     let val = e.target.value;
@@ -33,24 +83,79 @@ const RegisterStep2 = () => {
   const npwpInputRef = useRef(null);
   const ktpInputRef = useRef(null);
 
-  const handleFileChange = (field) => (e) => {
+  const [isUploading, setIsUploading] = useState({ npwp: false, ktp: false });
+
+  const handleFileChange = (field) => async (e) => {
     const file = e.target.files[0];
     if (file) {
-      if (file.size > 100 * 1024) {
-        alert("File size cannot exceed 100KB");
+      if (file.size > 10 * 1024 * 1024) {
+        alert("File size cannot exceed 10MB");
         e.target.value = '';
         return;
       }
-      setFiles(prev => ({ ...prev, [field]: file.name }));
+
+      setIsUploading(prev => ({ ...prev, [field]: true }));
+      
+      const formDataUpload = new FormData();
+      formDataUpload.append('file', file);
+      formDataUpload.append('type', field);
+
+      try {
+        const response = await fetch(apiUrl('/member/members/upload_temp_document/'), {
+          method: 'POST',
+          body: formDataUpload
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+          const fileNameKey = field === 'npwp' ? 'npwpFileName' : 'ktpFileName';
+          const pathKey = field === 'npwp' ? 'npwpPath' : 'ktpPath';
+          
+          setFormData(prev => ({ 
+            ...prev, 
+            [fileNameKey]: file.name,
+            [pathKey]: data.file_path 
+          }));
+        } else {
+          alert("Failed to upload file: " + (data.error || 'Server error'));
+        }
+      } catch (err) {
+        console.error("Upload error:", err);
+        alert("Connection error while uploading");
+      } finally {
+        setIsUploading(prev => ({ ...prev, [field]: false }));
+      }
     }
+  };
+
+  const isOutsource = () => {
+    if (!formData.employeeStatus) return false;
+    const selectedStatus = employeeStatuses.find(s => s.id.toString() === formData.employeeStatus.toString());
+    return selectedStatus && selectedStatus.status_name.toLowerCase().includes('outsource');
+  };
+
+  const isContract = () => {
+    if (!formData.employeeStatus) return false;
+    const selectedStatus = employeeStatuses.find(s => s.id.toString() === formData.employeeStatus.toString());
+    return selectedStatus && selectedStatus.status_name.toLowerCase().includes('contract');
+  };
+
+  const isFormValid = () => {
+    // Basic fields validation
+    const hasBasicFields = formData.mobilePhone && formData.email && formData.employeeStatus && formData.department && formData.voluntarySaving >= 50000;
+    const hasFiles = formData.npwpPath && formData.ktpPath;
+    const hasContractDate = isContract() ? formData.contractEndDate : true;
+    
+    // Checkbox validation based on status
+    const hasDefaultAgree = formData.defaultAgree;
+    const hasPayrollAgree = isOutsource() ? true : formData.payrollAgree;
+
+    return hasBasicFields && hasFiles && hasContractDate && hasDefaultAgree && hasPayrollAgree && !isUploading.npwp && !isUploading.ktp;
   };
 
   const handleContinue = (e) => {
     e.preventDefault();
-    if (!files.npwp || !files.ktp) {
-      alert("Please upload both NPWP and KTP documents before continuing.");
-      return;
-    }
+    if (!isFormValid()) return;
     navigate('/register/step-3');
   };
 
@@ -95,27 +200,53 @@ const RegisterStep2 = () => {
           <div className="custom-select-wrapper">
             <select className="reg-form-input reg-form-select" required value={formData.employeeStatus} onChange={handleChange('employeeStatus')}>
               <option value="" disabled></option>
-              <option value="permanent">Permanent</option>
-              <option value="contract">Contract</option>
+              {employeeStatuses.map((status) => (
+                <option key={status.id} value={status.id}>{status.status_name}</option>
+              ))}
             </select>
           </div>
         </div>
 
+        {isContract() && (
+          <div className="reg-form-group">
+            <label className="reg-form-label">Contract End Date (Masa Kontrak)</label>
+            <input 
+              type="date" 
+              className="reg-form-input" 
+              required 
+              value={formData.contractEndDate} 
+              onChange={handleChange('contractEndDate')} 
+            />
+          </div>
+        )}
+
         {/* File Uploads */}
         <div className="reg-form-group">
-          <label className="reg-form-label">Upload NPWP</label>
-          <div className="file-upload-box" onClick={() => npwpInputRef.current.click()} style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <Upload size={20} />
-            {files.npwp && <span style={{ marginTop: '0.5rem', fontSize: '0.8rem' }}>{files.npwp}</span>}
+          <label className="reg-form-label">Upload NPWP <span style={{ fontWeight: 'normal', color: '#64748b' }}>(Max 10MB)</span></label>
+          <div className="file-upload-box" onClick={() => !isUploading.npwp && npwpInputRef.current.click()} style={{ cursor: isUploading.npwp ? 'wait' : 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', borderColor: formData.npwpPath ? '#22c55e' : 'var(--color-border)' }}>
+            <Upload size={20} className={isUploading.npwp ? "animate-bounce" : ""} />
+            {isUploading.npwp ? (
+              <span style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#3b82f6' }}>Uploading...</span>
+            ) : formData.npwpFileName ? (
+              <span style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#22c55e' }}>✓ {formData.npwpFileName}</span>
+            ) : (
+              <span style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#94a3b8' }}>Click to upload NPWP</span>
+            )}
             <input type="file" ref={npwpInputRef} style={{ display: 'none' }} accept="image/*,.pdf" onChange={handleFileChange('npwp')} />
           </div>
         </div>
 
         <div className="reg-form-group">
-          <label className="reg-form-label">Upload KTP</label>
-          <div className="file-upload-box" onClick={() => ktpInputRef.current.click()} style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <Upload size={20} />
-            {files.ktp && <span style={{ marginTop: '0.5rem', fontSize: '0.8rem' }}>{files.ktp}</span>}
+          <label className="reg-form-label">Upload KTP <span style={{ fontWeight: 'normal', color: '#64748b' }}>(Max 10MB)</span></label>
+          <div className="file-upload-box" onClick={() => !isUploading.ktp && ktpInputRef.current.click()} style={{ cursor: isUploading.ktp ? 'wait' : 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', borderColor: formData.ktpPath ? '#22c55e' : 'var(--color-border)' }}>
+            <Upload size={20} className={isUploading.ktp ? "animate-bounce" : ""} />
+            {isUploading.ktp ? (
+              <span style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#3b82f6' }}>Uploading...</span>
+            ) : formData.ktpFileName ? (
+              <span style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#22c55e' }}>✓ {formData.ktpFileName}</span>
+            ) : (
+              <span style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#94a3b8' }}>Click to upload KTP</span>
+            )}
             <input type="file" ref={ktpInputRef} style={{ display: 'none' }} accept="image/*,.pdf" onChange={handleFileChange('ktp')} />
           </div>
         </div>
@@ -126,10 +257,9 @@ const RegisterStep2 = () => {
           <div className="custom-select-wrapper">
             <select className="reg-form-input reg-form-select" required value={formData.department} onChange={handleChange('department')}>
               <option value="" disabled></option>
-              <option value="it">IT</option>
-              <option value="hr">HR</option>
-              <option value="finance">Finance</option>
-              <option value="operations">Operations</option>
+              {departments.map((dept) => (
+                <option key={dept.id} value={dept.id}>{dept.department_name}</option>
+              ))}
             </select>
           </div>
         </div>
@@ -167,17 +297,29 @@ const RegisterStep2 = () => {
             </label>
           </div>
 
-          <div className="checkbox-group">
-            <input type="checkbox" id="payroll-deduct-agree" required checked={formData.payrollAgree} onChange={handleCheckboxChange('payrollAgree')} />
-            <label htmlFor="payroll-deduct-agree" className="checkbox-label">
-              I authorize the HR payroll department of PT Sanoh Indonesia to automatically deduct my salary for Mandatory Savings and Voluntary Savings for the Sanoh Sinergi Bersama Cooperative.
-            </label>
-          </div>
+          {!isOutsource() && (
+            <div className="checkbox-group">
+              <input type="checkbox" id="payroll-deduct-agree" required checked={formData.payrollAgree} onChange={handleCheckboxChange('payrollAgree')} />
+              <label htmlFor="payroll-deduct-agree" className="checkbox-label">
+                I authorize the HR payroll department of PT Sanoh Indonesia to automatically deduct my salary for Mandatory Savings and Voluntary Savings for the Sanoh Sinergi Bersama Cooperative.
+              </label>
+            </div>
+          )}
         </div>
 
         <div className="reg-actions" style={{ justifyContent: 'space-between', marginTop: '2rem' }}>
           <Link to="/register/step-1" className="btn-secondary">← Back</Link>
-          <button type="submit" className="btn-primary-sm">Continue →</button>
+          <button 
+            type="submit" 
+            className="btn-primary-sm"
+            disabled={!isFormValid()}
+            style={{ 
+              opacity: isFormValid() ? 1 : 0.6, 
+              cursor: isFormValid() ? 'pointer' : 'not-allowed'
+            }}
+          >
+            Continue →
+          </button>
         </div>
       </form>
     </div>
