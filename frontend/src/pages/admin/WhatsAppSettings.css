@@ -1,7 +1,21 @@
 .wa-settings {
-  padding: 24px;
+  padding: 28px;
   font-family: 'Inter', Arial, sans-serif;
-  max-width: 960px;
+  max-width: 1180px;
+  margin: 0 auto;
+  min-height: 100%;
+}
+
+.wa-settings::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at top left, rgba(37, 211, 102, 0.10), transparent 28%),
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.08), transparent 24%),
+    linear-gradient(180deg, rgba(248, 250, 252, 0.9), rgba(248, 250, 252, 0.72));
+  z-index: -1;
 }
 
 /* ── Toast ─────────────────────────────────────────────── */
@@ -27,62 +41,106 @@
 
 /* ── Page Header ──────────────────────────────────────── */
 .wa-page-header {
-  margin-bottom: 24px;
+  margin-bottom: 22px;
+  padding: 22px 24px;
+  border-radius: 22px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.94), rgba(240, 253, 244, 0.92));
+  border: 1px solid rgba(229, 231, 235, 0.9);
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.06);
 }
 
 .wa-page-title {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
 }
 
 .wa-page-icon {
-  width: 46px;
-  height: 46px;
-  border-radius: 12px;
-  background: #e8fdf0;
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #dcfce7, #ecfeff);
+  border: 1px solid rgba(37, 211, 102, 0.14);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.8);
 }
 
 .wa-page-title h2 {
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 700;
-  color: #111827;
+  color: #0f172a;
   margin: 0 0 2px;
 }
 
 .wa-page-title p {
-  font-size: 13px;
-  color: #6b7280;
+  font-size: 13.5px;
+  color: #64748b;
   margin: 0;
+  line-height: 1.5;
 }
 
 /* ── Card ─────────────────────────────────────────────── */
-.wa-card {
-  background: #fff;
-  border-radius: 16px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.07);
-  padding: 24px;
+.wa-top-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
   margin-bottom: 20px;
 }
 
+.wa-card {
+  background: rgba(255,255,255,0.94);
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+  padding: 24px;
+  margin-bottom: 20px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  backdrop-filter: blur(10px);
+}
+
+.wa-card--highlight {
+  background: linear-gradient(135deg, rgba(255,255,255,0.98), rgba(236, 253, 245, 0.95));
+}
+
 .wa-card-head {
-  margin-bottom: 18px;
+  margin-bottom: 16px;
+}
+
+.wa-card-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #0f766e;
+  background: rgba(20, 184, 166, 0.1);
+  border: 1px solid rgba(20, 184, 166, 0.14);
+  padding: 6px 10px;
+  border-radius: 999px;
+  margin-bottom: 10px;
+}
+
+.wa-card-eyebrow--green {
+  color: #166534;
+  background: rgba(34, 197, 94, 0.1);
+  border-color: rgba(34, 197, 94, 0.14);
 }
 
 .wa-card-head h3 {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
-  color: #111827;
-  margin: 0 0 4px;
+  color: #0f172a;
+  margin: 0 0 6px;
 }
 
 .wa-card-sub {
-  font-size: 12.5px;
-  color: #6b7280;
+  font-size: 12.8px;
+  color: #64748b;
+  line-height: 1.5;
 }
 
 .wa-card-head--row {
@@ -99,15 +157,18 @@
   align-items: center;
   gap: 14px;
   flex-wrap: wrap;
+  justify-content: space-between;
 }
 
 .wa-phone-value {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 600;
-  color: #111827;
+  color: #0f172a;
+  flex: 1;
+  min-width: 0;
 }
 
 .wa-phone-badge {
@@ -118,6 +179,12 @@
   padding: 3px 8px;
   border-radius: 6px;
   letter-spacing: 0.04em;
+}
+
+.wa-value-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .wa-phone-edit {
@@ -139,29 +206,36 @@
 }
 
 .wa-phone-prefix {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
-  color: #374151;
+  color: #475569;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px 12px;
 }
 
 /* ── Loading / Empty ──────────────────────────────────── */
 .wa-loading {
   text-align: center;
-  padding: 60px 0;
-  color: #9ca3af;
+  padding: 72px 0;
+  color: #64748b;
   font-size: 14px;
 }
 
 .wa-empty {
   text-align: center;
-  padding: 40px 0;
-  color: #9ca3af;
+  padding: 44px 0;
+  color: #64748b;
   font-size: 13.5px;
 }
 
 /* ── Table ────────────────────────────────────────────── */
 .wa-table-wrap {
   overflow-x: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  background: #fff;
 }
 
 .wa-table {
@@ -173,19 +247,19 @@
 .wa-table th {
   text-align: left;
   padding: 10px 12px;
-  background: #f9fafb;
-  color: #6b7280;
+  background: linear-gradient(180deg, #f8fafc, #f1f5f9);
+  color: #475569;
   font-weight: 600;
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid #e2e8f0;
 }
 
 .wa-table td {
   padding: 12px 12px;
   border-bottom: 1px solid #f3f4f6;
-  color: #374151;
+  color: #334155;
   vertical-align: middle;
 }
 
@@ -194,7 +268,7 @@
 }
 
 .wa-table tr:hover td {
-  background: #f9fafb;
+  background: #f8fafc;
 }
 
 .wa-row--inactive td {
@@ -206,13 +280,14 @@
 }
 
 .wa-td-message {
-  color: #6b7280;
+  color: #64748b;
   font-size: 13px;
   max-width: 380px;
+  line-height: 1.45;
 }
 
 .wa-label-chip {
-  background: #eff6ff;
+  background: linear-gradient(135deg, #eff6ff, #f0f9ff);
   color: #1d4ed8;
   font-size: 12px;
   font-weight: 600;
@@ -277,15 +352,16 @@
   font-weight: 600;
   cursor: pointer;
   border: none;
-  transition: background 0.15s, opacity 0.15s;
+  transition: background 0.15s, opacity 0.15s, transform 0.15s, box-shadow 0.15s;
 }
 
 .wa-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.wa-btn:hover:not(:disabled) { transform: translateY(-1px); }
 
 .wa-btn--primary {
   background: linear-gradient(135deg, #25D366, #1aac52);
   color: white;
-  box-shadow: 0 2px 8px rgba(37,211,102,0.3);
+  box-shadow: 0 8px 20px rgba(37,211,102,0.18);
 }
 .wa-btn--primary:hover:not(:disabled) { background: linear-gradient(135deg, #1ebe5d, #18a04c); }
 
@@ -312,17 +388,17 @@
 .wa-input {
   width: 100%;
   padding: 10px 12px;
-  border: 1.5px solid #d1d5db;
-  border-radius: 10px;
+  border: 1.5px solid #d6dbe3;
+  border-radius: 12px;
   font-size: 13.5px;
-  color: #111827;
+  color: #0f172a;
   outline: none;
   box-sizing: border-box;
   transition: border-color 0.15s;
   background: white;
   font-family: inherit;
 }
-.wa-input:focus { border-color: #25D366; box-shadow: 0 0 0 3px rgba(37,211,102,0.12); }
+.wa-input:focus { border-color: #25D366; box-shadow: 0 0 0 4px rgba(37,211,102,0.10); }
 
 .wa-textarea {
   resize: vertical;
@@ -336,7 +412,7 @@
   gap: 5px;
   font-size: 13px;
   font-weight: 600;
-  color: #374151;
+  color: #334155;
   margin-bottom: 14px;
 }
 
@@ -362,10 +438,10 @@
 
 .wa-modal {
   background: white;
-  border-radius: 18px;
+  border-radius: 20px;
   width: 100%;
   max-width: 520px;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.18);
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.22);
   animation: wa-modal-pop 0.2s cubic-bezier(0.34,1.56,0.64,1);
 }
 
@@ -382,7 +458,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 24px 0;
+  padding: 22px 24px 0;
 }
 
 .wa-modal-header h3 {
@@ -421,6 +497,60 @@
   justify-content: flex-end;
   gap: 10px;
   padding: 0 24px 20px;
+}
+
+@media (max-width: 900px) {
+  .wa-settings {
+    padding: 18px;
+  }
+
+  .wa-top-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .wa-page-header {
+    padding: 18px;
+  }
+
+  .wa-phone-display {
+    align-items: flex-start;
+  }
+
+  .wa-phone-value {
+    min-width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .wa-page-title {
+    align-items: flex-start;
+  }
+
+  .wa-page-title h2 {
+    font-size: 20px;
+  }
+
+  .wa-card {
+    padding: 18px;
+    border-radius: 18px;
+  }
+
+  .wa-table th,
+  .wa-table td {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .wa-modal-body,
+  .wa-modal-header {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  .wa-modal-footer {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
 }
 
 .wa-delete-text {

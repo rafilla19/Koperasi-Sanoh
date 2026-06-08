@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Wallet, CreditCard, FileText, UserCircle, LogOut, Menu, ChevronLeft, ChevronRight, Users, CheckSquare, Database, Archive } from 'lucide-react';
+import { LayoutDashboard, Wallet, CreditCard, FileText, UserCircle, LogOut, Menu, ChevronLeft, ChevronRight, Users, CheckSquare, Database, Archive, Settings } from 'lucide-react';
 import logoImg from '../assets/logo.png';
 import './DashboardLayout.css';
 import { fetchWASettings } from '../services/waApi';
@@ -73,8 +73,8 @@ const DashboardLayout = () => {
   if (currentPath.includes('/dashboard/admin/archives')) {
     title = 'Document Archives';
     breadcrumb = 'Admin / Archives';  } else if (currentPath.includes('/dashboard/admin/whatsapp-settings')) {
-    title = 'WhatsApp Settings';
-    breadcrumb = 'Admin / WA Settings';  } else if (currentPath.includes('/dashboard/admin/transaction/history')) {
+    title = 'Settings';
+    breadcrumb = 'Admin / Settings';  } else if (currentPath.includes('/dashboard/admin/transaction/history')) {
     title = 'Transaction History';
     breadcrumb = 'Admin / Transaction';
   } else if (currentPath.includes('/dashboard/admin/transaction/manual')) {
@@ -290,7 +290,8 @@ const DashboardLayout = () => {
 
               <NavLink to="/dashboard/admin/whatsapp-settings" className={({ isActive }) => `dl-sb-item ${isActive ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)}>
                 <div className="dl-sb-dot"></div>
-                <span className="dl-sb-item-text" style={{ fontSize: 14 }}>WA Settings</span>
+                <Settings size={17} strokeWidth={2.25} />
+                <span className="dl-sb-item-text" style={{ fontSize: 14 }}>Settings</span>
               </NavLink>
             </>
           )}

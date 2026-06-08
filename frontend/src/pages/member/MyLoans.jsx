@@ -8,6 +8,7 @@ const MyLoans = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('active');
   const [hasActiveLoan, setHasActiveLoan] = useState(false);
+  const [hasPendingLoan, setHasPendingLoan] = useState(false);
   const [totalOutstanding, setTotalOutstanding] = useState(0);
   const [nextDeduction, setNextDeduction] = useState('-');
   const [showAutoDeductBanner, setShowAutoDeductBanner] = useState(false);
@@ -104,6 +105,7 @@ const MyLoans = () => {
         const pendingSummaryResponse = await fetch(apiUrl(`/loan/loan-applications/pending_summary/?member_id=${memberId}`));
         if (pendingSummaryResponse.ok) {
           const pendingSummary = await pendingSummaryResponse.json();
+          setHasPendingLoan((pendingSummary || []).length > 0);
           const pendingLoansFormatted = pendingSummary.map(item => ({
             id: `#${item.id}`,
             type: item.type_name || 'Pinjaman',
@@ -178,6 +180,8 @@ const MyLoans = () => {
   const handleApplyLoan = () => {
     if (hasPendingClosure) {
       alert('Anda tidak dapat mengajukan pinjaman baru karena akun Anda dalam proses penutupan.');
+    } else if (hasPendingLoan) {
+      alert('Anda tidak dapat mengajukan pinjaman baru karena masih ada pengajuan pinjaman yang menunggu persetujuan.');
     } else if (hasActiveLoan) {
       alert('Anda tidak dapat mengajukan pinjaman baru karena masih ada pinjaman yang aktif.');
     } else {
@@ -212,8 +216,8 @@ const MyLoans = () => {
         <button
           className="btn-apply-loan"
           onClick={handleApplyLoan}
-          disabled={hasActiveLoan || hasPendingClosure}
-          style={(hasActiveLoan || hasPendingClosure) ? { 
+          disabled={hasActiveLoan || hasPendingLoan || hasPendingClosure}
+          style={(hasActiveLoan || hasPendingLoan || hasPendingClosure) ? { 
             background: '#94a3b8', 
             cursor: 'not-allowed',
             color: '#f1f5f9'

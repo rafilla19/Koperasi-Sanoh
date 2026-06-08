@@ -184,7 +184,11 @@ const LoanApplication = () => {
             <select
               required
               value={form.loan_type}
-              onChange={(e) => setForm({ ...form, loan_type: e.target.value })}
+              onChange={(e) => {
+                const val = e.target.value;
+                // If installments (id '1') selected, default duration to 4 months.
+                setForm({ ...form, loan_type: val, duration_months: val === '1' ? '4' : '' });
+              }}
             >
               <option value="" disabled>Select type...</option>
               {loanTypes.map((type) => (
@@ -218,10 +222,14 @@ const LoanApplication = () => {
               onChange={(e) => setForm({ ...form, duration_months: e.target.value })}
             >
               <option value="" disabled>Select duration...</option>
-              <option value="6">6 Months</option>
-              <option value="12">12 Months</option>
-              <option value="18">18 Months</option>
-              <option value="24">24 Months</option>
+              {(() => {
+                // If loan type is installments (id === '1'), only allow 4 months.
+                // Otherwise (goods or other), allow 6, 12, 24 months as requested.
+                const durations = form.loan_type === '1' ? [4] : [6, 12, 24];
+                return durations.map((d) => (
+                  <option key={d} value={String(d)}>{d} Months</option>
+                ));
+              })()}
             </select>
           </div>
 

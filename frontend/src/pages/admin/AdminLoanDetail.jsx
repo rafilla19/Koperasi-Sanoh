@@ -16,6 +16,8 @@ const AdminLoanDetail = () => {
   const [isEditingTerm, setIsEditingTerm] = useState(false);
   const [isEditingInterest, setIsEditingInterest] = useState(false);
   const [isEditingAmount, setIsEditingAmount] = useState(false);
+  const [proofFile, setProofFile] = useState(null);
+  const [proofFileName, setProofFileName] = useState('');
 
   const resolveDocumentUrl = (filePath) => {
     if (!filePath) return '';
@@ -79,7 +81,11 @@ const AdminLoanDetail = () => {
       alert('Silakan isi catatan keputusan sebelum menyetujui pinjaman.');
       return;
     }
-    if (!window.confirm('Are you sure you want to approve this loan?')) return;
+    if (!proofFile) {
+      alert('Silakan unggah bukti transfer sebelum menyetujui pinjaman.');
+      return;
+    }
+    if (!window.confirm('Apakah Anda yakin ingin menyetujui pinjaman ini?')) return;
     
     try {
       // Get admin_id from user in localStorage
@@ -87,36 +93,38 @@ const AdminLoanDetail = () => {
       const user = userStr ? JSON.parse(userStr) : null;
       const adminId = user?.id || 1;
 
+      const formData = new FormData();
+      formData.append('repayment_term', repaymentTerm);
+      formData.append('interest_rate', interestRate);
+      formData.append('amount_requested', amountRequested);
+      formData.append('admin_id', adminId);
+      formData.append('reason', rejectReason.trim());
+      formData.append('proof_of_transfer', proofFile);
+
       const response = await fetch(apiUrl(`/loan/loan-applications/${id}/approve/`), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          repayment_term: repaymentTerm,
-          interest_rate: interestRate,
-          amount_requested: amountRequested,
-          admin_id: adminId
-        })
+        body: formData
       });
       
       const data = await response.json();
       if (response.ok) {
-        alert(data.message);
+        alert(data.message || 'Pinjaman berhasil disetujui');
         navigate('/dashboard/admin/ls-loans');
       } else {
-        alert(data.error || 'Failed to approve');
+        alert(data.error || 'Gagal menyetujui pinjaman');
       }
     } catch (err) {
       console.error(err);
-      alert('Failed to approve loan');
+      alert('Gagal menyetujui pinjaman');
     }
   };
 
   const handleReject = async () => {
     if (isDecisionLocked) {
-      alert('Please provide a reason for rejection in the decision notes');
+      alert('Silakan isi catatan keputusan sebelum menolak pinjaman');
       return;
     }
-    if (!window.confirm('Are you sure you want to reject this application?')) return;
+    if (!window.confirm('Apakah Anda yakin ingin menolak pengajuan ini?')) return;
 
     try {
       // Get admin_id from user in localStorage
@@ -135,18 +143,18 @@ const AdminLoanDetail = () => {
       
       const data = await response.json();
       if (response.ok) {
-        alert(data.message);
+        alert(data.message || 'Pinjaman berhasil ditolak');
         navigate('/dashboard/admin/ls-loans');
       } else {
-        alert(data.error || 'Failed to reject');
+        alert(data.error || 'Gagal menolak pinjaman');
       }
     } catch (err) {
       console.error(err);
-      alert('Failed to reject loan');
+      alert('Gagal menolak pinjaman');
     }
   };
 
-  if (!detail) return <div style={{ padding: '24px' }}>Loading...</div>;
+  if (!detail) return <div style={{ padding: '24px' }}>Memuat...</div>;
 
   const formatRupiah = (number) => {
     return new Intl.NumberFormat('id-ID', {
@@ -159,17 +167,17 @@ const AdminLoanDetail = () => {
   const formatDate = (dateString) => {
     if (!dateString) return '';
     const date = new Date(dateString);
-    return date.toLocaleString('en-US', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleString('id-ID', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
   return (
     <div className="admin-loan-detail">
       <div className="aldet-header-area">
         <div className="aldet-header-left">
-          <h1>Loan Details</h1>
-          <span className="aldet-badge active">Pending</span>
+          <h1>Detail Pinjaman</h1>
+          <span className="aldet-badge active">Menunggu</span>
         </div>
-        <p className="aldet-submitted">Submitted on {formatDate(detail.applied_at)}</p>
+        <p className="aldet-submitted">Diajukan pada {formatDate(detail.applied_at)}</p>
       </div>
 
       <div className="aldet-profile-card">
@@ -190,7 +198,7 @@ const AdminLoanDetail = () => {
           </div>
         </div>
         <button className="aldet-view-profile-btn" onClick={handleProfileClick}>
-          View profile
+          Lihat profil
         </button>
       </div>
 
@@ -200,7 +208,7 @@ const AdminLoanDetail = () => {
           <div className="aldet-loan-info-grid">
             <div className="aldet-info-box">
               <div className="aldet-ib-header">
-                <div className="aldet-ib-label">Amount Requested</div>
+                <div className="aldet-ib-label">Jumlah Pinjaman</div>
                 <button className="aldet-edit-btn" onClick={() => setIsEditingAmount(!isEditingAmount)}>
                   <Edit2 size={14} />
                 </button>
@@ -221,16 +229,16 @@ const AdminLoanDetail = () => {
                 <div className="aldet-ib-value lg">{formatRupiah(amountRequested)}</div>
               )}
 
-              <div className="aldet-ib-label mt">Loan Type</div>
-              <div className="aldet-ib-value">{detail.loan_type_name || 'N/A'}</div>
+              <div className="aldet-ib-label mt">Jenis Pinjaman</div>
+              <div className="aldet-ib-value">{detail.loan_type_name || 'Tidak ada'}</div>
               
-              <div className="aldet-ib-label mt">Purpose</div>
-              <div className="aldet-ib-value">{detail.purpose}</div>
+              <div className="aldet-ib-label mt">Tujuan Pinjaman</div>
+              <div className="aldet-ib-value">{detail.purpose || 'Tidak ada'}</div>
             </div>
 
             <div className="aldet-info-box">
               <div className="aldet-ib-header">
-                <div className="aldet-ib-label">Repayment Term</div>
+                <div className="aldet-ib-label">Jangka Waktu Cicilan</div>
                 <button className="aldet-edit-btn" onClick={() => setIsEditingTerm(!isEditingTerm)}>
                   <Edit2 size={14} />
                 </button>
@@ -243,10 +251,10 @@ const AdminLoanDetail = () => {
                     onChange={(e) => setRepaymentTerm(e.target.value)}
                     className="aldet-input"
                   />
-                  <span>Bulan</span>
+                  <span>bulan</span>
                 </div>
               ) : (
-                <div className="aldet-ib-value mb">{repaymentTerm} Bulan</div>
+                <div className="aldet-ib-value mb">{repaymentTerm} bulan</div>
               )}
 
               <div className="aldet-ib-header mt">
@@ -255,7 +263,7 @@ const AdminLoanDetail = () => {
                   <Edit2 size={14} />
                 </button>
               </div>
-              <div className="aldet-ib-recommend">AI Recommended: {aiSuggestion?.suggested_interest_rate || '0.5'}%</div>
+              <div className="aldet-ib-recommend">Rekomendasi: {aiSuggestion?.suggested_interest_rate || '0.5'}%</div>
               {isEditingInterest ? (
                 <div className="aldet-edit-row">
                   <input
@@ -265,41 +273,67 @@ const AdminLoanDetail = () => {
                     onChange={(e) => setInterestRate(e.target.value)}
                     className="aldet-input"
                   />
-                  <span>%/Month(Flat)</span>
+                  <span>%/bulan (flat)</span>
                 </div>
               ) : (
-                <div className="aldet-ib-value">{interestRate}%/Month(Flat)</div>
+                <div className="aldet-ib-value">{interestRate}%/bulan (flat)</div>
               )}
             </div>
           </div>
 
           <div className="aldet-risk">
-            <span className="aldet-risk-label">AI Eligibility Rating</span>
+            <span className="aldet-risk-label">Kelayakan Pinjaman</span>
             <span className={`aldet-risk-val ${aiSuggestion?.eligibility?.toLowerCase() || 'low'}`}>
-              {aiSuggestion?.eligibility || 'Calculating...'}
+              {aiSuggestion?.eligibility || 'Sedang dihitung...'}
             </span>
             {aiSuggestion && (
-              <span className="aldet-risk-conf">Confidence: {aiSuggestion.confidence_score}%</span>
+              <span className="aldet-risk-conf">Keyakinan: {aiSuggestion.confidence_score}%</span>
             )}
           </div>
 
           <div className="aldet-decision">
-            <h3 className="aldet-section-title">Admin Decision</h3>
+            <h3 className="aldet-section-title">Catatan Keputusan Admin</h3>
             <textarea 
-              placeholder="Type rejection reason or notes here" 
+              placeholder="Tulis catatan penolakan atau catatan keputusan di sini"
               className="aldet-textarea"
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}
             ></textarea>
             {isDecisionLocked && (
               <div style={{ marginTop: '8px', color: '#b91c1c', fontSize: '13px' }}>
-                Catatan keputusan diperlukan untuk menyetujui atau menolak.
+                Catatan keputusan wajib diisi sebelum menyetujui atau menolak.
               </div>
             )}
           </div>
 
           <div className="aldet-upload">
-            <h3 className="aldet-section-title">Document Slip Gaji</h3>
+            <h3 className="aldet-section-title">Bukti Transfer</h3>
+            <label className="aldet-dropzone" htmlFor="proof_of_transfer_input">
+              <UploadCloud size={30} color="#4f7df3" />
+              <strong>Unggah bukti transfer</strong>
+              <p>Format PNG, JPG, JPEG, atau PDF. File akan disimpan ke bucket loan/bukti_transfer.</p>
+              <span style={{ fontSize: 13, fontWeight: 600, color: '#4f7df3' }}>Klik untuk memilih file</span>
+            </label>
+            <input
+              id="proof_of_transfer_input"
+              type="file"
+              accept="image/*,.pdf"
+              onChange={(e) => {
+                const file = e.target.files?.[0] || null;
+                setProofFile(file);
+                setProofFileName(file ? file.name : '');
+              }}
+              style={{ display: 'none' }}
+            />
+            {proofFileName && (
+              <div style={{ marginTop: 10, fontSize: 13, color: '#4b5563', fontWeight: 600 }}>
+                File terpilih: {proofFileName}
+              </div>
+            )}
+          </div>
+
+          <div className="aldet-upload">
+            <h3 className="aldet-section-title">Dokumen Slip Gaji</h3>
             <div className="aldet-doc-preview" style={{ marginBottom: '24px' }}>
               {detail.salary_statement_file ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', background: '#fcfcfc', border: '1px dashed #cbd5e1', borderRadius: '8px' }}>
@@ -312,21 +346,21 @@ const AdminLoanDetail = () => {
                       rel="noopener noreferrer"
                       style={{ fontSize: '13px', color: '#4f7df3', textDecoration: 'none' }}
                     >
-                      Click to view document
+                      Klik untuk melihat dokumen
                     </a>
                   </div>
                 </div>
               ) : (
                 <div style={{ padding: '16px', color: '#666', background: '#fcfcfc', border: '1px dashed #cbd5e1', borderRadius: '8px', textAlign: 'center' }}>
-                  No document uploaded
+                  Belum ada dokumen yang diunggah
                 </div>
               )}
             </div>
           </div>
 
           <div className="aldet-actions">
-            <button className="aldet-action-btn reject" onClick={handleReject} disabled={isDecisionLocked} aria-disabled={isDecisionLocked}>REJECT</button>
-            <button className="aldet-action-btn approve" onClick={handleApprove} disabled={isDecisionLocked} aria-disabled={isDecisionLocked}>APPROVE</button>
+            <button className="aldet-action-btn reject" onClick={handleReject} disabled={isDecisionLocked} aria-disabled={isDecisionLocked}>TOLAK</button>
+            <button className="aldet-action-btn approve" onClick={handleApprove} disabled={isDecisionLocked || !proofFile} aria-disabled={isDecisionLocked || !proofFile}>SETUJUI</button>
           </div>
         </div>
       </div>

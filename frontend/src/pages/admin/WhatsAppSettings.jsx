@@ -5,6 +5,11 @@ import './WhatsAppSettings.css';
 const EMPTY_FORM = { label: '', message: '', sort_order: 0, is_active: true };
 
 export default function WhatsAppSettings() {
+  const [email, setEmail]           = useState('');
+  const [editEmail, setEditEmail]   = useState('');
+  const [editingEmail, setEditingEmail] = useState(false);
+  const [savingEmail, setSavingEmail]   = useState(false);
+
   const [phone, setPhone]           = useState('');
   const [editPhone, setEditPhone]   = useState('');
   const [editingPhone, setEditingPhone] = useState(false);
@@ -36,6 +41,8 @@ export default function WhatsAppSettings() {
       fetch(apiUrl('/whatsapp/questions/')).then(r => r.json()),
     ])
       .then(([cfg, qs]) => {
+        setEmail(cfg.email || '');
+        setEditEmail(cfg.email || '');
         setPhone(cfg.phone_number || '');
         setEditPhone(cfg.phone_number || '');
         setQuestions(Array.isArray(qs) ? qs : []);
@@ -47,6 +54,35 @@ export default function WhatsAppSettings() {
   useEffect(() => { fetchAll(); }, []);
 
   // ── Phone ────────────────────────────────────────────────────────
+  const handleSaveEmail = async () => {
+    if (!editEmail.trim()) return;
+    setSavingEmail(true);
+    try {
+      const res = await fetch(apiUrl('/whatsapp/config/'), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: editEmail.trim() }),
+      }).then(r => r.json());
+      setEmail(res.email || '');
+      setEditingEmail(false);
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        try {
+          const user = JSON.parse(userStr);
+          user.email = res.email || editEmail.trim();
+          localStorage.setItem('user', JSON.stringify(user));
+        } catch {
+          // ignore localStorage parse issues
+        }
+      }
+      showToast('success', 'Email admin berhasil diperbarui');
+    } catch {
+      showToast('error', 'Gagal memperbarui email');
+    } finally {
+      setSavingEmail(false);
+    }
+  };
+
   const handleSavePhone = async () => {
     if (!editPhone.trim()) return;
     setSavingPhone(true);
@@ -147,8 +183,8 @@ export default function WhatsAppSettings() {
             </svg>
           </span>
           <div>
-            <h2>Pengaturan WhatsApp</h2>
-            <p>Kelola nomor admin dan daftar pertanyaan yang muncul di tombol chat member</p>
+            <h2>Pengaturan</h2>
+            <p>Kelola email dan nomor admin serta daftar pertanyaan yang muncul di tombol chat member</p>
           </div>
         </div>
       </div>
@@ -157,44 +193,87 @@ export default function WhatsAppSettings() {
         <div className="wa-loading">Memuat data...</div>
       ) : (
         <>
-          {/* ── Phone Number Card ── */}
-          <div className="wa-card">
-            <div className="wa-card-head">
-              <h3>Nomor WhatsApp Admin</h3>
-              <span className="wa-card-sub">Nomor ini yang akan dihubungi member saat klik tombol chat</span>
+          <div className="wa-top-grid">
+            {/* ── Email Card ── */}
+            <div className="wa-card wa-card--highlight">
+              <div className="wa-card-head">
+                <div className="wa-card-eyebrow">Admin Access</div>
+                <h3>Email Admin</h3>
+                <span className="wa-card-sub">Email ini dipakai sebagai akun admin utama dan bisa diubah di sini</span>
+              </div>
+
+              {editingEmail ? (
+                <div className="wa-phone-edit">
+                  <div className="wa-phone-hint">Gunakan email aktif yang valid</div>
+                  <div className="wa-phone-row">
+                    <input
+                      className="wa-input"
+                      type="email"
+                      value={editEmail}
+                      onChange={e => setEditEmail(e.target.value)}
+                      placeholder="admin@koperasi.com"
+                    />
+                    <button className="wa-btn wa-btn--primary" onClick={handleSaveEmail} disabled={savingEmail}>
+                      {savingEmail ? 'Menyimpan...' : 'Simpan'}
+                    </button>
+                    <button className="wa-btn wa-btn--ghost" onClick={() => { setEditEmail(email); setEditingEmail(false); }}>
+                      Batal
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="wa-phone-display">
+                  <div className="wa-phone-value">
+                    <span className="wa-phone-badge">@</span>
+                    <span className="wa-value-text">{email || '—'}</span>
+                  </div>
+                  <button className="wa-btn wa-btn--outline" onClick={() => setEditingEmail(true)}>
+                    Edit Email
+                  </button>
+                </div>
+              )}
             </div>
 
-            {editingPhone ? (
-              <div className="wa-phone-edit">
-                <div className="wa-phone-hint">Format: 62xxxxxxxxxx (tanpa + atau tanda hubung)</div>
-                <div className="wa-phone-row">
-                  <span className="wa-phone-prefix">+</span>
-                  <input
-                    className="wa-input"
-                    value={editPhone}
-                    onChange={e => setEditPhone(e.target.value.replace(/\D/g, ''))}
-                    placeholder="6281234567890"
-                    maxLength={15}
-                  />
-                  <button className="wa-btn wa-btn--primary" onClick={handleSavePhone} disabled={savingPhone}>
-                    {savingPhone ? 'Menyimpan...' : 'Simpan'}
-                  </button>
-                  <button className="wa-btn wa-btn--ghost" onClick={() => { setEditPhone(phone); setEditingPhone(false); }}>
-                    Batal
+            {/* ── Phone Number Card ── */}
+            <div className="wa-card">
+              <div className="wa-card-head">
+                <div className="wa-card-eyebrow wa-card-eyebrow--green">Communication</div>
+                <h3>Nomor WhatsApp Admin</h3>
+                <span className="wa-card-sub">Nomor ini yang akan dihubungi member saat klik tombol chat</span>
+              </div>
+
+              {editingPhone ? (
+                <div className="wa-phone-edit">
+                  <div className="wa-phone-hint">Format: 62xxxxxxxxxx (tanpa + atau tanda hubung)</div>
+                  <div className="wa-phone-row">
+                    <span className="wa-phone-prefix">+</span>
+                    <input
+                      className="wa-input"
+                      value={editPhone}
+                      onChange={e => setEditPhone(e.target.value.replace(/\D/g, ''))}
+                      placeholder="6281234567890"
+                      maxLength={15}
+                    />
+                    <button className="wa-btn wa-btn--primary" onClick={handleSavePhone} disabled={savingPhone}>
+                      {savingPhone ? 'Menyimpan...' : 'Simpan'}
+                    </button>
+                    <button className="wa-btn wa-btn--ghost" onClick={() => { setEditPhone(phone); setEditingPhone(false); }}>
+                      Batal
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="wa-phone-display">
+                  <div className="wa-phone-value">
+                    <span className="wa-phone-badge">WA</span>
+                    <span className="wa-value-text">+{phone || '—'}</span>
+                  </div>
+                  <button className="wa-btn wa-btn--outline" onClick={() => setEditingPhone(true)}>
+                    Edit Nomor
                   </button>
                 </div>
-              </div>
-            ) : (
-              <div className="wa-phone-display">
-                <div className="wa-phone-value">
-                  <span className="wa-phone-badge">WA</span>
-                  +{phone || '—'}
-                </div>
-                <button className="wa-btn wa-btn--outline" onClick={() => setEditingPhone(true)}>
-                  Edit Nomor
-                </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
 
           {/* ── Questions Card ── */}

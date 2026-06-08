@@ -1,5 +1,6 @@
 from rest_framework import viewsets, status as drf_status
 from rest_framework.decorators import action
+from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
 from django.db import connection, transaction
 from django.utils import timezone
@@ -233,13 +234,25 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response({'error': str(e)}, status=400)
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], parser_classes=[MultiPartParser, FormParser])
     def approve(self, request, pk=None):
         try:
             application = self.get_object()
             repayment_term = int(request.data.get('repayment_term', application.duration_months))
             interest_rate_percent = Decimal(str(request.data.get('interest_rate', '0.5')))
             updated_amount = Decimal(str(request.data.get('amount_requested', application.amount_requested)))
+            proof_file = request.FILES.get('proof_of_transfer')
+
+            if not proof_file:
+                return Response({'error': 'Bukti transfer wajib diunggah untuk menyetujui pinjaman.'}, status=400)
+
+            safe_name = os.path.basename(proof_file.name or 'proof_of_transfer')
+            safe_name = safe_name.replace(' ', '_')
+            storage_path = f"loan/bukti_transfer/{timezone.now():%Y%m%d_%H%M%S}_{uuid4().hex}_{safe_name}"
+            saved_path = default_storage.save(storage_path, proof_file)
+            proof_of_transfer = default_storage.url(saved_path)
+            if not str(proof_of_transfer).startswith('http'):
+                proof_of_transfer = get_absolute_media_url(request, saved_path)
             
             with transaction.atomic():
                 # 1. Update Application, Create Loan, and Generate Installments via Stored Procedure
@@ -255,7 +268,7 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
 
                 with connection.cursor() as cursor:
                     cursor.execute(
-                        "CALL public.sp_loan_approve(%s, %s, %s, %s, %s, %s)",
+                        "CALL public.sp_loan_approve(%s, %s, %s, %s, %s, %s, %s)",
                         [
                             application.id,
                             repayment_term,
@@ -263,6 +276,7 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
                             updated_amount,
                             admin_user_id,
                             reason,
+                            proof_of_transfer,
                         ]
                     )
                 
@@ -309,7 +323,7 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
                 except Exception as e:
                     print(f"ML Training failed: {str(e)}")
                 
-            return Response({'message': 'Loan approved and installments generated successfully'})
+            return Response({'message': 'Pinjaman berhasil disetujui dan cicilan berhasil dibuat'})
         except Exception as e:
             return Response({'error': str(e)}, status=400)
 
@@ -353,7 +367,7 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
             except Exception as e:
                 print(f"Failed to send member rejection notification: {str(e)}")
 
-            return Response({'message': 'Loan application rejected', 'admin_id_updated': admin_user_id})
+            return Response({'message': 'Pengajuan pinjaman berhasil ditolak', 'admin_id_updated': admin_user_id})
         except Exception as e:
             return Response({'error': str(e)}, status=400)
 
