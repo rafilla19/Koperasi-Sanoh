@@ -613,6 +613,7 @@ class LoanViewSet(viewsets.ModelViewSet):
             l.status_id,
             l.remaining_balance,
             l.principal_amount,
+            l.start_date,
             la.purpose,
             la.admin_update,
             la.salary_statement_file,
@@ -668,6 +669,7 @@ class LoanViewSet(viewsets.ModelViewSet):
             l.status_id,
             l.remaining_balance,
             l.principal_amount,
+            l.start_date,
             la.purpose,
             la.admin_update,
             la.salary_statement_file,
@@ -1399,6 +1401,31 @@ class LoanViewSet(viewsets.ModelViewSet):
 
                 UNION ALL
 
+                            
+                ----------------------------------------------------------------
+                -- SHU DISTRIBUTION
+                ----------------------------------------------------------------
+                SELECT
+                    w.paid_at AS transaction_date,
+                    m.full_name,
+                    'SHU DISTRIBUTION' AS transaction_type,
+                    'MANUAL TRANSFER' AS payment_method,
+                    w.total_shu AS amount,
+                    s.status_code AS status,
+                    w.tf_reference_id AS reference_number
+
+                FROM shu_member_distributions w
+
+                INNER JOIN members m
+                    ON m.id = w.member_id
+
+                INNER JOIN statuses s
+                    ON s.id = w.status
+
+                WHERE w.distributed_status = TRUE
+            
+                UNION ALL
+
 
                 ----------------------------------------------------------------
                 -- LOAN PAYMENTS
@@ -2022,12 +2049,32 @@ class LoanViewSet(viewsets.ModelViewSet):
             cursor.execute(overdue_query, [period_due_date])
             overdue_row = cursor.fetchone()
             overdue = overdue_row[0] if overdue_row and overdue_row[0] else 0
+
+            # Get monthly funding limit (most recent active setting)
+            cursor.execute("SELECT monthly_limit FROM loan_funding_settings WHERE is_active = TRUE ORDER BY effective_date DESC LIMIT 1")
+            ml_row = cursor.fetchone()
+            monthly_limit = float(ml_row[0]) if ml_row and ml_row[0] is not None else 0.0
+
+            # Sum principal_amount of loans that started in the selected month/year and are active (status_id = 25)
+            cursor.execute(
+                "SELECT COALESCE(SUM(principal_amount),0) FROM loans WHERE EXTRACT(YEAR FROM start_date) = %s AND EXTRACT(MONTH FROM start_date) = %s AND status_id = 25",
+                [sel_year, sel_month]
+            )
+            alloc_row = cursor.fetchone()
+            allocated = float(alloc_row[0]) if alloc_row and alloc_row[0] is not None else 0.0
+
+            remaining_allocation = monthly_limit - allocated
+            if remaining_allocation < 0:
+                remaining_allocation = 0.0
             
         return Response({
             'total_members': total_members,
             'active_loans': active_loans,
             'collected_this_month': collected,
-            'total_overdue': overdue
+            'total_overdue': overdue,
+            'monthly_limit': monthly_limit,
+            'allocated_this_month': allocated,
+            'remaining_allocation': remaining_allocation
         })
 
     @action(detail=False, methods=['post'])
@@ -3245,6 +3292,21 @@ class LoanViewSet(viewsets.ModelViewSet):
             loan_params.append(end_date)
         loan_q = " ".join(loan_parts)
 
+        shu_parts = [
+            "SELECT w.paid_at AS transaction_date, 'SHU DISTRIBUTION' AS transaction_type, w.total_shu AS amount, s.status_code AS status, w.tf_reference_id AS reference",
+            "FROM shu_member_distributions w",
+            "INNER JOIN statuses s ON s.id = w.status",
+            "WHERE w.distributed_status = TRUE AND w.member_id = %s"
+        ]
+        shu_params = [member_id]
+        if start_date:
+            shu_parts.append("AND w.paid_at >= %s")
+            shu_params.append(start_date)
+        if end_date:
+            shu_parts.append("AND w.paid_at <= %s")
+            shu_params.append(end_date)
+        shu_q = " ".join(shu_parts)
+
         queries = []
         params = []
 
@@ -3259,6 +3321,10 @@ class LoanViewSet(viewsets.ModelViewSet):
         if tx_type == 'all' or tx_type == 'loan':
             queries.append(loan_q)
             params.extend(loan_params)
+
+        if tx_type == 'all' or tx_type == 'shu_distribution':
+            queries.append(shu_q)
+            params.extend(shu_params)
 
         if tx_type in ['mandatory', 'voluntary', 'principal']:
             if tx_type == 'mandatory': st_name = 'MANDATORY'

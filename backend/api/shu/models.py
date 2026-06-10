@@ -102,6 +102,7 @@ class ShuMemberDistributionsMonthly(models.Model):
     member = models.ForeignKey(Members, models.DO_NOTHING)
     total_savings = models.DecimalField(max_digits=20, decimal_places=2, default=0)
     total_shu = models.DecimalField(max_digits=20, decimal_places=2, default=0)
+    distributed_status = models.BooleanField(default=False)
     created_at = models.DateTimeField(blank=True, null=True)
     updated_at = models.DateTimeField(blank=True, null=True)
 

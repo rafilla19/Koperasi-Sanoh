@@ -135,7 +135,7 @@ const DashboardHome = () => {
           fetch(apiUrl(`/loan/loans/dashboard_summary/?member_id=${memberId}`)),
           fetch(url),
           fetch(apiUrl('/loan/loans/payment_channels/')),
-          fetch(apiUrl(`/v1/my-shu/analytics/?member_id=${memberId}`))
+          fetch(apiUrl(`/my-shu/analytics/?member_id=${memberId}`))
         ]);
 
         const summaryData = await summaryRes.json();
@@ -805,6 +805,7 @@ const DashboardHome = () => {
             <option value="deposit">Deposit</option>
             <option value="loan">Loan Installment</option>
             <option value="withdrawal">Withdrawals</option>
+            <option value="shu_distribution">SHU Distribution</option>
           </select>
 
           <span className="filter-strip-label">Date</span>

@@ -11,7 +11,7 @@
   --dl-txt3: #7A90B0;
   --sidebar-w: 260px;
   --hdr-h: 68px;
-  --font-h: 'Syne', sans-serif;
+  --font-h: var(--font-family);
   --font-b: 'DM Sans', sans-serif;
 }
 

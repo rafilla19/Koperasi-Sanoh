@@ -401,10 +401,10 @@ const LoanDetails = () => {
         {status !== 'Rejected' && (
           <span className="ld-date">
             {status === 'Completed' ? 
-              `Start on ${formatDateTime(loanData?.admin_update)} - End on ${formatDateTime(loanData?.last_payment_date)}` : 
+              `Start on ${formatDate(loanData?.start_date || loanData?.admin_update)} - End on ${formatDate(loanData?.last_payment_date)}` : 
               status === 'Pending' ? 
               `Applied at ${formatDateTime(loanData?.applied_at)}` :
-              `Start on ${formatDateTime(loanData?.admin_update)}`}
+              `Start on ${formatDate(loanData?.start_date || loanData?.admin_update)}`}
           </span>
         )}
         {!isPendingOrRejected && (
@@ -577,7 +577,7 @@ const LoanDetails = () => {
                   <th>NO.</th>
                   <th>DUE DATE</th>
                   <th>AMOUNT PRINCIPLE</th>
-                  <th>AMOUNT INSTALLMENT</th>
+                  <th>AMOUNT INTEREST</th>
                   <th>TOTAL PAYMENT</th>
                   <th>STATUS</th>
                 </tr>

@@ -182,10 +182,7 @@ const MyProfile = () => {
       return;
     }
 
-    if (!isValidated) {
-      alert("You have modified your bank account details. Please verify your bank account first before saving.");
-      return;
-    }
+    // Removed mandatory bank validation as requested
     
     const selectedBankObj = banks.find(b => b.bank_name === profile.destBank);
     const bankId = selectedBankObj ? selectedBankObj.id : profile.bankId;
@@ -331,10 +328,10 @@ const MyProfile = () => {
               <input 
                 type="text" 
                 className="prof-input" 
-                placeholder={isEditing ? "Will be auto-populated upon verification" : "Account holder name"} 
+                placeholder="Account holder name" 
                 value={profile.accName} 
-                disabled={true} 
-                style={{ backgroundColor: '#f8fafc', cursor: 'not-allowed' }} 
+                onChange={e => setProfile({...profile, accName: e.target.value})}
+                disabled={!isEditing} 
               />
             </div>
             <div className="inp-group">
@@ -349,7 +346,7 @@ const MyProfile = () => {
                   onChange={e => { setProfile({...profile, accNo: e.target.value, accName: ''}); setIsValidated(false); }} 
                   disabled={!isEditing} 
                 />
-                {isEditing && (
+                {/* {isEditing && (
                   <button 
                     type="button" 
                     onClick={handleVerifyAccount} 
@@ -370,15 +367,11 @@ const MyProfile = () => {
                       transition: 'all 0.2s'
                     }}
                   >
-                    {isValidating ? 'Checking...' : (isValidated ? 'Verified ✓' : 'Verify')}
+                    {isValidating ? 'Checking...' : (isValidated ? 'Verified' : 'Verify')}
                   </button>
-                )}
+                )} */}
               </div>
-              {!isValidated && isEditing && (
-                <span style={{ fontSize: '11px', color: '#ef4444', marginTop: '4px', display: 'block' }}>
-                  Please verify your bank details before saving.
-                </span>
-              )}
+              {/* Validation warning removed */}
             </div>
             <div className="inp-group" style={{ marginTop: '24px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

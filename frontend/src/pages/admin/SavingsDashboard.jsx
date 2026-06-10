@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { apiUrl } from "../../services/api";
+import { apiUrl, getAuthHeaders } from "../../services/api";
 import "./SavingsDashboard.css";
 import SavingsTabNav from "../../components/SavingsTabNav";
 import {
@@ -60,7 +60,7 @@ export default function SavingsDashboard() {
 
   useEffect(() => {
     setLoadingAnalytics(true);
-    fetch(apiUrl(`/admin/savings/analytics/?months=${trendPeriod}`))
+    fetch(apiUrl(`/admin/savings/analytics/?months=${trendPeriod}`), { headers: getAuthHeaders() })
       .then(r => r.ok ? r.json() : null)
       .then(data => setAnalytics(data))
       .catch(() => setAnalytics(null))
@@ -251,11 +251,12 @@ export default function SavingsDashboard() {
 
         <div className="analytics-cards">
           {[
-            { label: 'Total Anggota', key: 'total_members', icon: '👥', bg: '#dbeafe', color: '#2563eb', format: (v) => v },
+            // { label: 'Total Anggota', key: 'total_members', icon: '👥', bg: '#dbeafe', color: '#2563eb', format: (v) => v },
             { label: 'Total Simp. Wajib', key: 'total_wajib', icon: '💳', bg: '#dcfce7', color: '#16a34a', format: formatRupiah },
             { label: 'Total Simp. Sukarela', key: 'total_sukarela', icon: '📊', bg: '#fef9c3', color: '#ca8a04', format: formatRupiah },
             { label: 'Total Simp. Pokok', key: 'total_pokok', icon: '🏦', bg: '#f3e8ff', color: '#9333ea', format: formatRupiah },
             { label: 'Total Penarikan', key: 'total_withdrawal', icon: '📤', bg: '#fee2e2', color: '#dc2626', format: formatRupiah },
+            { label: 'Balance Saving Used', key: 'remaining_saving_used', icon: '💸', bg: '#eef2ff', color: '#1e40af', format: formatRupiah },
           ].map(({ label, key, icon, bg, color, format }) => (
             <div className="analytics-card" key={key}>
               <span className="analytics-icon" style={{ background: bg, color }}>{icon}</span>

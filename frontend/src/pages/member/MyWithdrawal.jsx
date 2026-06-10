@@ -73,7 +73,7 @@ export default function MyWithdrawalDetail() {
           Penarikan #{data.id}
         </p>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-          <h2 style={{ margin: 0, fontSize: 28, fontWeight: 800, color: '#0A1628', fontFamily: 'Syne, sans-serif' }}>
+          <h2 style={{ margin: 0, fontSize: 28, fontWeight: 800, color: '#0A1628', fontFamily: 'var(--font-family)' }}>
             Rp {fmt(data.amount)},00
           </h2>
           <span style={{ background: status.bg, color: status.color, padding: '6px 14px', borderRadius: 99, fontSize: 12, fontWeight: 700 }}>

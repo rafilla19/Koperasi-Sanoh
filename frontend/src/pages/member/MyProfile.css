@@ -29,7 +29,7 @@
 }
 
 .prof-header h1 {
-  font-family: var(--font-h, 'Outfit', 'Syne', sans-serif);
+  font-family: var(--font-family);
   font-size: 32px;
   font-weight: 800;
   color: #0A1628;
@@ -148,7 +148,7 @@
 }
 
 .pb-name {
-  font-family: var(--font-h, 'Outfit', 'Syne', sans-serif);
+  font-family: var(--font-family);
   font-size: 36px;
   font-weight: 900;
   margin: 0 0 28px 0;
@@ -455,7 +455,7 @@ textarea.prof-input {
 
 .closure-text h3 {
   margin: 0 0 6px 0;
-  font-family: var(--font-h, 'Outfit', 'Syne', sans-serif);
+  font-family: var(--font-family);
   font-size: 17px;
   font-weight: 800;
   color: #9F1239;
@@ -549,7 +549,7 @@ textarea.prof-input {
 }
 
 .cm-header h2 {
-  font-family: var(--font-h, 'Outfit', 'Syne', sans-serif);
+  font-family: var(--font-family);
   font-size: 22px;
   font-weight: 800;
   color: #0A1628;
@@ -613,7 +613,7 @@ textarea.prof-input {
 }
 
 .cm-card h4 {
-  font-family: var(--font-h, 'Outfit', 'Syne', sans-serif);
+  font-family: var(--font-family);
   font-size: 15px;
   margin: 0 0 14px 0;
   font-weight: 800;

@@ -107,6 +107,7 @@ const MemberDetail = () => {
     try {
       const payload = new FormData();
       payload.append('full_name', formData.full_name || '');
+      payload.append('nik_employee', formData.nik_employee || '');
       payload.append('phone_number', formData.phone_number || '');
       payload.append('email', formData.email || '');
       payload.append('address', formData.address || '');
@@ -155,12 +156,13 @@ const MemberDetail = () => {
     setIsEditing(false);
   };
 
-  const formatRupiah = (number) => {
+  const formatRupiah = (number, decimals = 0) => {
     return new Intl.NumberFormat('id-ID', {
       style: 'currency',
       currency: 'IDR',
-      minimumFractionDigits: 0
-    }).format(number || 0).replace(',00', '');
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals
+    }).format(number || 0);
   };
 
   const formatDate = (dateString) => {
@@ -242,7 +244,7 @@ const MemberDetail = () => {
           <div className="md-user-text">
             <h2>{profile.full_name}</h2>
             <div className="md-user-subfields">
-              <span className="nik-badge">{profile.nik_employee || 'Tidak ada NIK'}</span>
+              {/* <span className="nik-badge">{profile.nik_employee || 'Tidak ada NIK'}</span> */}
               <span className="separator">•</span>
               <span className="join-date-meta">Bergabung sejak {formatDate(profile.join_date)}</span>
             </div>
@@ -271,6 +273,20 @@ const MemberDetail = () => {
                 />
               ) : (
                 <div className="md-value-box text-bold">{profile.full_name || '-'}</div>
+              )}
+            </div>
+
+            <div className="md-form-group">
+              <label className="lbl">NIK Employee</label>
+              {isEditing ? (
+                <input
+                  type="text"
+                  className="md-input"
+                  value={formData.nik_employee  || ''}
+                  onChange={(e) => handleInputChange('nik_employee', e.target.value)}
+                />
+              ) : (
+                <div className="md-value-box text-bold">{profile.nik_employee || '-'}</div>
               )}
             </div>
 
@@ -569,7 +585,7 @@ const MemberDetail = () => {
               <label className="lbl">Current SHU</label>
               <div className="md-finance-badge obligation-vol">
                 <span className="currency-label">Rp</span>
-                <span className="balance-value">{formatRupiah(profile.current_shu || profile.accrued_shu || 0).replace('Rp', '').trim()}</span>
+                <span className="balance-value">{formatRupiah(profile.current_shu || profile.accrued_shu || 0, 2).replace('Rp', '').trim()}</span>
               </div>
             </div>
 

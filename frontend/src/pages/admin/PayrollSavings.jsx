@@ -416,7 +416,7 @@ const PayrollSavings = () => {
             <span className="pl-page-info">Page {currentPage} of {totalPages} · {filteredData.length} total records</span>
             <div className="pl-page-btns">
               <button className="pl-page-btn" disabled={currentPage===1} onClick={() => setCurrentPage(p=>p-1)}><ChevronLeft size={16} /></button>
-              {Array.from({length: totalPages }, (_, i)=>i+1).filter(p=>p===1||p===totalPages||Math.abs(p-currentPage)<=1).reduce((acc,p,idx,arr)=>{ if(idx>0 && arr[idx-1]!==p-1) acc.push('...'); acc.push(p); return acc; },[]).map((p,i)=> typeof p==='string' ? <span key={i} className="pl-page-ellipsis">…</span> : <button key={p} className={`pl-page-btn ${currentPage===p?'active':''}`} disabled={currentPage===p} onClick={()=>setCurrentPage(p)}>{p}</button>)}
+              {Array.from({length: totalPages }, (_, i)=>i+1).filter(p=>p===1||p===totalPages||Math.abs(p-currentPage)<=1).reduce((acc,p,idx,arr)=>{ if(idx>0 && arr[idx-1]!==p-1) acc.push('...'); acc.push(p); return acc; },[]).map((p,i)=> typeof p==='string' ? <span key={`ellipsis-${i}`} className="pl-page-ellipsis">…</span> : <button key={p} className={`pl-page-btn ${currentPage===p?'active':''}`} disabled={currentPage===p} onClick={()=>setCurrentPage(p)}>{p}</button>)}
               <button className="pl-page-btn" disabled={currentPage===totalPages} onClick={() => setCurrentPage(p=>p+1)}><ChevronRight size={16} /></button>
             </div>
           </div>

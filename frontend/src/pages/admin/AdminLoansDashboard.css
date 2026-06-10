@@ -26,40 +26,63 @@
 
 .ald-stat-card {
   background: white;
-  border-radius: 12px;
-  padding: 16px;
+  border-radius: 16px;
+  padding: 18px 20px;
   flex: 1 1 calc(25% - 12px);
   min-width: 220px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  cursor: default;
+}
+
+.ald-stat-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.09);
 }
 
 .ald-stat-top {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
+  align-items: flex-start;
+  margin-bottom: 16px;
 }
 
 .ald-stat-title {
   font-size: 13px;
   font-weight: 600;
-  color: #333;
+  color: #64748b;
+  flex: 1;
+  padding-right: 8px;
+  line-height: 1.4;
 }
 
 .ald-stat-body {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+}
+
+.ald-stat-img img {
+  width: 36px;
+  height: 36px;
+  object-fit: cover;
+  border-radius: 8px;
 }
 
 .ald-stat-icon-wrapper {
-  background: #4f7df3;
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.ald-stat-card:hover .ald-stat-icon-wrapper {
+  transform: scale(1.08) rotate(-3deg);
 }
 
 .ald-stat-icon {
@@ -67,9 +90,10 @@
 }
 
 .ald-stat-value {
-  font-size: 18px;
-  font-weight: 700;
+  font-size: 20px;
+  font-weight: 800;
   color: #1a1a1a;
+  letter-spacing: -0.02em;
 }
 
 .ald-stat-trend {

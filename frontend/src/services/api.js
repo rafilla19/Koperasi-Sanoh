@@ -9,7 +9,7 @@ export const apiUrl = (path = '') => {
   return `${API_URL}${path.startsWith('/') ? '' : '/'}${path}`;
 };
 
-const getAuthHeaders = () => {
+export const getAuthHeaders = () => {
   try {
     const userStr = localStorage.getItem('user');
     if (!userStr) return {};

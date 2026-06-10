@@ -605,10 +605,17 @@ def admin_all_transactions(request):
 def admin_dashboard_overview(request):
     """
     Dashboard overview for admin home.
-    - total_assets: total SHU + total mandatory savings + total voluntary savings
+    - total_assets: interest_paid + mandatory_saving + admin_fee + SHU_portion
+        * interest_paid   : SUM(amount_interest) from paid loan installments (status_id=29)
+        * mandatory_saving: SUM(balance) from saving_wallets where saving_type_id=1
+        * admin_fee       : SUM(fee_admin) from loans with paid/settled status
+        * SHU_portion     : net_profit from latest shu_results × SUM of percentages
+                            from master_configurations where distributed_member=FALSE
+                            (Jasa Usaha, Dana Sosial, Dana Cadangan)
     - current_month_shu: SHU for current month
     - active_members: active users in users table
-    - pending_approvals: total count for pending registrations, close account requests, loan applications, withdrawal requests, voluntary saving requests
+    - pending_approvals: total count for pending registrations, close account requests,
+                         loan applications, withdrawal requests, voluntary saving requests
     """
     now = timezone.now()
     current_month = now.month
@@ -617,23 +624,12 @@ def admin_dashboard_overview(request):
         with connection.cursor() as cursor:
             cursor.execute(
                 """
-                SELECT
-                  COALESCE(SUM(CASE WHEN saving_type_id = 1 THEN balance ELSE 0 END), 0) AS total_mandatory,
-                  COALESCE(SUM(CASE WHEN saving_type_id = 2 THEN balance ELSE 0 END), 0) AS total_voluntary
+                SELECT COALESCE(SUM(balance), 0)
                 FROM saving_wallets
-                WHERE deleted_at IS NULL
+                WHERE saving_type_id = 1 AND deleted_at IS NULL
                 """
             )
-            total_mandatory, total_voluntary = cursor.fetchone()
-
-            cursor.execute(
-                """
-                SELECT COALESCE(SUM(total_shu), 0)
-                FROM shu_member_distributions
-                WHERE paid_at IS NULL
-                """
-            )
-            total_shu = cursor.fetchone()[0] or 0
+            total_mandatory = cursor.fetchone()[0] or 0
 
             cursor.execute(
                 """
@@ -648,7 +644,8 @@ def admin_dashboard_overview(request):
             )
             current_month_shu = cursor.fetchone()[0] or 0
 
-            cursor.execute("SELECT COUNT(*) FROM users WHERE is_active IS TRUE")
+            # Count members linked to active users (total anggota)
+            cursor.execute("SELECT COUNT(m.id) FROM members m INNER JOIN users u ON m.user_id = u.id WHERE u.is_active = TRUE")
             active_members = cursor.fetchone()[0] or 0
 
             cursor.execute(
@@ -809,18 +806,84 @@ def admin_dashboard_overview(request):
                     'link': '/dashboard/admin/voluntary-savings',
                 })
 
+            # ── NEW total_assets components ──────────────────────────────────────
+
+            # 1. Total Interest Paid
+            cursor.execute(
+                """
+                SELECT COALESCE(SUM(amount_interest), 0)
+                FROM loan_installments 
+                WHERE status_id IN (29,30)
+                """
+            )
+            total_interest_paid = cursor.fetchone()[0] or 0
+
+            # 2. Total Admin Fee
+            cursor.execute(
+                """
+                SELECT COALESCE(SUM(fee_admin), 0)
+                FROM loan_installments 
+                WHERE status_id IN (29,30)
+                """
+            )
+            total_admin_fee = cursor.fetchone()[0] or 0
+
+            # 3. Total Principle Saving
+            cursor.execute(
+                """
+                SELECT COALESCE(SUM(balance), 0)
+                FROM saving_wallets
+                WHERE saving_type_id = 3
+                """
+            )
+            total_principle_saving = cursor.fetchone()[0] or 0
+
+            # SHU Cooperative Portion is NO LONGER included in total_assets based on user request,
+            # but we keep the logic here if it's still needed in the breakdown
+            cursor.execute(
+                """
+                SELECT COALESCE(SUM(percentage), 0)
+                FROM master_configurations
+                WHERE distributed_member = FALSE
+                  AND deleted_at IS NULL
+                """
+            )
+            shu_non_distributed_pct = float(cursor.fetchone()[0] or 0)
+
+            cursor.execute(
+                """
+                SELECT COALESCE(SUM(net_profit), 0)
+                FROM shu_results
+                WHERE deleted_at IS NULL
+                """
+            )
+            total_shu_net_profit = float(cursor.fetchone()[0] or 0)
+
+            shu_cooperative_portion = total_shu_net_profit * (shu_non_distributed_pct / 100.0)
+
         pending_requests.sort(key=lambda item: item.get('request_date') or '', reverse=True)
         pending_approvals = (
             pending_registrations + pending_close_accounts + pending_loans + pending_withdrawals + pending_voluntary
         )
 
-        total_assets = float(total_shu or 0) + float(total_mandatory or 0) + float(total_voluntary or 0)
+        # Formula baru sesuai request user:
+        # total_assets = total_interest + total_admin_fee + total_principle_saving
+        total_assets = (
+            float(total_interest_paid)
+            + float(total_admin_fee)
+            + float(total_principle_saving)
+        )
 
         return Response({
             'total_assets': total_assets,
-            'total_shu': float(total_shu or 0),
-            'total_mandatory_savings': float(total_mandatory or 0),
-            'total_voluntary_savings': float(total_voluntary or 0),
+            'total_assets_breakdown': {
+                'total_interest': float(total_interest_paid),
+                'total_admin_fee': float(total_admin_fee),
+                'total_principle_saving': float(total_principle_saving),
+                'shu_cooperative_portion': round(shu_cooperative_portion, 2),
+                'shu_non_distributed_pct': shu_non_distributed_pct,
+                'shu_total_net_profit': total_shu_net_profit,
+            },
             'current_month_shu': float(current_month_shu or 0),
             'active_members': int(active_members),
             'pending_approvals': int(pending_approvals),
@@ -882,17 +945,31 @@ def admin_savings_analytics(request):
         elif 'PRINCIPLE' in name:
             total_pokok += val
 
-    total_members = (
-        SavingWallets.objects
-        .filter(deleted_at__isnull=True)
-        .values('member_id').distinct().count()
-    )
+    # Total anggota: count members that have an active user (matches admin definition)
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT COUNT(m.id) FROM members m INNER JOIN users u ON m.user_id = u.id WHERE u.is_active = TRUE")
+            tm_row = cursor.fetchone()
+            total_members = int(tm_row[0]) if tm_row and tm_row[0] is not None else 0
+    except Exception:
+        total_members = 0
 
     total_withdrawal = float(
         Withdrawals.objects
         .filter(deleted_at__isnull=True, status_id=19)
         .aggregate(total=Sum('amount'))['total'] or 0
     )
+
+    # Calculate remaining balance saving used from loan fund allocations
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT COALESCE(SUM(remaining_amount),0) FROM loan_fund_allocations INNER JOIN loans l ON loan_id = l.id WHERE l.status_id = 25"
+            )
+            rb_row = cursor.fetchone()
+            remaining_saving_used = float(rb_row[0]) if rb_row and rb_row[0] is not None else 0.0
+    except Exception:
+        remaining_saving_used = 0.0
 
     monthly_trend = []
     for i in range(months - 1, -1, -1):
@@ -926,6 +1003,7 @@ def admin_savings_analytics(request):
         'total_sukarela': total_sukarela,
         'total_pokok': total_pokok,
         'total_withdrawal': total_withdrawal,
+        'remaining_saving_used': remaining_saving_used,
         'monthly_trend': monthly_trend,
     })
 

@@ -135,16 +135,16 @@ def my_shu_analytics(request):
         else:
             member_id = TEMP_MEMBER_ID
 
-    # 1. Total SHU (where paid_at IS NULL)
-    total_shu_qs = ShuMemberDistributions.objects.filter(
+    # 1. Total SHU (where distributed_status = false)
+    total_shu_qs = ShuMemberDistributionsMonthly.objects.filter(
         member_id=member_id,
-        paid_at__isnull=True
+        distributed_status=False
     ).aggregate(total_shu=Sum('total_shu'))
     total_shu = total_shu_qs['total_shu'] or Decimal('0')
 
     # 2. Data Chart Per Bulan
     monthly_data = (
-        ShuMemberDistributions.objects.filter(member_id=member_id)
+        ShuMemberDistributionsMonthly.objects.filter(member_id=member_id)
         .annotate(month=TruncMonth('created_at'))
         .values('month')
         .annotate(total_shu=Sum('total_shu'))
@@ -855,8 +855,9 @@ def _build_month_labels(year, month, count):
 
 @api_view(['GET'])
 def admin_shu_net_sales(request):
-    """Return net sales series from shu_results.net_profit grouped by year/month."""
+    """Return net sales series from shu_member_distributions_monthly grouped by year/month."""
     from datetime import date
+    from django.db import connection
 
     range_option = request.query_params.get('range', '3month')
     range_map = {
@@ -872,17 +873,27 @@ def admin_shu_net_sales(request):
     start_year, start_month = month_pairs[0]
     start_code = start_year * 100 + start_month
 
-    results = ShuResults.objects.filter(
-        deleted_at__isnull=True,
-        period_month__isnull=False,
-        period_month__lte=12,
-    ).annotate(
-        yyyymm=F('period_year') * 100 + F('period_month')
-    ).filter(yyyymm__gte=start_code).order_by('period_year', 'period_month')
+    query = """
+        SELECT 
+            sr.period_year, 
+            sr.period_month, 
+            COALESCE(SUM(smdm.total_shu), 0) AS total_shu
+        FROM shu_member_distributions_monthly smdm
+        INNER JOIN shu_results sr ON smdm.period_id = sr.id
+        WHERE sr.deleted_at IS NULL
+          AND sr.period_month <= 12
+          AND (sr.period_year * 100 + sr.period_month) >= %s
+        GROUP BY sr.period_year, sr.period_month
+        ORDER BY sr.period_year, sr.period_month
+    """
+    
+    with connection.cursor() as cursor:
+        cursor.execute(query, [start_code])
+        rows = cursor.fetchall()
 
     result_map = {
-        f'{result.period_year}-{result.period_month:02d}': float(result.net_profit or 0)
-        for result in results
+        f'{row[0]}-{row[1]:02d}': float(row[2])
+        for row in rows
     }
 
     data = [result_map.get(key, 0) for key in labels]

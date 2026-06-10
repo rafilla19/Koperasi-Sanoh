@@ -37,7 +37,7 @@
 }
 
 .sv-hero-title {
-  font-family: var(--font-h, 'Syne', sans-serif);
+  font-family: var(--font-family);
   font-size: clamp(32px, 5vw, 48px);
   line-height: 1;
   font-weight: 800;
@@ -125,7 +125,7 @@
 
 .sv-stat-value {
   display: block;
-  font-family: 'Space Grotesk', var(--font-h, 'Syne'), sans-serif;
+  font-family: var(--font-family);
   font-size: clamp(20px, 3vw, 28px);
   font-weight: 700;
   letter-spacing: -0.03em;
@@ -148,7 +148,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-family: var(--font-h, 'Syne', sans-serif);
+  font-family: var(--font-family);
   font-size: 16px;
   font-weight: 800;
   color: #0A1628;
@@ -243,7 +243,7 @@
   margin-bottom: 6px;
 }
 .sv-uc-total {
-  font-family: 'Space Grotesk', var(--font-h, 'Syne'), sans-serif;
+  font-family: var(--font-family);
   font-size: clamp(32px, 4vw, 46px);
   font-weight: 700;
   letter-spacing: -0.03em;
@@ -301,7 +301,7 @@
   margin: 0 0 5px 0;
 }
 .sv-uc-item-amount {
-  font-family: 'Space Grotesk', var(--font-h, 'Syne'), sans-serif;
+  font-family: var(--font-family);
   font-size: 20px;
   font-weight: 700;
   margin: 0 0 4px 0;
@@ -370,7 +370,7 @@
   background: #F8FAFC;
 }
 .sv-vr-form-title {
-  font-family: var(--font-h, 'Syne', sans-serif);
+  font-family: var(--font-family);
   font-size: 15px;
   font-weight: 700;
   color: #0A1628;
@@ -451,7 +451,7 @@
 .sv-banner-left   { position: relative; z-index: 2; }
 .sv-banner-right  { position: relative; z-index: 2; text-align: right; }
 .sv-banner-title  { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(255,255,255,0.7); margin-bottom: 8px; display: block; }
-.sv-banner-amount { font-family: var(--font-h, 'Syne', sans-serif); font-size: 32px; font-weight: 800; margin: 0; letter-spacing: 0.02em; }
+.sv-banner-amount { font-family: var(--font-family); font-size: 32px; font-weight: 800; margin: 0; letter-spacing: 0.02em; }
 .sv-banner-desc   { font-size: 11px; color: rgba(255,255,255,0.8); margin-top: 8px; display: block; }
 
 .btn-banner {
@@ -496,7 +496,7 @@
   margin-bottom: 24px;
 }
 .sv-card-title {
-  font-family: var(--font-h, 'Syne', sans-serif);
+  font-family: var(--font-family);
   font-size: 18px;
   font-weight: 700;
   color: #0A1628;
@@ -732,7 +732,7 @@
 }
 .wd-detail-header  { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid #E2E8F0; }
 .wd-detail-label   { font-size: 11px; font-weight: 700; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 6px; }
-.wd-detail-amount  { font-family: var(--font-h, 'Syne', sans-serif); font-size: 26px; font-weight: 800; color: #0A1628; margin: 0; }
+.wd-detail-amount  { font-family: var(--font-family); font-size: 26px; font-weight: 800; color: #0A1628; margin: 0; }
 .wd-detail-rows    { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
 .wd-detail-row     { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; font-size: 13px; color: #334155; }
 .wd-detail-row-label { color: #94A3B8; font-size: 12px; flex-shrink: 0; }

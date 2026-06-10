@@ -13,7 +13,7 @@
 }
 
 .add-title {
-  font-family: var(--font-h, 'Syne', sans-serif);
+  font-family: var(--font-family);
   font-size: 32px;
   font-weight: 800;
   color: #0A1628;

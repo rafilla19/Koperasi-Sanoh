@@ -1,18 +1,41 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ShoppingBag, Search, Printer, MoreHorizontal, Calendar } from 'lucide-react';
-import { apiUrl } from '../../services/api';
+import {
+  Wallet,
+  Users,
+  BadgeDollarSign,
+  Calendar,
+  Clock3,
+  Search,
+  Printer,
+  TrendingUp,
+  BarChart3,
+  AlertCircle,
+  PiggyBank
+} from "lucide-react";
+import { apiUrl, getAuthHeaders } from '../../services/api';
 import './AdminLoansDashboard.css';
 
 const AdminLoansDashboard = () => {
   const navigate = useNavigate();
 
+  // Icon config per stat card: icon, gradient bg, icon color
+  const STAT_ICONS = [
+    { icon: <Wallet size={22} />, bg: 'linear-gradient(135deg, #6366f1, #4f46e5)', shadow: 'rgba(99,102,241,0.35)' },
+    { icon: <Users size={22} />, bg: 'linear-gradient(135deg, #0ea5e9, #0284c7)', shadow: 'rgba(14,165,233,0.35)' },
+    { icon: <BadgeDollarSign size={22} />, bg: 'linear-gradient(135deg, #10b981, #059669)', shadow: 'rgba(16,185,129,0.35)' },
+    { icon: <Clock3 size={22} />, bg: 'linear-gradient(135deg, #f59e0b, #d97706)', shadow: 'rgba(245,158,11,0.35)' },
+    { icon: <BarChart3 size={22} />, bg: 'linear-gradient(135deg, #8b5cf6, #7c3aed)', shadow: 'rgba(139,92,246,0.35)' },
+    { icon: <PiggyBank size={22} />, bg: 'linear-gradient(135deg, #ec4899, #db2777)', shadow: 'rgba(236,72,153,0.35)' },
+    { icon: <AlertCircle size={22} />, bg: 'linear-gradient(135deg, #ef4444, #dc2626)', shadow: 'rgba(239,68,68,0.35)' },
+    { icon: <TrendingUp size={22} />, bg: 'linear-gradient(135deg, #14b8a6, #0d9488)', shadow: 'rgba(20,184,166,0.35)' },
+  ];
+
   const [stats, setStats] = useState([
-    { title: 'Total Outstanding', value: 'Rp 0', up: '34.7%' },
-    { title: 'Active Borrowers', value: 'Rp 0', up: '34.7%' },
-    { title: 'Interest Achieved', value: 'Rp 0', up: '34.7%' },
-    { title: 'Current Month Installment', value: 'Rp 0', up: '34.7%' },
-    { title: 'Pending Approvals', value: '0', up: '' }
+    { title: 'Total Outstanding', value: 'Loading...', up: '', tooltip: 'Total outstanding loan amount across all active loans.' },
+    { title: 'Active Borrowers', value: 'Loading...', up: '', tooltip: 'Number of members with active loans.' },
+    { title: 'Interest Achieved', value: 'Loading...', up: '', tooltip: 'Total interest collected from all loans.' },
+    { title: 'Pending Approvals', value: 'Loading...', up: '', tooltip: 'Number of loan applications currently pending approval.' }
   ]);
 
   const [pendingList, setPendingList] = useState([]);
@@ -81,21 +104,23 @@ const AdminLoansDashboard = () => {
           row2Stats = [
             { title: 'Total Active Loan', value: `${data.active_loans}/${data.total_members} Members`, up: '' },
             { title: 'Collected This Month', value: `${formatRupiah(data.collected_this_month)}`, up: '' },
-            { title: 'Total Overdue Loans This Month', value: formatRupiah(data.total_overdue), up: '' }
+            { title: 'Total Overdue Loans This Month', value: formatRupiah(data.total_overdue), up: '' },
+            { title: 'Remaining Loan Allocation This Month', value: formatRupiah(data.remaining_allocation || data.monthly_limit || 0), up: '' }
           ];
         }
 
         // Combine both rows into one setStats call
         setStats([...row1Stats, ...row2Stats]);
 
-        const pendingRes = await fetch(apiUrl('/loan/loan-applications/admin_pending_list/'));
+        const pendingRes = await fetch(apiUrl('/loan/loan-applications/admin_pending_list/'), { headers: getAuthHeaders() });
         if (pendingRes.ok) {
           const pendingData = await pendingRes.json();
           setPendingList(pendingData);
         }
 
         const activeLoansRes = await fetch(
-          apiUrl(`/loan/loans/admin_loans_list/?month=${selectedMonth}&year=${selectedYear}`)
+          apiUrl(`/loan/loans/admin_loans_list/?month=${selectedMonth}&year=${selectedYear}`),
+          { headers: getAuthHeaders() }
         );
         if (activeLoansRes.ok) {
           const activeLoansData = await activeLoansRes.json();
@@ -329,26 +354,39 @@ const AdminLoansDashboard = () => {
   return (
     <div className="admin-loans-dash">
       <div className="ald-header">
-        <h1>Loan Management</h1>
+        {/* <h1>Loan Management</h1> */}
         {/* <div className="ald-breadcrumb">Home &gt; Loan Management</div> */}
       </div>
 
       <div className="ald-stats">
-        {stats.map((stat, i) => (
-          <div key={i} className="ald-stat-card">
-            <div className="ald-stat-top">
-              <div className="ald-stat-title">{stat.title}</div>
-            </div>
-            <div className="ald-stat-body">
-              <div className="ald-stat-value">{stat.value}</div>
-              {stat.up && (
-                <div className={`ald-stat-trend ${stat.up.startsWith('+') ? 'up' : 'down'}`}>
-                  {stat.up.startsWith('+') ? '↑' : '↓'} {stat.up.replace('+', '').replace('-', '')}
+        {stats.map((stat, i) => {
+          const iconCfg = STAT_ICONS[i] || STAT_ICONS[0];
+          return (
+            <div key={i} className="ald-stat-card">
+              <div className="ald-stat-top">
+                <div className="ald-stat-title">{stat.title}</div>
+                <div
+                  className="ald-stat-icon-wrapper"
+                  title={stat.tooltip}
+                  style={{
+                    background: iconCfg.bg,
+                    boxShadow: `0 6px 16px ${iconCfg.shadow}`,
+                  }}
+                >
+                  <span className="ald-stat-icon">{iconCfg.icon}</span>
                 </div>
-              )}
+              </div>
+              <div className="ald-stat-body">
+                <div className="ald-stat-value">{stat.value}</div>
+                {stat.up && (
+                  <div className={`ald-stat-trend ${stat.up.startsWith('+') ? 'up' : 'down'}`}>
+                    {stat.up.startsWith('+') ? '↑' : '↓'} {stat.up.replace('+', '').replace('-', '')}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <div className="ald-pending-section">

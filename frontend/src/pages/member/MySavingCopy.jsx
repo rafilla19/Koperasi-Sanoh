@@ -305,7 +305,7 @@ const MySaving = () => {
 
           {/* Bottom Left (Approvals) */}
           <div className="wd-left-bottom wd-left" style={{ gridColumn: '1 / 2' }}>
-            <h3 style={{fontSize: 18, margin: '8px 0', fontFamily: 'Syne', fontWeight: 700}}>Approvals</h3>
+            <h3 style={{fontSize: 18, margin: '8px 0', fontFamily: 'var(--font-family)', fontWeight: 700}}>Approvals</h3>
             <div className="appr-list">
               <div className="appr-item">
                 <p>Kebutuhan mendadak untuk renovasi rumah<br/><strong>8.000.000</strong></p>

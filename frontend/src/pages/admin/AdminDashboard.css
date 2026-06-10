@@ -1,10 +1,10 @@
 .ad-container {
   max-width: 1300px;
   margin: 0 auto;
-  padding: 24px 24px 36px;
+  padding: 18px 18px 28px;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 18px;
 }
 
 /* ─── Header ──────────────────────────────────── */
@@ -12,14 +12,15 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
-  gap: 16px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid #E2E8F0;
+  gap: 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(226,232,240,0.8);
+  margin-bottom: 0;
 }
 
 .ad-page-header h1 {
   margin: 0;
-  font-family: var(--font-h, 'Syne', sans-serif);
+  font-family: var(--font-family);
   font-size: 30px;
   font-weight: 800;
   color: #0F172A;
@@ -45,6 +46,7 @@
   white-space: nowrap;
   flex-shrink: 0;
 }
+
 
 /* ─── Banners ─────────────────────────────────── */
 .ad-banner {
@@ -72,8 +74,9 @@
 /* ─── KPI Cards ───────────────────────────────── */
 .ad-stats {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
 .ad-stat-card {
@@ -127,7 +130,7 @@
 }
 
 .ad-stat-val strong {
-  font-family: var(--font-h, 'Syne', sans-serif);
+  font-family: var(--font-family);
   font-size: 22px;
   font-weight: 800;
   color: #0F172A;
@@ -144,7 +147,7 @@
 }
 
 .ad-section-header h2 {
-  font-family: var(--font-h, 'Syne', sans-serif);
+  font-family: var(--font-family);
   font-size: 20px;
   font-weight: 800;
   color: #0F172A;
@@ -360,7 +363,7 @@
 
 .ad-chart-header h3 {
   margin: 0 0 3px;
-  font-family: var(--font-h, 'Syne', sans-serif);
+  font-family: var(--font-family);
   font-size: 18px;
   font-weight: 800;
   color: #0F172A;

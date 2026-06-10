@@ -44,7 +44,7 @@
 }
 
 .ld-header h1 {
-  font-family: var(--font-h, 'Syne', sans-serif);
+  font-family: var(--font-family);
   font-size: 24px;
   font-weight: 800;
   color: #0A1628;
@@ -141,7 +141,7 @@
 }
 
 .ld-rejection-note h4 {
-  font-family: var(--font-h, 'Syne', sans-serif);
+  font-family: var(--font-family);
   font-size: 15px;
   font-weight: 700;
   color: #991B1B;
@@ -160,7 +160,7 @@
 }
 
 .ld-details-card h3 {
-  font-family: var(--font-h, 'Syne', sans-serif);
+  font-family: var(--font-family);
   font-size: 18px;
   font-weight: 700;
   color: #0A1628;
@@ -234,7 +234,7 @@
 }
 
 .ld-g-col .val {
-  font-family: var(--font-h, 'Syne', sans-serif);
+  font-family: var(--font-family);
   font-size: 20px;
   font-weight: 800;
   color: #0A1628;
@@ -246,7 +246,7 @@
 }
 
 .ld-next-deduction .val-large {
-  font-family: var(--font-h, 'Syne', sans-serif);
+  font-family: var(--font-family);
   font-size: 28px;
   font-weight: 800;
   color: #0A1628;
@@ -289,7 +289,7 @@
 }
 
 .ld-progress-section h3 {
-  font-family: var(--font-h, 'Syne', sans-serif);
+  font-family: var(--font-family);
   font-size: 18px;
   font-weight: 700;
   color: #0A1628;
@@ -323,7 +323,7 @@
 }
 
 .ld-schedule h3 {
-  font-family: var(--font-h, 'Syne', sans-serif);
+  font-family: var(--font-family);
   font-size: 18px;
   font-weight: 700;
   color: #0A1628;
@@ -449,7 +449,7 @@
 }
 
 .ld-modal h2 {
-  font-family: var(--font-h, 'Syne', sans-serif);
+  font-family: var(--font-family);
   font-size: 22px;
   font-weight: 800;
   color: #0A1628;
@@ -575,7 +575,7 @@
 }
 
 .ld-receipt-total .val {
-  font-family: var(--font-h, 'Syne', sans-serif);
+  font-family: var(--font-family);
   font-size: 24px;
   font-weight: 800;
   color: #0A1628;
@@ -644,7 +644,7 @@
 }
 
 .midtrans-header h3 {
-  font-family: var(--font-h, 'Syne', sans-serif);
+  font-family: var(--font-family);
   font-size: 20px;
   font-weight: 800;
   color: #0A1628;
@@ -681,7 +681,7 @@
   padding-top: 16px;
 }
 .m-inv-row.amount .val {
-  font-family: var(--font-h, 'Syne', sans-serif);
+  font-family: var(--font-family);
   font-size: 20px;
   font-weight: 800;
   color: #2D6BE4;

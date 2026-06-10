@@ -185,8 +185,8 @@ def _member_profile_query(member_id):
         ) loan ON loan.member_id = m.id
         LEFT JOIN LATERAL (
             SELECT COALESCE(SUM(total_shu), 0) AS current_shu
-            FROM shu_member_distributions
-            WHERE paid_at IS NULL
+            FROM shu_member_distributions_monthly
+            WHERE distributed_status = false
                 AND member_id = m.id
         ) shu ON TRUE
         LEFT JOIN LATERAL (
@@ -794,6 +794,9 @@ class MemberViewSet(viewsets.ViewSet):
                 if data.get('full_name') is not None:
                     member.full_name = data['full_name']
                     member_updates.append('full_name')
+                if data.get('nik_employee') is not None:
+                    member.nik_employee = data['nik_employee']
+                    member_updates.append('nik_employee')
                 if data.get('phone_number') is not None:
                     member.phone_number = data['phone_number']
                     member_updates.append('phone_number')
@@ -1245,8 +1248,8 @@ class MemberViewSet(viewsets.ViewSet):
             ) loan ON loan.member_id = m.id
             LEFT JOIN LATERAL (
                 SELECT COALESCE(SUM(total_shu), 0) AS current_shu
-                FROM shu_member_distributions
-                WHERE paid_at IS NULL
+                FROM shu_member_distributions_monthly
+                WHERE distributed_status = false
                     AND member_id = m.id
             ) shu ON TRUE
             LEFT JOIN LATERAL (

@@ -29,7 +29,7 @@ const TransactionHistory = () => {
       if (res.ok) {
         const data = await res.json();
         setTransactions(data);
-        setCurrentPage(1); 
+        setCurrentPage(1);
       }
     } catch (err) {
       console.error('Error fetching transactions:', err);
@@ -51,7 +51,7 @@ const TransactionHistory = () => {
 
     // Define CSV headers
     const headers = ['Date', 'Member Name', 'Transaction Type', 'Method', 'Reference Number', 'Amount', 'Status'];
-    
+
     // Map transactions to CSV rows
     const rows = transactions.map(t => [
       t.transaction_date,
@@ -74,7 +74,7 @@ const TransactionHistory = () => {
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     const dateStr = new Date().toISOString().split('T')[0];
-    
+
     link.setAttribute('href', url);
     link.setAttribute('download', `transaction_history_${dateStr}.csv`);
     link.style.visibility = 'hidden';
@@ -146,10 +146,10 @@ const TransactionHistory = () => {
             <label>Search Member</label>
             <div className="th-search-box">
               <Search size={18} className="th-search-icon" />
-              <input 
-                type="text" 
+              <input
+                type="text"
                 name="member_name"
-                placeholder="Enter name..." 
+                placeholder="Enter name..."
                 value={filters.member_name}
                 onChange={handleFilterChange}
               />
@@ -161,8 +161,9 @@ const TransactionHistory = () => {
             <select name="transaction_type" value={filters.transaction_type} onChange={handleFilterChange}>
               <option value="">All Types</option>
               <option value="deposit">Deposit</option>
-              <option value="loan-installment">Loan Installment</option>
+              <option value="INSTALLMENT PAYMENT">Loan Installment</option>
               <option value="withdrawals">Withdrawals</option>
+              <option value="SHU DISTRIBUTION">SHU Distribution</option>
             </select>
           </div>
 
@@ -230,20 +231,20 @@ const TransactionHistory = () => {
 
       {totalPages > 1 && (
         <div className="th-pagination">
-          <button 
-            className="th-page-btn" 
+          <button
+            className="th-page-btn"
             disabled={currentPage === 1}
             onClick={() => paginate(currentPage - 1)}
           >
             <ChevronLeft size={18} />
           </button>
-          
+
           {[...Array(totalPages)].map((_, i) => {
             const pageNum = i + 1;
             if (pageNum === 1 || pageNum === totalPages || (pageNum >= currentPage - 1 && pageNum <= currentPage + 1)) {
               return (
-                <button 
-                  key={pageNum} 
+                <button
+                  key={pageNum}
                   className={`th-page-num ${currentPage === pageNum ? 'active' : ''}`}
                   onClick={() => paginate(pageNum)}
                 >
@@ -256,8 +257,8 @@ const TransactionHistory = () => {
             return null;
           })}
 
-          <button 
-            className="th-page-btn next" 
+          <button
+            className="th-page-btn next"
             disabled={currentPage === totalPages}
             onClick={() => paginate(currentPage + 1)}
           >

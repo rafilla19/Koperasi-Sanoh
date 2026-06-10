@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Wallet, TrendingUp, Users, Clock, CalendarDays } from 'lucide-react';
+import { Wallet, TrendingUp, Users, Clock, CalendarDays, Repeat } from 'lucide-react';
 import {
   fetchAdminDashboardOverview,
   fetchAdminDashboardNetSales,
@@ -104,7 +104,7 @@ const AdminDashboard = () => {
   const totalAssets = dashboardData?.total_assets || 0;
   const currentMonthShu = dashboardData?.current_month_shu || 0;
   const activeMembers = dashboardData?.active_members || 0;
-  const pendingApprovals = dashboardData?.pending_approvals || 0;
+
   const pendingRequests = dashboardData?.pending_requests || [];
 
   const kpiCards = [
@@ -128,14 +128,7 @@ const AdminDashboard = () => {
       value: activeMembers,
       icon: <Users size={22} />,
       gradient: 'linear-gradient(135deg, #8B5CF6, #C4B5FD)',
-    },
-    {
-      label: 'Persetujuan Tertunda',
-      sublabel: 'Permintaan menunggu tindakan',
-      value: pendingApprovals,
-      icon: <Clock size={22} />,
-      gradient: 'linear-gradient(135deg, #F59E0B, #FCD34D)',
-    },
+    }
   ];
 
   const shuData = {
@@ -191,10 +184,6 @@ const AdminDashboard = () => {
     <div className="ad-container">
       {/* Header */}
       <div className="ad-page-header">
-        <div>
-          <h1>Admin Dashboard</h1>
-          <p>Ringkasan aset, SHU, dan permintaan persetujuan terbaru.</p>
-        </div>
         <div className="ad-date-badge">
           <CalendarDays size={16} />
           <span>{getTodayLabel()}</span>
@@ -243,20 +232,33 @@ const AdminDashboard = () => {
 
       <div className="ad-approvals-row">
         {pendingRequests.length > 0 ? (
-          pendingRequests.map((request) => (
-            <div
-              className="ad-approval-card"
-              key={`${request.request_type}-${request.request_id}`}
-              onClick={() => request.link && navigate(request.link)}
-              style={{ cursor: request.link ? 'pointer' : 'default' }}
-            >
+          pendingRequests.map((request) => {
+            const isVoluntary = ['voluntary', 'sukarela'].some((term) =>
+              (request.request_type || '').toLowerCase().includes(term)
+            );
+            return (
+              <div
+                className="ad-approval-card"
+                key={`${request.request_type}-${request.request_id}`}
+                onClick={() => {
+                  if (isVoluntary) {
+                    navigate('/dashboard/admin/ls-savings');
+                    return;
+                  }
+
+                  if (request.link) {
+                    navigate(request.link);
+                  }
+                }}               
+                style={{ cursor: request.link || isVoluntary ? 'pointer' : 'default' }}
+              >
               <div className="ad-ac-header">
-                <div className="ad-ac-avatar">
-                  <span>{(request.member_name || '?')[0].toUpperCase()}</span>
-                </div>
+                    <div className="ad-ac-avatar">
+                <Repeat size={22} strokeWidth={2.2} />
+              </div>
                 <div className="ad-ac-info">
                   <h4>{request.member_name}</h4>
-                  <p>{request.request_type}</p>
+                  <p>{(request.request_type || '').toLowerCase().includes('voluntary') ? 'Voluntary Saving Request Change' : request.request_type}</p>
                 </div>
                 <span className={`ad-ac-status status-${String(request.status || '').toLowerCase().replace(/\s+/g, '-')}`}>
                   {request.status}
@@ -287,7 +289,8 @@ const AdminDashboard = () => {
                 </span>
               </div>
             </div>
-          ))
+          )
+        })
         ) : (
           <div className="ad-empty-state">
             <Clock size={32} strokeWidth={1.5} />
@@ -324,7 +327,7 @@ const AdminDashboard = () => {
         <div className="ad-chart-card">
           <div className="ad-chart-header">
             <div>
-              <h3>Net Sales</h3>
+              <h3>SHU</h3>
               <p className="ad-chart-sub">Penjualan bersih dalam periode terpilih</p>
             </div>
             <select

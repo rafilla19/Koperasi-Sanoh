@@ -30,7 +30,7 @@
 }
 
 .tc-header-left h1 {
-  font-family: var(--font-h, 'Syne', sans-serif);
+  font-family: var(--font-family);
   font-size: 28px;
   font-weight: 800;
   color: #0A1628;
