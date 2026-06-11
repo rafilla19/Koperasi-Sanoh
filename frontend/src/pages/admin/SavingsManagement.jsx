@@ -137,16 +137,16 @@ export default function SavingsManagement() {
 
       {/* TABLE */}
       <table>
-        <thead>
+        <thead style={{ background: 'linear-gradient(135deg, #3b82f6, #2563eb)' }}>
           <tr>
-            <th style={{ width: 40 }}>No</th>
-            <th>Anggota</th>
-            <th>Department</th>
-            <th>Withdraw</th>
-            <th>Simp Pokok</th>
-            <th>Simp Wajib</th>
-            <th>Simp Sukarela</th>
-            <th>Total</th>
+            <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none', width: 40 }}>No</th>
+            <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Anggota</th>
+            <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Department</th>
+            <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Withdraw</th>
+            <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Simp Pokok</th>
+            <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Simp Wajib</th>
+            <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Simp Sukarela</th>
+            <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Total</th>
           </tr>
         </thead>
         <tbody>

@@ -495,34 +495,43 @@ const AdminLoansDashboard = () => {
 
         <div className="ald-table-container">
           <table className="ald-table">
-            <thead>
+        <thead style={{ background: 'linear-gradient(135deg, #3b82f6, #2563eb)' }}>
               <tr>
-                <th>
-                  <input
-                    id="select-all-loans"
-                    name="select-all-loans"
-                    type="checkbox"
-                    checked={selectAll}
-                    onChange={handleSelectAll}
-                    className="ald-checkbox-header"
-                  />
-                </th>
-                <th>ID</th>
-                <th>Name</th>
-                <th>NIK</th>
-                <th>Purpose</th>
-                <th>Type</th>
-                <th>Department</th>
-                <th>Start Date</th>
-                <th>End Date</th>
-                <th>Principal</th>
-                <th>Interest</th>
-                <th>Total Amount</th>
-                <th>Remaining Balance</th>
-                <th>Progress</th>
-                <th>Current Month Due Date</th>
-                <th>Current Month Installment</th>
-                <th>Status</th>
+                {[
+                  { label: <input id="select-all-loans" name="select-all-loans" type="checkbox" checked={selectAll} onChange={handleSelectAll} className="ald-checkbox-header" />, key: 'cb' },
+                  { label: 'ID', key: 'id' },
+                  { label: 'Name', key: 'name' },
+                  { label: 'NIK', key: 'nik' },
+                  { label: 'Purpose', key: 'purpose' },
+                  { label: 'Type', key: 'type' },
+                  { label: 'Department', key: 'dept' },
+                  { label: 'Start Date', key: 'start' },
+                  { label: 'End Date', key: 'end' },
+                  { label: 'Principal', key: 'principal' },
+                  { label: 'Interest', key: 'interest' },
+                  { label: 'Total Amount', key: 'total' },
+                  { label: 'Remaining Balance', key: 'remaining' },
+                  { label: 'Progress', key: 'progress' },
+                  { label: 'Current Month Due Date', key: 'due' },
+                  { label: 'Current Month Installment', key: 'inst' },
+                  { label: 'Status', key: 'status' },
+                ].map(({ label, key }) => (
+                  <th
+                    key={key}
+                    style={{
+                      color: '#ffffff',
+                      fontWeight: 600,
+                      fontSize: 13,
+                      letterSpacing: '0.4px',
+                      padding: '13px 12px',
+                      background: 'transparent',
+                      textShadow: '0 1px 2px rgba(0,0,0,0.2)',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {label}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>

@@ -214,15 +214,15 @@ const MemberManagement = () => {
         ) : (
           <div className="mm-table-scroll">
             <table className="mm-table">
-              <thead>
+              <thead style={{ background: 'linear-gradient(135deg, #3b82f6, #2563eb)' }}>
                 <tr>
-                  <th>Nama & Email</th>
-                  <th>NIK Karyawan</th>
-                  <th>Departemen</th>
-                  <th>Tanggal Bergabung</th>
-                  <th>Nomor Telepon</th>
-                  <th>Total Tabungan</th>
-                  <th style={{ textAlign: 'center' }}>Aksi</th>
+                  <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Nama & Email</th>
+                  <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>NIK Karyawan</th>
+                  <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Departemen</th>
+                  <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Tanggal Bergabung</th>
+                  <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Nomor Telepon</th>
+                  <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Total Tabungan</th>
+                  <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none', textAlign: 'center' }}>Aksi</th>
                 </tr>
               </thead>
               <tbody>

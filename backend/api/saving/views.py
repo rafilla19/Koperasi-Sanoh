@@ -4,6 +4,7 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
 from django.db.models import Q, Sum, Count
+from django.db.models.functions import TruncMonth
 from django.db import connection, transaction as db_transaction
 from django.http import HttpResponse
 from django.utils import timezone
@@ -280,6 +281,138 @@ def my_saving_obligations(request):
         'mandatory_amount': mandatory_amount,
         'voluntary_amount': voluntary_amount,
     })
+
+
+@api_view(['GET'])
+def my_savings_monthly_trend(request):
+    """Return monthly sums for voluntary deposits and paid withdrawals for current member.
+    Query params: ?months=<n> default 6
+    """
+    from datetime import date
+
+    try:
+        months = max(1, min(24, int(request.query_params.get('months', 6))))
+    except (ValueError, TypeError):
+        months = 6
+
+    def month_start(n_ago):
+        today = date.today()
+        total = today.year * 12 + today.month - 1 - n_ago
+        return date(total // 12, total % 12 + 1, 1)
+
+    member_id = _get_member_id_from_request(request)
+
+    # Use TruncMonth aggregation to ensure grouping by transaction_date for deposits
+    start = month_start(months - 1)
+
+    deposit_rows = (
+        SavingTransactions.objects
+        .filter(
+            member_id=member_id,
+            saving_type__is_mandatory=False,
+            transaction_type_id=1,
+            transaction_date__date__gte=start,
+        )
+        .annotate(month=TruncMonth('transaction_date'))
+        .values('month')
+        .annotate(total=Sum('amount'))
+        .order_by('month')
+    )
+
+    withdrawal_rows = (
+        Withdrawals.objects
+        .filter(
+            member_id=member_id,
+            saving_type__is_mandatory=False,
+            status_id=19,
+            paid_date__date__gte=start,
+        )
+        .annotate(month=TruncMonth('paid_date'))
+        .values('month')
+        .annotate(total=Sum('amount'))
+        .order_by('month')
+    )
+
+    deposit_map = {row['month'].date().strftime('%b %Y'): float(row['total'] or 0) for row in deposit_rows}
+    withdrawal_map = {row['month'].date().strftime('%b %Y'): float(row['total'] or 0) for row in withdrawal_rows}
+
+    monthly = []
+    for i in range(months - 1, -1, -1):
+        d = month_start(i)
+        label = d.strftime('%b %Y')
+        monthly.append({
+            'month': label,
+            'deposits': deposit_map[label] if label in deposit_map else 0,
+            'withdrawals': withdrawal_map[label] if label in withdrawal_map else 0,
+        })
+
+    return Response({'monthly_trend': monthly})
+
+
+@api_view(['GET'])
+def my_savings_timeline(request):
+    """Return a combined list (union) of voluntary deposits (transaction_date)
+    and paid withdrawals (paid_date) for the current member.
+    Query params: ?months=<n> default 6 (limits how far back to include)
+    """
+    from datetime import date
+
+    try:
+        months = max(1, min(48, int(request.query_params.get('months', 6))))
+    except (ValueError, TypeError):
+        months = 6
+
+    def month_start(n_ago):
+        today = date.today()
+        total = today.year * 12 + today.month - 1 - n_ago
+        return date(total // 12, total % 12 + 1, 1)
+
+    member_id = _get_member_id_from_request(request)
+    start = month_start(months - 1)
+
+    deposits = list(
+        SavingTransactions.objects
+        .filter(
+            member_id=member_id,
+            transaction_type_id=1,
+            saving_type__is_mandatory=False,
+            transaction_date__date__gte=start,
+        )
+        .values('amount', 'transaction_date')
+        .order_by('transaction_date')
+    )
+
+    withdrawals_qs = list(
+        Withdrawals.objects
+        .filter(
+            member_id=member_id,
+            saving_type__is_mandatory=False,
+            status_id=19,
+            paid_date__date__gte=start,
+        )
+        .values('amount', 'paid_date')
+        .order_by('paid_date')
+    )
+
+    events = []
+    for d in deposits:
+        events.append({
+            'type': 'deposit',
+            'amount': float(d.get('amount') or 0),
+            'date': d.get('transaction_date').isoformat() if d.get('transaction_date') else None,
+        })
+    for w in withdrawals_qs:
+        events.append({
+            'type': 'withdrawal',
+            'amount': float(w.get('amount') or 0),
+            'date': w.get('paid_date').isoformat() if w.get('paid_date') else None,
+        })
+
+    # sort by date asc
+    events = [e for e in events if e.get('date')]
+    events.sort(key=lambda x: x['date'])
+
+    return Response({'timeline': events})
 
 
 # ── ADMIN ────────────────────────────────────────────────────────
@@ -633,14 +766,10 @@ def admin_dashboard_overview(request):
 
             cursor.execute(
                 """
-                SELECT COALESCE(SUM(smd.total_shu), 0)
-                FROM shu_member_distributions smd
-                JOIN shu_results sr ON sr.id = smd.period_id
-                WHERE smd.paid_at IS NULL
-                  AND sr.deleted_at IS NULL
-                  AND sr.period_month = %s
-                """,
-                [current_month],
+                SELECT COALESCE(SUM(total_shu), 0)
+                FROM shu_member_distributions_monthly
+                WHERE distributed_status = FALSE
+                """
             )
             current_month_shu = cursor.fetchone()[0] or 0
 

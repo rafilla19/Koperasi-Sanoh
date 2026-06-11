@@ -16,10 +16,11 @@ class SavingTypesSerializer(serializers.ModelSerializer):
 
 class SavingWalletsSerializer(serializers.ModelSerializer):
     saving_type = SavingTypesSerializer(read_only=True)
+    saving_type_id = serializers.IntegerField(source='saving_type.id', read_only=True)
 
     class Meta:
         model = SavingWallets
-        fields = ['id', 'saving_type', 'balance', 'last_updated']
+        fields = ['id', 'saving_type', 'saving_type_id', 'balance', 'last_updated']
 
 
 # ── MEMBER ───────────────────────────────────────────────────────

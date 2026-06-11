@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Search, FileText, Plus, Download } from 'lucide-react';
+import { Search, FileText, Plus, Download, X, ExternalLink, Eye } from 'lucide-react';
 import { fetchDocumentArchives, fetchDocumentTypes, uploadDocumentArchive } from '../../services/api';
 import './DocumentArchives.css';
 
@@ -30,6 +30,7 @@ const DocumentArchives = () => {
     type_id: '',
     document: null,
   });
+  const [viewerDoc, setViewerDoc] = useState(null); // { title, url }
 
   const typeOptions = useMemo(() => ['Semua Tipe', ...types.map((t) => t.name)], [types]);
 
@@ -131,9 +132,46 @@ const DocumentArchives = () => {
     }
   };
 
+  const handleRowDoubleClick = (doc) => {
+    if (doc.document_url) {
+      setViewerDoc({ title: doc.title, url: doc.document_url });
+    }
+  };
+
   return (
     <div className="card">
-      {/* HEADER */}
+      {/* PDF VIEWER MODAL */}
+      {viewerDoc && (
+        <div className="da-viewer-overlay" onClick={() => setViewerDoc(null)}>
+          <div className="da-viewer-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="da-viewer-toolbar">
+              <div className="da-viewer-title">
+                <FileText size={16} color="#60a5fa" />
+                {viewerDoc.title}
+              </div>
+              <div className="da-viewer-actions">
+                <a
+                  href={viewerDoc.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="da-viewer-btn da-viewer-btn-open"
+                >
+                  <ExternalLink size={13} /> Buka di Tab Baru
+                </a>
+                <button className="da-viewer-btn da-viewer-btn-close" onClick={() => setViewerDoc(null)}>
+                  <X size={13} /> Tutup
+                </button>
+              </div>
+            </div>
+            <iframe
+              src={`${viewerDoc.url}#toolbar=1&navpanes=0&scrollbar=1`}
+              className="da-viewer-frame"
+              title={viewerDoc.title}
+            />
+          </div>
+        </div>
+      )}
+
       <div className="da-header">
         <div>
           <h2 style={{ margin: 0, fontSize: 24, fontWeight: 600 }}>Arsip Dokumen</h2>
@@ -260,15 +298,34 @@ const DocumentArchives = () => {
 
       {/* TABLE */}
       <table>
-        <thead>
+        <thead style={{ background: 'linear-gradient(135deg, #3b82f6, #2563eb)' }}>
           <tr>
-            <th style={{ width: 40 }}>No</th>
-            <th>Nama Dokumen</th>
-            <th>Deskripsi</th>
-            <th>Jenis Dokumen</th>
-            <th>Ukuran</th>
-            <th>Tanggal Unggah</th>
-            <th style={{ width: 80 }}>Aksi</th>
+            {[
+              { label: 'No', style: { width: 40 } },
+              { label: 'Nama Dokumen', style: {} },
+              { label: 'Deskripsi', style: {} },
+              { label: 'Jenis Dokumen', style: {} },
+              { label: 'Ukuran', style: {} },
+              { label: 'Tanggal Unggah', style: {} },
+              { label: 'Aksi', style: { width: 80 } },
+            ].map(({ label, style }) => (
+              <th
+                key={label}
+                style={{
+                  ...style,
+                  color: '#ffffff',
+                  fontWeight: 600,
+                  fontSize: 13,
+                  letterSpacing: '0.4px',
+                  padding: '13px 12px',
+                  background: 'transparent',
+                  textShadow: '0 1px 2px rgba(0,0,0,0.2)',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {label}
+              </th>
+            ))}
           </tr>
         </thead>
         <tbody>
@@ -280,7 +337,12 @@ const DocumentArchives = () => {
             paginatedDocs.map((doc, index) => {
               const typeName = doc.type_name || 'Belum ditentukan';
               return (
-                <tr key={doc.id}>
+                <tr
+                  key={doc.id}
+                  className={doc.document_url ? 'da-row-clickable' : ''}
+                  onDoubleClick={() => handleRowDoubleClick(doc)}
+                  title={doc.document_url ? 'Klik dua kali untuk pratinjau dokumen' : ''}
+                >
                   <td style={{ color: '#94a3b8', fontSize: 12 }}>
                     {(currentPage - 1) * rowsPerPage + index + 1}
                   </td>

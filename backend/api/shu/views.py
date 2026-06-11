@@ -911,11 +911,18 @@ def admin_shu_net_sales(request):
 
 @api_view(['GET'])
 def admin_shu_weekly_cashflow(request):
-    """Return weekly money in/out cashflow for the selected date range."""
+    """
+    Return weekly money-in / money-out cashflow using the same data sources
+    as the transaction_history endpoint:
+      Money IN  → saving_transactions (deposits) + loan_payments (installments)
+      Money OUT → withdrawals + shu_member_distributions (SHU distributions)
+    """
     from datetime import timedelta
 
     range_option = request.query_params.get('range', '3month')
     range_map = {
+        '7days': 7,
+        '30days': 30,
         'weekly': 28,
         '3month': 90,
         '6month': 180,
@@ -925,38 +932,112 @@ def admin_shu_weekly_cashflow(request):
     days = range_map.get(range_option, 90)
     today = timezone.now().date()
     start_date = today - timedelta(days=days)
-    start_week = start_date - timedelta(days=start_date.weekday())
 
-    expense_rows = (
-        IncomeExpenses.objects
-        .filter(deleted_at__isnull=True, transaction_date__date__gte=start_week, transaction_date__date__lte=today)
-        .annotate(week_start=TruncWeek('transaction_date'))
-        .values('week_start')
-        .annotate(
-            total_income=Sum('amount', filter=Q(type__iexact=IncomeExpenses.TYPE_INCOME)),
-            total_expense=Sum('amount', filter=Q(type__iexact=IncomeExpenses.TYPE_EXPENSE)),
-        )
-        .order_by('week_start')
-    )
+    if range_option in ['7days', '30days']:
+        trunc_unit = 'day'
+        step_days = 1
+        start_period = start_date
+    else:
+        trunc_unit = 'week'
+        step_days = 7
+        start_period = start_date - timedelta(days=start_date.weekday())
 
-    weekly_map = {
-        row['week_start'].date(): {
-            'income': float(row['total_income'] or 0),
-            'expense': float(row['total_expense'] or 0),
-        }
-        for row in expense_rows if row['week_start']
-    }
+    query = f"""
+        SELECT
+            DATE_TRUNC('{trunc_unit}', transaction_date)::date AS period_start,
+            SUM(CASE WHEN flow = 'IN'  THEN amount ELSE 0 END) AS total_income,
+            SUM(CASE WHEN flow = 'OUT' THEN amount ELSE 0 END) AS total_expense
+        FROM (
+            -- MONEY IN: saving deposits (MANDATORY / VOLUNTARY / PRINCIPLE / DEPOSIT)
+            SELECT
+                st.transaction_date::date AS transaction_date,
+                st.amount,
+                'IN' AS flow
+            FROM saving_transactions st
+            INNER JOIN transaction_types tt ON tt.id = st.transaction_type_id
+            INNER JOIN statuses s ON s.id = st.status_id
+            WHERE st.transaction_date::date >= %s
+              AND st.transaction_date::date <= %s
+              AND UPPER(tt.name) IN ('MANDATORY', 'VOLUNTARY', 'PRINCIPLE', 'DEPOSIT', 'CREDIT')
+              AND UPPER(s.status_code) IN ('COMPLETED', 'PAID', 'SUCCESS')
+
+            UNION ALL
+
+            -- MONEY IN: loan installment payments
+            SELECT
+                lp.payment_date::date AS transaction_date,
+                lp.amount_paid AS amount,
+                'IN' AS flow
+            FROM loan_payments lp
+            INNER JOIN statuses s ON s.id = lp.status_id
+            WHERE lp.payment_date::date >= %s
+              AND lp.payment_date::date <= %s
+              AND UPPER(s.status_code) IN ('COMPLETED', 'PAID', 'LATE_PAID', 'SUCCESS')
+
+            UNION ALL
+
+            -- MONEY OUT: withdrawals
+            SELECT
+                w.request_date::date AS transaction_date,
+                w.amount,
+                'OUT' AS flow
+            FROM withdrawals w
+            INNER JOIN statuses s ON s.id = w.status_id
+            WHERE w.request_date::date >= %s
+              AND w.request_date::date <= %s
+              AND UPPER(s.status_code) IN ('COMPLETED', 'PAID', 'SUCCESS')
+
+            UNION ALL
+
+            -- MONEY OUT: SHU distributions
+            SELECT
+                smd.paid_at::date AS transaction_date,
+                smd.total_shu AS amount,
+                'OUT' AS flow
+            FROM shu_member_distributions smd
+            INNER JOIN statuses s ON s.id = smd.status
+            WHERE smd.paid_at::date >= %s
+              AND smd.paid_at::date <= %s
+              AND smd.distributed_status = TRUE
+
+        ) combined
+        WHERE transaction_date IS NOT NULL
+        GROUP BY DATE_TRUNC('{trunc_unit}', transaction_date)::date
+        ORDER BY period_start
+    """
+
+    params = [
+        start_period, today,  # saving deposits
+        start_period, today,  # installments
+        start_period, today,  # withdrawals
+        start_period, today,  # SHU distributions
+    ]
+
+    period_map = {}
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(query, params)
+            for row in cursor.fetchall():
+                period_start_date, total_in, total_out = row
+                if period_start_date:
+                    period_map[period_start_date] = {
+                        'income': float(total_in or 0),
+                        'expense': float(total_out or 0),
+                    }
+    except Exception as e:
+        print("ERROR IN admin_shu_weekly_cashflow:", e)
+        pass
 
     labels = []
     income_data = []
     expense_data = []
-    week_start = start_week
-    while week_start <= today:
-        labels.append(week_start.strftime('%d %b'))
-        totals = weekly_map.get(week_start, {'income': 0, 'expense': 0})
+    cursor_date = start_period
+    while cursor_date <= today:
+        labels.append(cursor_date.strftime('%d %b'))
+        totals = period_map.get(cursor_date, {'income': 0, 'expense': 0})
         income_data.append(totals['income'])
         expense_data.append(totals['expense'])
-        week_start += timedelta(days=7)
+        cursor_date += timedelta(days=step_days)
 
     return Response({
         'range': range_option,

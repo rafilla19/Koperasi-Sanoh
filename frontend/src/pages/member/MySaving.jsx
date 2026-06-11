@@ -63,6 +63,11 @@ const savingsApi = {
   getPaymentSchedule: () =>
     fetch(apiUrl('/my-savings/payment-schedule/'), { headers: getAuthHeaders() }).then(r => r.json()),
 
+  getSavingsMonthlyTrend: (months = 6) =>
+    fetch(apiUrl(`/my-savings/monthly-trend/?months=${months}`), { headers: getAuthHeaders() }).then(r => r.json()),
+  getSavingsTimeline: (months = 6) =>
+    fetch(apiUrl(`/my-savings/timeline/?months=${months}`), { headers: getAuthHeaders() }).then(r => r.json()),
+
   submitWithdrawal: (amount, notes) =>
     fetch(apiUrl('/my-savings/withdrawals/'), {
       method: 'POST',
@@ -94,6 +99,7 @@ const MySaving = () => {
   const [obligations, setObligations] = useState({ mandatory_amount: 0, voluntary_amount: 0 });
   const [expandVR, setExpandVR] = useState(false);
   const [expandApprovals, setExpandApprovals] = useState(false);
+  const [showAllSchedule, setShowAllSchedule] = useState(false);
 
   const BILLS_PER_PAGE = 10;
   const [billsPage, setBillsPage] = useState(1);
@@ -178,6 +184,51 @@ const MySaving = () => {
       .finally(() => setLoadingBills(false));
   }, []);
 
+  // Fetch timeline (union of deposits & withdrawals) and aggregate by month for chart
+  useEffect(() => {
+    let mounted = true;
+    savingsApi.getSavingsTimeline(6)
+      .then(data => {
+        if (!mounted) return;
+        const events = Array.isArray(data?.timeline) ? data.timeline : [];
+        if (events.length === 0) return;
+
+        // Aggregate by month label (e.g., 'Jun 2026')
+        const mapDeposits = {};
+        const mapWithdrawals = {};
+        events.forEach(ev => {
+          const dt = ev.date ? new Date(ev.date) : null;
+          if (!dt) return;
+          const label = dt.toLocaleDateString('id-ID', { month: 'short', year: 'numeric' });
+          if (ev.type === 'deposit') {
+            mapDeposits[label] = (mapDeposits[label] || 0) + Number(ev.amount || 0);
+          } else if (ev.type === 'withdrawal') {
+            mapWithdrawals[label] = (mapWithdrawals[label] || 0) + Number(ev.amount || 0);
+          }
+        });
+
+        // Build labels covering last 6 months in chronological order
+        const months = 6;
+        const labels = [];
+        const depositsArr = [];
+        const withArr = [];
+        for (let i = months - 1; i >= 0; i--) {
+          const d = new Date();
+          d.setMonth(d.getMonth() - i);
+          const label = d.toLocaleDateString('id-ID', { month: 'short', year: 'numeric' });
+          labels.push(label);
+          depositsArr.push(mapDeposits[label] || 0);
+          withArr.push(mapWithdrawals[label] || 0);
+        }
+
+        setChartLabelsState(labels);
+        setChartDeposits(depositsArr);
+        setChartWithdrawals(withArr);
+      })
+      .catch(() => {})
+    return () => { mounted = false; };
+  }, []);
+
   const getBalance = (isMandatory) => {
     const wallet = wallets.find(w => w.saving_type?.is_mandatory === isMandatory);
     return wallet ? formatRp(wallet.balance) : '0';
@@ -186,7 +237,8 @@ const MySaving = () => {
   const getPokokBalance = () => {
     const wallet = wallets.find(w =>
       w.saving_type_id === 3 ||
-      w.saving_type?.saving_type_name?.toLowerCase().includes('pokok')
+      w.saving_type?.id === 3 ||
+      w.saving_type?.name?.toLowerCase().includes('pokok')
     );
     return wallet ? formatRp(wallet.balance) : '0';
   };
@@ -199,6 +251,8 @@ const MySaving = () => {
   const latestWithdrawal = withdrawals[0];
   const memberName = memberProfile?.full_name || memberProfile?.username || 'Member';
   const memberEmail = memberProfile?.email || '-';
+  const todayDay = new Date().getDate();
+  const isVoluntaryChangeAllowed = todayDay === 22 || todayDay === 23;
 
   const handleTabChange = (tab) => {
     setActiveTab(tab);
@@ -240,6 +294,10 @@ const MySaving = () => {
     setVrError('');
     setVrMessage('');
     const requested = Number(vrAmount);
+    if (!isVoluntaryChangeAllowed) {
+      setVrError('Permintaan perubahan hanya dapat diajukan pada tanggal 22-23 setiap bulan.');
+      return;
+    }
     if (!requested || requested <= 0) {
       setVrError('Masukkan jumlah yang valid');
       return;
@@ -270,12 +328,16 @@ const MySaving = () => {
   const paginatedBills = paidBills.slice((billsPage - 1) * BILLS_PER_PAGE, billsPage * BILLS_PER_PAGE);
 
   const chartLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
+  const [chartLabelsState, setChartLabelsState] = useState(['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun']);
+  const [chartDeposits, setChartDeposits] = useState([0, 0, 0, 0, 0, 0]);
+  const [chartWithdrawals, setChartWithdrawals] = useState([0, 0, 0, 0, 0, 0]);
+
   const chartData = {
-    labels: chartLabels,
+    labels: chartLabelsState,
     datasets: [
       {
-        label: 'Saving',
-        data: [1200000, 1900000, 1500000, 2200000, 3100000, 2800000],
+        label: 'Voluntary Deposits',
+        data: chartDeposits,
         borderColor: '#2D6BE4',
         backgroundColor: 'rgba(45, 107, 228, 0.1)',
         borderWidth: 2,
@@ -285,7 +347,7 @@ const MySaving = () => {
       },
       {
         label: 'Withdrawals',
-        data: withdrawals.slice(0, 6).map(w => Number(w.amount) || 0),
+        data: chartWithdrawals,
         borderColor: '#E11D48',
         backgroundColor: 'rgba(225, 29, 72, 0.05)',
         borderWidth: 2,
@@ -337,29 +399,6 @@ const MySaving = () => {
           </p>
         </div>
         <div className="sv-hero-profile">
-          <span className="sv-hero-profile-label">Current Member</span>
-          <strong>{memberName}</strong>
-          <span>{memberEmail}</span>
-        </div>
-      </section>
-
-      <section className="sv-stat-grid">
-        <div className="sv-stat-card sv-stat-card--dark">
-          <span className="sv-stat-label">Total Simpanan</span>
-          <strong className="sv-stat-value">{loadingWallets ? '—' : `Rp ${getTotalBalance()}`}</strong>
-          <span className="sv-stat-note">All cooperative savings combined</span>
-        </div>
-        <div className="sv-stat-card">
-          <span className="sv-stat-label">Simpanan Wajib</span>
-          <strong className="sv-stat-value">{loadingWallets ? '—' : `Rp ${getBalance(true)}`}</strong>
-          <span className="sv-stat-note">Per month target: {loadingObligations ? '—' : `Rp ${formatRp(obligations.mandatory_amount)}`}</span>
-        </div>
-        <div className="sv-stat-card">
-          <span className="sv-stat-label">Simpanan Sukarela</span>
-          <strong className="sv-stat-value">{loadingWallets ? '—' : `Rp ${getBalance(false)}`}</strong>
-          <span className="sv-stat-note">Current request: {loadingObligations ? '—' : `Rp ${formatRp(obligations.voluntary_amount)}`}</span>
-        </div>
-        <div className="sv-stat-card sv-stat-card--accent">
           <span className="sv-stat-label">Last Withdrawal</span>
           <strong className="sv-stat-value">{latestWithdrawal ? `Rp ${formatRp(latestWithdrawal.amount)}` : '—'}</strong>
           <span className="sv-stat-note">{latestWithdrawal?.status_name || latestWithdrawal?.status_code || 'No withdrawal yet'}</span>
@@ -455,11 +494,19 @@ const MySaving = () => {
                 <button
                   className="sv-uc-request-btn"
                   onClick={() => { setShowVoluntaryForm(v => !v); setVrError(''); setVrMessage(''); setVrAmount(''); }}
+                  disabled={!isVoluntaryChangeAllowed}
+                  title={isVoluntaryChangeAllowed ? 'Ajukan perubahan' : 'Permintaan perubahan hanya bisa dilakukan tanggal 22-23'}
+                  style={{ opacity: isVoluntaryChangeAllowed ? 1 : 0.5, cursor: isVoluntaryChangeAllowed ? 'pointer' : 'not-allowed' }}
                 >
                   {showVoluntaryForm ? 'Batal' : '+ Request Perubahan'}
                 </button>
               </div>
             </div>
+            {!isVoluntaryChangeAllowed && (
+              <p className="sv-vr-note" style={{ marginTop: 12, color: '#64748B', fontSize: 13 }}>
+                Perubahan simpanan sukarela hanya bisa diajukan pada tanggal 22-23 setiap bulan.
+              </p>
+            )}
 
             {vrMessage && (
               <div className="sv-uc-success-msg">
@@ -668,42 +715,55 @@ const MySaving = () => {
                 </p>
               ) : (
                 <div className="sv-timeline">
-                  {paymentSchedule.paid.map((bill) => {
-                    const period = new Date(bill.bill_period_start);
-                    const label = period.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
-                    const dueLabel = bill.paid_at
-                      ? new Date(bill.paid_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })
-                      : bill.due_date
-                        ? new Date(bill.due_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })
-                        : '-';
+                  {(() => {
+                    const combined = [
+                      ...paymentSchedule.paid.map((bill) => ({ ...bill, schedule_status: 'Paid' })),
+                      ...paymentSchedule.upcoming.map((bill) => ({ ...bill, schedule_status: 'Upcoming' })),
+                    ];
+                    const sorted = combined.sort((a, b) => {
+                      const aDate = new Date(a.bill_period_start || a.due_date || a.paid_at);
+                      const bDate = new Date(b.bill_period_start || b.due_date || b.paid_at);
+                      return bDate - aDate;
+                    });
+                    const displayItems = showAllSchedule ? sorted : sorted.slice(0, 5);
                     return (
-                      <div key={bill.id} className="sv-tl-item paid">
-                        <div className="sv-tl-icon"><Check size={12} strokeWidth={3} /></div>
-                        <div className="sv-tl-content">
-                          <span className="sv-tl-status">Paid</span>
-                          <h4 className="sv-tl-title">{label}</h4>
-                          <p className="sv-tl-desc">{dueLabel} — Rp {formatRp(bill.amount_due)}</p>
-                        </div>
-                      </div>
+                      <>
+                        {displayItems.map((bill) => {
+                          const period = bill.bill_period_start ? new Date(bill.bill_period_start) : null;
+                          const label = period
+                            ? period.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
+                            : 'No Period';
+                          const dueDate = bill.paid_at || bill.due_date;
+                          const dueLabel = dueDate
+                            ? new Date(dueDate).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })
+                            : '-';
+                          const isPaid = bill.schedule_status === 'Paid';
+                          return (
+                            <div key={`${bill.id}-${bill.schedule_status}`} className={`sv-tl-item ${isPaid ? 'paid' : 'upcoming'}`}>
+                              <div className="sv-tl-icon">
+                                {isPaid ? <Check size={12} strokeWidth={3} /> : null}
+                              </div>
+                              <div className="sv-tl-content">
+                                <span className="sv-tl-status">{bill.schedule_status}</span>
+                                <h4 className="sv-tl-title">{label}</h4>
+                                <p className="sv-tl-desc">{dueLabel} — Rp {formatRp(bill.amount_due)}</p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {combined.length > 5 && (
+                          <div style={{ textAlign: 'center', marginTop: 12 }}>
+                            <button
+                              className="sv-show-all-btn"
+                              onClick={() => setShowAllSchedule(prev => !prev)}
+                            >
+                              {showAllSchedule ? 'Tampilkan Lebih Sedikit' : `Show All (${combined.length})`}
+                            </button>
+                          </div>
+                        )}
+                      </>
                     );
-                  })}
-                  {paymentSchedule.upcoming.map((bill) => {
-                    const period = new Date(bill.bill_period_start);
-                    const label = period.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
-                    const dueLabel = bill.due_date
-                      ? new Date(bill.due_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })
-                      : '-';
-                    return (
-                      <div key={bill.id} className="sv-tl-item upcoming">
-                        <div className="sv-tl-icon"></div>
-                        <div className="sv-tl-content">
-                          <span className="sv-tl-status">Upcoming</span>
-                          <h4 className="sv-tl-title">{label}</h4>
-                          <p className="sv-tl-desc">{dueLabel} — Rp {formatRp(bill.amount_due)}</p>
-                        </div>
-                      </div>
-                    );
-                  })}
+                  })()}
                 </div>
               )}
             </div>
@@ -728,7 +788,7 @@ const MySaving = () => {
                   onClick={() => setShowWithdrawForm(true)}
                   style={{ display: showWithdrawForm ? 'none' : 'inline-flex' }}
                 >
-                  $ Withdraw
+                  Withdraw
                 </button>
               </div>
             </div>
@@ -741,7 +801,7 @@ const MySaving = () => {
                     Last 6 Months Performance
                   </p>
                 </div>
-                <span className="appr-badge complete">+12% Overall</span>
+                <span ></span>
               </div>
               <div style={{ position: 'relative', height: '240px', width: '100%' }}>
                 <Line data={chartData} options={chartOptions} />

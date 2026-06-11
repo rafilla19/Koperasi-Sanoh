@@ -16,13 +16,14 @@ table {
 
 thead {
   background: linear-gradient(135deg, #3b82f6, #2563eb);
-  color: white;
+  color: #ffffff;
 }
 
 thead th {
-  color: white;
+  color: #ffffff !important;
   font-weight: 600;
   letter-spacing: 0.5px;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.15);
 }
 
 th,
@@ -209,6 +210,117 @@ tr {
 
 .da-download-btn:hover {
   background: #dcfce7;
+}
+
+/* DOCUMENT ROW HOVER */
+tbody tr:hover {
+  background: #f0f7ff;
+  transition: background 0.15s;
+}
+
+.da-row-clickable {
+  cursor: pointer;
+}
+
+/* PDF VIEWER MODAL */
+.da-viewer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  animation: fadeIn 0.18s ease;
+}
+
+.da-viewer-modal {
+  background: #1e293b;
+  border-radius: 16px;
+  width: 92vw;
+  max-width: 960px;
+  height: 88vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 32px 80px rgba(0,0,0,0.5);
+  animation: slideUp 0.2s ease;
+}
+
+.da-viewer-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  background: #0f172a;
+  border-bottom: 1px solid #334155;
+  flex-shrink: 0;
+}
+
+.da-viewer-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #f1f5f9;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.da-viewer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.da-viewer-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 8px;
+  border: none;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  text-decoration: none;
+}
+
+.da-viewer-btn:hover {
+  opacity: 0.85;
+}
+
+.da-viewer-btn-close {
+  background: #334155;
+  color: #f1f5f9;
+}
+
+.da-viewer-btn-open {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: #fff;
+}
+
+.da-viewer-frame {
+  flex: 1;
+  width: 100%;
+  border: none;
+  background: #fff;
+}
+
+.da-viewer-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #94a3b8;
+  font-size: 14px;
+  gap: 12px;
 }
 
 /* EMPTY STATE */

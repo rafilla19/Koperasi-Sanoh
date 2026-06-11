@@ -12,6 +12,8 @@ urlpatterns = [
     path('my-savings/notifications/', views.my_notifications, name='my-notifications'),
     path('my-savings/obligations/', views.my_saving_obligations, name='my-saving-obligations'),
     path('my-savings/payment-schedule/', views.my_payment_schedule, name='my-payment-schedule'),
+    path('my-savings/monthly-trend/', views.my_savings_monthly_trend, name='my-savings-monthly-trend'),
+    path('my-savings/timeline/', views.my_savings_timeline, name='my-savings-timeline'),
     path('my-savings/paid-bills/', views.my_paid_bills, name='my-paid-bills'),
 
     # ── Admin: dashboard ────────────────────────────────────────

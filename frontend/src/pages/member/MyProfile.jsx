@@ -271,7 +271,7 @@ const MyProfile = () => {
           <h2 className="pb-name">{profile.fullName || '...'}</h2>
           <div className="pb-meta-grid">
             <div>
-              <span className="pb-label">ID NUMBER</span>
+              <span className="pb-label">NIK Employee</span>
               <div className="pb-meta-val">{profile.nik || '...'}</div>
             </div>
             <div>

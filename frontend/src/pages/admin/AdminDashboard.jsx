@@ -116,8 +116,8 @@ const AdminDashboard = () => {
       gradient: 'linear-gradient(135deg, #2563EB, #60A5FA)',
     },
     {
-      label: 'SHU Bulan Ini',
-      sublabel: 'Sisa Hasil Usaha bulan berjalan',
+      label: 'Total SHU',
+      sublabel: 'Sisa Hasil Usaha belum terdistribusi',
       value: formatRupiah(currentMonthShu),
       icon: <TrendingUp size={22} />,
       gradient: 'linear-gradient(135deg, #10B981, #6EE7B7)',
@@ -136,7 +136,7 @@ const AdminDashboard = () => {
     datasets: [
       {
         fill: false,
-        label: 'Pemasukan',
+        label: 'Masuk (Tabungan & Cicilan)',
         data: weeklyCashflowChart.income,
         borderColor: '#4CAF50',
         backgroundColor: 'rgba(76, 175, 80, 0.15)',
@@ -145,7 +145,7 @@ const AdminDashboard = () => {
       },
       {
         fill: false,
-        label: 'Pengeluaran',
+        label: 'Keluar (Penarikan & SHU)',
         data: weeklyCashflowChart.expense,
         borderColor: '#F87171',
         backgroundColor: 'rgba(248, 113, 113, 0.15)',
@@ -305,18 +305,20 @@ const AdminDashboard = () => {
           <div className="ad-chart-header">
             <div>
               <h3>Analitik Transaksi</h3>
-              <p className="ad-chart-sub">Arus kas pemasukan & pengeluaran</p>
+              <p className="ad-chart-sub">Masuk: Tabungan &amp; Cicilan &nbsp;|&nbsp; Keluar: Penarikan &amp; SHU</p>
             </div>
             <select
               className="ad-chart-select"
               value={weeklyRange}
               onChange={(e) => setWeeklyRange(e.target.value)}
             >
-              <option value="weekly">Mingguan</option>
-              <option value="3month">3 Bulan Terakhir</option>
-              <option value="6month">6 Bulan Terakhir</option>
-              <option value="1year">1 Tahun Terakhir</option>
-              <option value="3year">3 Tahun Terakhir</option>
+              <option value="7days">7 Hari Terakhir (Harian)</option>
+              <option value="30days">30 Hari Terakhir (Harian)</option>
+              <option value="weekly">1 Bulan Terakhir (Mingguan)</option>
+              <option value="3month">3 Bulan Terakhir (Mingguan)</option>
+              <option value="6month">6 Bulan Terakhir (Mingguan)</option>
+              <option value="1year">1 Tahun Terakhir (Mingguan)</option>
+              <option value="3year">3 Tahun Terakhir (Mingguan)</option>
             </select>
           </div>
           <div className="ad-chart-body">

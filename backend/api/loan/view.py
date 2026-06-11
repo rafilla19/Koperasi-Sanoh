@@ -302,6 +302,7 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
                             ('Duration', f'{repayment_term} months'),
                             ('Interest Rate', f'{interest_rate_percent}% / month'),
                             ('Total Repayment', f'Rp {total_amount:,.0f}'),
+                            ('Proof of Transfer', 'Attached in this email' if saved_path else 'Not attached'),
                         ],
                         highlight=('Status', 'Approved'),
                         footer_note='You can now view your repayment schedule in the dashboard.'
@@ -313,6 +314,30 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
                         [member_email]
                     )
                     msg.attach_alternative(html_message, 'text/html')
+                    
+                    # Attach proof file from default storage (supports S3/Supabase/local)
+                    if saved_path:
+                        attached = False
+                        try:
+                            with default_storage.open(saved_path, 'rb') as stored_file:
+                                file_bytes = stored_file.read()
+                            filename_only = os.path.basename(saved_path) or 'proof_of_transfer'
+                            mime_type = mimetypes.guess_type(filename_only)[0] or 'application/octet-stream'
+                            msg.attach(filename_only, file_bytes, mime_type)
+                            attached = True
+                        except Exception as attach_err:
+                            print(f"Failed to attach loan approval proof file: {str(attach_err)}")
+                        if not attached and proof_of_transfer:
+                            try:
+                                with urlopen(proof_of_transfer) as response:
+                                    remote_bytes = response.read()
+                                remote_name = os.path.basename(saved_path) or 'proof_of_transfer'
+                                remote_mime = mimetypes.guess_type(remote_name)[0] or 'application/octet-stream'
+                                msg.attach(remote_name, remote_bytes, remote_mime)
+                                attached = True
+                            except Exception as url_attach_err:
+                                print(f"Failed to attach loan approval proof file from URL: {str(url_attach_err)}")
+
                     msg.send(fail_silently=True)
                 except Exception as e:
                     print(f"Failed to send member approval notification: {str(e)}")

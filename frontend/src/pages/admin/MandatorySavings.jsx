@@ -268,9 +268,9 @@ export default function MandatorySavings() {
       {/* TABLE */}
       <div className="table-wrapper">
       <table>
-        <thead>
+        <thead style={{ background: 'linear-gradient(135deg, #3b82f6, #2563eb)' }}>
           <tr>
-            <th style={{ width: 36 }}>
+            <th style={{ width: 36, padding: '1rem', borderBottom: 'none' }}>
               <input
                 type="checkbox"
                 checked={allChecked}
@@ -279,16 +279,16 @@ export default function MandatorySavings() {
                 style={{ cursor: 'pointer' }}
               />
             </th>
-            <th style={{ width: 40 }}>No</th>
-            <th>Nama Member</th>
-            <th>NIK</th>
-            <th>Department</th>
-            <th>Status Karyawan</th>
-            <th>Simp. Pokok</th>
-            <th>Simp. Wajib</th>
-            <th>Simp. Sukarela</th>
-            <th>Total</th>
-            <th>Status</th>
+            <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none', width: 40 }}>No</th>
+            <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Nama Member</th>
+            <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>NIK</th>
+            <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Department</th>
+            <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Status Karyawan</th>
+            <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Simp. Pokok</th>
+            <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Simp. Wajib</th>
+            <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Simp. Sukarela</th>
+            <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Total</th>
+            <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Status</th>
           </tr>
         </thead>
         <tbody>
