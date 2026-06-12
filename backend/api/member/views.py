@@ -70,6 +70,15 @@ def _parse_iso_date(value):
     return value
 
 
+def _int_or_none(value):
+    if value in (None, ''):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _absolute_media_url(request, path):
     if not path:
         return None
@@ -810,14 +819,21 @@ class MemberViewSet(viewsets.ViewSet):
                     member.department_id = data['department_id']
                     member_updates.append('department_id')
                 if data.get('employee_status_id') is not None:
-                    member.employee_status_id = data['employee_status_id']
+                    member.employee_status_id = _int_or_none(data.get('employee_status_id'))
                     member_updates.append('employee_status_id')
 
                 contract_end_value = None
-                if data.get('employee_status_id') == 2 and 'contract_end' in data:
-                    contract_end_value = _parse_iso_date(data.get('contract_end'))
-                elif data.get('employee_status_id') is not None and data.get('employee_status_id') != 2:
-                    contract_end_value = None
+                new_status = _int_or_none(data.get('employee_status_id')) if data.get('employee_status_id') is not None else member.employee_status_id
+                if 'contract_end' in data:
+                    if new_status == 2 and data.get('contract_end') not in (None, ''):
+                        contract_end_value = _parse_iso_date(data.get('contract_end'))
+                    else:
+                        contract_end_value = None
+                elif data.get('employee_status_id') is not None:
+                    if _int_or_none(data.get('employee_status_id')) == 2:
+                        contract_end_value = member.contract_end
+                    else:
+                        contract_end_value = None
 
                 if 'contract_end' in data or data.get('employee_status_id') is not None:
                     member.contract_end = contract_end_value

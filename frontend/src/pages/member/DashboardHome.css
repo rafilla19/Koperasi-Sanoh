@@ -792,8 +792,12 @@
   font-family: var(--dh-font-head);
   font-size: 16px;
   font-weight: 700;
-  color: var(--dh-navy);
+  color: #1d4ed8 !important;
   margin: 0;
+}
+
+.tx-card-header > h3 {
+  color: #1d4ed8 !important;
 }
 
 /* Filters strip */
@@ -929,7 +933,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--dh-txt-3);
+  color: #000 !important;
   border-bottom: 1px solid var(--dh-border);
   white-space: nowrap;
 }
