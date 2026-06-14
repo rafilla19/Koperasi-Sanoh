@@ -138,6 +138,23 @@ export const shuApi = {
     return fetchJson(apiUrl(`/admin/shu/results/?${params}`))
   },
 
+  getComponentAllocations: ({ year, month } = {}) => {
+    const params = new URLSearchParams()
+    if (year) params.append('year', year)
+    if (month) params.append('month', month)
+    return fetchJson(apiUrl(`/admin/shu/component-allocations/?${params}`))
+  },
+
+  saveComponentAllocations: (data) =>
+    fetch(apiUrl('/admin/shu/component-allocations/save/'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }).then(r => {
+      if (!r.ok) return r.json().then(err => Promise.reject(err))
+      return r.json()
+    }),
+
   distributeShu: (data) =>
     fetch(apiUrl('/admin/shu/results/'), {
       method: 'POST',

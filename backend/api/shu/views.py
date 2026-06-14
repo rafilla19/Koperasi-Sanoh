@@ -16,7 +16,7 @@ from api.models import IncomeExpenseCategories, IncomeExpenses  # noqa: F401 —
 from .models import (
     AccountingPeriods, MasterConfiguration,
     ShuPeriods, ShuMemberDistributions, ShuMemberDistributionsMonthly,
-    ShuResults, ShuMemberBases,
+    ShuResults, ShuMemberBases, ShuComponentAllocation,
     STATUS_PENDING_ID, STATUS_PAID_ID,
 )
 from django.db import transaction, IntegrityError, connection
@@ -827,16 +827,36 @@ def admin_shu_results(request):
         if net_profit is None:
             net_profit = (total_revenue - total_expense).quantize(Decimal('0.01'))
 
-    result, created = ShuResults.objects.update_or_create(
-        period_year=int(year),
-        period_month=int(month) if month else 13,
-        defaults={
-            'total_revenue': total_revenue,
-            'total_expense': total_expense,
-            'net_profit': net_profit,
-            'distributed_status': True,
-        },
-    )
+    with transaction.atomic():
+        result, created = ShuResults.objects.update_or_create(
+            period_year=int(year),
+            period_month=int(month) if month else 13,
+            defaults={
+                'total_revenue': total_revenue,
+                'total_expense': total_expense,
+                'net_profit': net_profit,
+                'distributed_status': True,
+            },
+        )
+
+        # Clear existing allocations and rebuild them from MasterConfiguration
+        ShuComponentAllocation.objects.filter(shu_result=result).delete()
+        active_configs = MasterConfiguration.objects.filter(deleted_at__isnull=True).order_by('id')
+        allocations = []
+        for config in active_configs:
+            allocated_amount = (result.net_profit * config.percentage / Decimal('100')).quantize(Decimal('0.01'))
+            allocations.append(ShuComponentAllocation(
+                shu_result=result,
+                master_configuration=config,
+                component_name=config.component_name,
+                percentage=config.percentage,
+                allocated_amount=allocated_amount,
+                period_month=result.period_month,
+                period_year=result.period_year,
+            ))
+        if allocations:
+            ShuComponentAllocation.objects.bulk_create(allocations)
+
     return Response(ShuResultsSerializer(result).data, status=201 if created else 200)
 
 
@@ -1537,3 +1557,196 @@ def admin_shu_stats(request):
         'total_recipients': distributed.values('member_id').distinct().count(),
         'latest_year': ShuPeriods.objects.order_by('-year').values_list('year', flat=True).first(),
     })
+
+
+@api_view(['GET'])
+def get_component_allocations(request):
+    """
+    GET  → list component allocations for a given period_year and period_month (13 for annual).
+    """
+    year_param = request.query_params.get('year')
+    month_param = request.query_params.get('month')
+
+    if not year_param:
+        return Response({'error': 'year parameter is required'}, status=400)
+
+    try:
+        year = int(year_param)
+        month = int(month_param) if month_param else 13
+    except ValueError:
+        return Response({'error': 'Invalid year or month value'}, status=400)
+
+    try:
+        shu_result = ShuResults.objects.get(period_year=year, period_month=month, deleted_at__isnull=True)
+    except ShuResults.DoesNotExist:
+        return Response({'error': f'SHU Result not found for period {month}/{year}'}, status=404)
+
+    allocs = ShuComponentAllocation.objects.filter(shu_result=shu_result, deleted_at__isnull=True).order_by('id')
+    
+    # If no allocations exist but SHU result exists, initialize them
+    if not allocs.exists():
+        active_configs = MasterConfiguration.objects.filter(deleted_at__isnull=True).order_by('id')
+        allocations = []
+        for config in active_configs:
+            allocated_amount = (shu_result.net_profit * config.percentage / Decimal('100')).quantize(Decimal('0.01'))
+            allocations.append(ShuComponentAllocation(
+                shu_result=shu_result,
+                master_configuration=config,
+                component_name=config.component_name,
+                percentage=config.percentage,
+                allocated_amount=allocated_amount,
+                period_month=shu_result.period_month,
+                period_year=shu_result.period_year,
+            ))
+        if allocations:
+            ShuComponentAllocation.objects.bulk_create(allocations)
+            allocs = ShuComponentAllocation.objects.filter(shu_result=shu_result, deleted_at__isnull=True).order_by('id')
+
+    data = []
+    for a in allocs:
+        data.append({
+            'id': a.id,
+            'master_configuration_id': a.master_configuration_id,
+            'component_name': a.component_name,
+            'percentage': float(a.percentage),
+            'allocated_amount': float(a.allocated_amount),
+            'period_month': a.period_month,
+            'period_year': a.period_year,
+        })
+
+    return Response({
+        'net_profit': float(shu_result.net_profit),
+        'results': data
+    })
+
+
+@api_view(['POST'])
+def save_component_allocations(request):
+    """
+    POST → update component allocations for a given period and recalculate member distributions.
+    Body: { year, month, allocations: [ { id, percentage }, ... ] }
+    """
+    year_param = request.data.get('year')
+    month_param = request.data.get('month')
+    allocations_data = request.data.get('allocations', [])
+
+    if not year_param:
+        return Response({'error': 'year is required'}, status=400)
+
+    try:
+        year = int(year_param)
+        month = int(month_param) if month_param else 13
+    except ValueError:
+        return Response({'error': 'Invalid year or month value'}, status=400)
+
+    try:
+        shu_result = ShuResults.objects.get(period_year=year, period_month=month, deleted_at__isnull=True)
+    except ShuResults.DoesNotExist:
+        return Response({'error': 'SHU Result not found for this period'}, status=404)
+
+    # Validate that total percentage sums to 100%
+    try:
+        total_pct = sum(Decimal(str(a.get('percentage', 0))) for a in allocations_data)
+    except (TypeError, ValueError, InvalidOperation):
+        return Response({'error': 'Nilai persentase tidak valid'}, status=400)
+
+    if total_pct != Decimal('100'):
+        return Response({'error': f'Total persentase harus 100%. Saat ini: {total_pct}%'}, status=400)
+
+    jasa_modal_pool = Decimal('0')
+
+    with transaction.atomic():
+        for alloc_item in allocations_data:
+            alloc_id = alloc_item.get('id')
+            try:
+                pct = Decimal(str(alloc_item.get('percentage', 0)))
+            except (TypeError, ValueError, InvalidOperation):
+                return Response({'error': 'Nilai persentase tidak valid'}, status=400)
+
+            allocated_amount = (shu_result.net_profit * pct / Decimal('100')).quantize(Decimal('0.01'))
+
+            try:
+                alloc = ShuComponentAllocation.objects.get(id=alloc_id, shu_result=shu_result)
+                alloc.percentage = pct
+                alloc.allocated_amount = allocated_amount
+                alloc.save(update_fields=['percentage', 'allocated_amount', 'updated_at'])
+                
+                if 'jasa modal' in alloc.component_name.lower():
+                    jasa_modal_pool = allocated_amount
+            except ShuComponentAllocation.DoesNotExist:
+                return Response({'error': f'Allocation item with ID {alloc_id} not found for this period'}, status=404)
+
+        # ── Recalculate Member Distributions ──
+        from api.saving.models import MemberSavingObligations
+        obligations = MemberSavingObligations.objects.filter(
+            saving_type_id__in=[1, 2],
+            is_active=True,
+            deleted_at__isnull=True,
+            member__deleted_at__isnull=True,
+        ).values('member_id', 'saving_type_id', 'monthly_amount')
+
+        now = timezone.now()
+        if shu_result.period_month == 13:
+            months_multiplier = Decimal('12') if year < now.year else Decimal(str(now.month))
+        else:
+            months_multiplier = Decimal('1')
+
+        member_savings = {}
+        for o in obligations:
+            mid = o['member_id']
+            if mid not in member_savings:
+                member_savings[mid] = Decimal('0')
+            member_savings[mid] += o['monthly_amount'] * months_multiplier
+
+        total_all_savings = sum(member_savings.values()) or Decimal('0')
+        members = Members.objects.filter(deleted_at__isnull=True)
+
+        if shu_result.period_month == 13:
+            # Update or create ShuMemberDistributions (annual)
+            for m in members:
+                total = member_savings.get(m.id, Decimal('0'))
+                shu_jasa_modal = (
+                    (total / total_all_savings * jasa_modal_pool).quantize(Decimal('0.01'))
+                    if total_all_savings > 0 else Decimal('0')
+                )
+                try:
+                    dist = ShuMemberDistributions.objects.get(period=shu_result, member=m)
+                    dist.total_savings = total
+                    dist.total_shu = shu_jasa_modal
+                    dist.updated_at = now
+                    dist.save(update_fields=['total_savings', 'total_shu', 'updated_at'])
+                except ShuMemberDistributions.DoesNotExist:
+                    ShuMemberDistributions.objects.create(
+                        period=shu_result,
+                        member=m,
+                        total_savings=total,
+                        total_shu=shu_jasa_modal,
+                        status_id=STATUS_PENDING_ID,
+                        created_at=now,
+                        updated_at=now,
+                    )
+        else:
+            # Update or create ShuMemberDistributionsMonthly
+            for m in members:
+                total = member_savings.get(m.id, Decimal('0'))
+                shu_jasa_modal = (
+                    (total / total_all_savings * jasa_modal_pool).quantize(Decimal('0.01'))
+                    if total_all_savings > 0 else Decimal('0')
+                )
+                try:
+                    dist = ShuMemberDistributionsMonthly.objects.get(period=shu_result, member=m)
+                    dist.total_savings = total
+                    dist.total_shu = shu_jasa_modal
+                    dist.updated_at = now
+                    dist.save(update_fields=['total_savings', 'total_shu', 'updated_at'])
+                except ShuMemberDistributionsMonthly.DoesNotExist:
+                    ShuMemberDistributionsMonthly.objects.create(
+                        period=shu_result,
+                        member=m,
+                        total_savings=total,
+                        total_shu=shu_jasa_modal,
+                        created_at=now,
+                        updated_at=now,
+                    )
+
+    return Response({'message': 'Alokasi SHU dan distribusi anggota berhasil diperbarui'})

@@ -46,6 +46,9 @@ urlpatterns = [
     # ── Admin: SHU Results ───────────────────────────────────────
     # GET ?year= ?month= → cek hasil | POST → simpan distribusi SHU
     path('admin/shu/results/', views.admin_shu_results, name='admin-shu-results'),
+    # GET ?year= ?month= → list allocations | POST → save modified allocations
+    path('admin/shu/component-allocations/', views.get_component_allocations, name='admin-shu-component-allocations'),
+    path('admin/shu/component-allocations/save/', views.save_component_allocations, name='admin-shu-component-allocations-save'),
     # GET ?range=1month|3month|6month|1year|3year → series data dari shu_results.net_profit
     path('admin/shu/net-sales/', views.admin_shu_net_sales, name='admin-shu-net-sales'),
     # GET ?range=weekly|3month|6month|1year|3year → weekly income/expense cashflow

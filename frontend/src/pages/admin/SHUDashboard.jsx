@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Download, TrendingUp, TrendingDown, ArrowUpRight, ArrowRight, PiggyBank, Calendar } from 'lucide-react';
+import { Download, TrendingUp, TrendingDown, ArrowUpRight, ArrowRight, PiggyBank, Calendar, X, AlertCircle } from 'lucide-react';
 import './SHUManagement.css';
 import { shuApi } from '../../api/shuApi';
 
@@ -65,8 +65,22 @@ const SHUDashboard = () => {
   const [selectedYear, setSelectedYear] = useState(String(currentYear));
   const [shuResult, setShuResult] = useState(null);
   const [masterConfigs, setMasterConfigs] = useState([]);
+  const [componentAllocations, setComponentAllocations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [savingsStats, setSavingsStats] = useState({ mandatory: 0, voluntary: 0, total: 0 });
+  const [refetchTrigger, setRefetchTrigger] = useState(0);
+
+  // Edit modal state
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [modalPeriodType, setModalPeriodType] = useState('tahunan'); // 'bulanan' or 'tahunan'
+  const [modalMonth, setModalMonth] = useState('');
+  const [modalYear, setModalYear] = useState(String(currentYear));
+  const [modalNetProfit, setModalNetProfit] = useState(0);
+  const [modalAllocations, setModalAllocations] = useState([]);
+  const [modalLoading, setModalLoading] = useState(false);
+  const [modalError, setModalError] = useState('');
+  const [modalSuccess, setModalSuccess] = useState('');
+  const [savingAllocations, setSavingAllocations] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -83,6 +97,21 @@ const SHUDashboard = () => {
         ]);
         setShuResult(result);
         setMasterConfigs(configs.results || []);
+        
+        let allocs = [];
+        try {
+          if (result && result.id) {
+            const allocsRes = await shuApi.getComponentAllocations({
+              year: selectedYear,
+              month: selectedMonth || undefined
+            });
+            allocs = allocsRes.results || [];
+          }
+        } catch (allocError) {
+          console.error("Gagal memuat detail alokasi SHU dari DB, fallback ke konfigurasi master", allocError);
+        }
+        setComponentAllocations(allocs);
+
         const rows = memberBases.results || [];
         setSavingsStats({
           mandatory: rows.reduce((s, r) => s + (r.mandatory_saving_monthly ?? 0), 0),
@@ -96,15 +125,102 @@ const SHUDashboard = () => {
       }
     };
     fetchData();
-  }, [selectedMonth, selectedYear]);
+  }, [selectedMonth, selectedYear, refetchTrigger]);
 
   const netProfit = Number(shuResult?.net_profit || 0);
-  const allocations = masterConfigs.map((cfg, i) => ({
-    label: cfg.component_name,
-    percentage: Number(cfg.percentage),
-    amount: netProfit * (Number(cfg.percentage) / 100),
-    color: ALLOC_COLORS[i % ALLOC_COLORS.length],
-  }));
+
+  const allocations = componentAllocations.length > 0
+    ? componentAllocations.map((alloc, i) => ({
+        id: alloc.id,
+        label: alloc.component_name,
+        percentage: Number(alloc.percentage),
+        amount: Number(alloc.allocated_amount),
+        color: ALLOC_COLORS[i % ALLOC_COLORS.length],
+      }))
+    : masterConfigs.map((cfg, i) => ({
+        label: cfg.component_name,
+        percentage: Number(cfg.percentage),
+        amount: netProfit * (Number(cfg.percentage) / 100),
+        color: ALLOC_COLORS[i % ALLOC_COLORS.length],
+      }));
+
+  // Modal logic handlers
+  const handleOpenEditModal = () => {
+    setModalPeriodType(selectedMonth ? 'bulanan' : 'tahunan');
+    setModalMonth(selectedMonth || '1');
+    setModalYear(selectedYear);
+    setModalError('');
+    setModalSuccess('');
+    setShowEditModal(true);
+  };
+
+  useEffect(() => {
+    if (!showEditModal) return;
+
+    const fetchAllocationsForModal = async () => {
+      setModalLoading(true);
+      setModalError('');
+      setModalAllocations([]);
+      setModalNetProfit(0);
+      try {
+        const monthParam = modalPeriodType === 'tahunan' ? undefined : modalMonth;
+        const res = await shuApi.getComponentAllocations({
+          year: modalYear,
+          month: monthParam || undefined,
+        });
+        setModalAllocations(res.results || []);
+        setModalNetProfit(res.net_profit || 0);
+      } catch (err) {
+        setModalError(err?.detail || err?.error || 'Belum ada data SHU untuk periode ini. Silakan buat hasil SHU terlebih dahulu di halaman Outcome Transaction.');
+      } finally {
+        setModalLoading(false);
+      }
+    };
+
+    fetchAllocationsForModal();
+  }, [showEditModal, modalPeriodType, modalMonth, modalYear]);
+
+  const handlePercentageChange = (id, rawValue) => {
+    setModalAllocations(prev =>
+      prev.map(alloc => {
+        if (alloc.id === id) {
+          const valNum = Number(rawValue) || 0;
+          return {
+            ...alloc,
+            percentage: rawValue,
+            allocated_amount: modalNetProfit * (valNum / 100),
+          };
+        }
+        return alloc;
+      })
+    );
+  };
+
+  const handleSaveAllocations = async () => {
+    setSavingAllocations(true);
+    setModalError('');
+    setModalSuccess('');
+    try {
+      const monthParam = modalPeriodType === 'tahunan' ? undefined : modalMonth;
+      
+      const payload = {
+        year: Number(modalYear),
+        month: monthParam ? Number(monthParam) : null,
+        allocations: modalAllocations.map(alloc => ({
+          id: alloc.id,
+          percentage: Number(alloc.percentage)
+        }))
+      };
+
+      await shuApi.saveComponentAllocations(payload);
+      setModalSuccess('Alokasi SHU berhasil diperbarui dan total SHU anggota telah disesuaikan.');
+      setRefetchTrigger(prev => prev + 1);
+    } catch (err) {
+      setModalError(err?.detail || err?.error || 'Gagal menyimpan alokasi.');
+    } finally {
+      setSavingAllocations(false);
+    }
+  };
 
   const periodLabel = selectedMonth
     ? `${MONTHS.find(m => m.value === selectedMonth)?.label} ${selectedYear}`
@@ -194,9 +310,31 @@ const SHUDashboard = () => {
               Distribusi penggunaan Sisa Hasil Usaha
             </p>
           </div>
-          {!loading && shuResult && (
-            <div style={{ fontSize: 13, color: '#374151', fontWeight: 600, background: '#f9fafb', padding: '6px 12px', borderRadius: 8, border: '1px solid #e5e7eb' }}>
-              Total SHU: <span style={{ color: '#2563eb' }}>Rp {fmt(netProfit)}</span>
+          {!loading && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button
+                onClick={handleOpenEditModal}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: 8,
+                  border: '1px solid #d1d5db',
+                  background: '#fff',
+                  color: '#374151',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4
+                }}
+              >
+                Edit Alokasi
+              </button>
+              {shuResult && (
+                <div style={{ fontSize: 13, color: '#374151', fontWeight: 600, background: '#f9fafb', padding: '6px 12px', borderRadius: 8, border: '1px solid #e5e7eb' }}>
+                  Total SHU: <span style={{ color: '#2563eb' }}>Rp {fmt(netProfit)}</span>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -310,6 +448,254 @@ const SHUDashboard = () => {
           </div>
         </div>
       </div>
+
+      {/* Edit Allocation Modal */}
+      {showEditModal && (
+        <div className="shu-modal-overlay" onClick={() => setShowEditModal(false)}>
+          <div className="shu-modal-content" style={{ maxWidth: 620 }} onClick={e => e.stopPropagation()}>
+            <div className="shu-modal-header">
+              <div className="shu-modal-title">Edit Alokasi SHU Komponen</div>
+              <button className="shu-modal-close" onClick={() => setShowEditModal(false)}><X size={20} /></button>
+            </div>
+            
+            <div className="shu-form-container" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* Period Type Selection */}
+              <div style={{ display: 'flex', gap: 16, alignItems: 'center', borderBottom: '1px solid #f3f4f6', paddingBottom: 12 }}>
+                <label style={{ fontWeight: 600, fontSize: 13, color: '#374151' }}>Tipe Periode:</label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    type="button"
+                    onClick={() => setModalPeriodType('bulanan')}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: 20,
+                      border: '1px solid #d1d5db',
+                      background: modalPeriodType === 'bulanan' ? '#3b82f6' : '#fff',
+                      color: modalPeriodType === 'bulanan' ? '#fff' : '#374151',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Bulanan
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setModalPeriodType('tahunan')}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: 20,
+                      border: '1px solid #d1d5db',
+                      background: modalPeriodType === 'tahunan' ? '#3b82f6' : '#fff',
+                      color: modalPeriodType === 'tahunan' ? '#fff' : '#374151',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Tahunan
+                  </button>
+                </div>
+              </div>
+
+              {/* Period Selection Controls */}
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                {modalPeriodType === 'bulanan' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 120 }}>
+                    <label style={{ fontWeight: 600, fontSize: 12, color: '#4b5563' }}>Bulan</label>
+                    <select
+                      value={modalMonth}
+                      onChange={e => setModalMonth(e.target.value)}
+                      className="shu-filter-select"
+                      style={{ width: '100%' }}
+                    >
+                      {MONTHS.filter(m => m.value !== '').map(m => (
+                        <option key={m.value} value={m.value}>{m.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 120 }}>
+                  <label style={{ fontWeight: 600, fontSize: 12, color: '#4b5563' }}>Tahun</label>
+                  <select
+                    value={modalYear}
+                    onChange={e => setModalYear(e.target.value)}
+                    className="shu-filter-select"
+                    style={{ width: '100%' }}
+                  >
+                    {YEARS.map(y => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Error messages */}
+              {modalError && (
+                <div style={{
+                  padding: '10px 14px',
+                  background: '#fef2f2',
+                  border: '1px solid #fecaca',
+                  borderRadius: 8,
+                  fontSize: 12,
+                  color: '#dc2626',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6
+                }}>
+                  <AlertCircle size={14} style={{ flexShrink: 0 }} />
+                  <span>{modalError}</span>
+                </div>
+              )}
+
+              {/* Success message */}
+              {modalSuccess && (
+                <div style={{
+                  padding: '10px 14px',
+                  background: '#f0fdf4',
+                  border: '1px solid #bbf7d0',
+                  borderRadius: 8,
+                  fontSize: 12,
+                  color: '#15803d',
+                  fontWeight: 600
+                }}>
+                  {modalSuccess}
+                </div>
+              )}
+
+              {/* Allocation Editing Form */}
+              {modalLoading ? (
+                <div style={{ textAlign: 'center', padding: '24px 0', color: '#9ca3af', fontSize: 13 }}>
+                  Memuat data alokasi...
+                </div>
+              ) : modalAllocations.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: '#eff6ff', borderRadius: 8, fontSize: 12, fontWeight: 600, color: '#2563eb' }}>
+                    <span>Total SHU (Net Profit):</span>
+                    <span>Rp {fmt(modalNetProfit)}</span>
+                  </div>
+
+                  <table style={{ display: 'table', width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ display: 'table-row', borderBottom: '2px solid #e5e7eb', textAlign: 'left' }}>
+                        <th style={{ display: 'table-cell', padding: '8px 4px', color: '#4b5563', fontWeight: 600 }}>Komponen</th>
+                        <th style={{ display: 'table-cell', padding: '8px 4px', color: '#4b5563', fontWeight: 600, width: '100px' }}>Persentase (%)</th>
+                        <th style={{ display: 'table-cell', padding: '8px 4px', color: '#4b5563', fontWeight: 600, textAlign: 'right', width: '150px' }}>Nilai Alokasi (Rp)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {modalAllocations.map(alloc => (
+                        <tr key={alloc.id} style={{ display: 'table-row', borderBottom: '1px solid #f3f4f6' }}>
+                          <td style={{ display: 'table-cell', padding: '8px 4px', color: '#1f2937', fontWeight: 500 }}>{alloc.component_name}</td>
+                          <td style={{ display: 'table-cell', padding: '8px 4px' }}>
+                            <input
+                              type="number"
+                              step="any"
+                              min="0"
+                              max="100"
+                              value={alloc.percentage}
+                              onChange={e => handlePercentageChange(alloc.id, e.target.value)}
+                              style={{
+                                width: '80px',
+                                padding: '4px 8px',
+                                borderRadius: 6,
+                                border: '1px solid #d1d5db',
+                                outline: 'none',
+                                fontSize: 13,
+                                color: '#1f2937',
+                                background: '#fff'
+                              }}
+                            />
+                          </td>
+                          <td style={{ display: 'table-cell', padding: '8px 4px', textAlign: 'right', color: '#374151', fontWeight: 600 }}>
+                            {fmt(alloc.allocated_amount)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  {/* Summary check */}
+                  {(() => {
+                    const sumPct = modalAllocations.reduce((sum, a) => sum + (Number(a.percentage) || 0), 0);
+                    const isCorrect = Math.abs(sumPct - 100) < 0.001;
+                    return (
+                      <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        marginTop: 8,
+                        padding: '10px 12px',
+                        background: isCorrect ? '#ecfdf5' : '#fffbeb',
+                        border: `1px solid ${isCorrect ? '#a7f3d0' : '#fef3c7'}`,
+                        borderRadius: 8,
+                        fontSize: 12,
+                        color: isCorrect ? '#065f46' : '#b45309',
+                        fontWeight: 600
+                      }}>
+                        <span>Total Persentase:</span>
+                        <span>{sumPct.toFixed(2)}% (Harus 100.00%)</span>
+                      </div>
+                    );
+                  })()}
+                </div>
+              ) : null}
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16, borderTop: '1px solid #e5e7eb', paddingTop: 16 }}>
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: 8,
+                    border: '1px solid #d1d5db',
+                    background: '#f3f4f6',
+                    fontSize: 13,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveAllocations}
+                  disabled={
+                    savingAllocations ||
+                    modalLoading ||
+                    modalAllocations.length === 0 ||
+                    Math.abs(modalAllocations.reduce((sum, a) => sum + (Number(a.percentage) || 0), 0) - 100) > 0.001
+                  }
+                  style={{
+                    padding: '8px 24px',
+                    borderRadius: 8,
+                    background:
+                      savingAllocations ||
+                      modalLoading ||
+                      modalAllocations.length === 0 ||
+                      Math.abs(modalAllocations.reduce((sum, a) => sum + (Number(a.percentage) || 0), 0) - 100) > 0.001
+                        ? '#93c5fd'
+                        : '#3b82f6',
+                    color: '#fff',
+                    border: 'none',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor:
+                      savingAllocations ||
+                      modalLoading ||
+                      modalAllocations.length === 0 ||
+                      Math.abs(modalAllocations.reduce((sum, a) => sum + (Number(a.percentage) || 0), 0) - 100) > 0.001
+                        ? 'not-allowed'
+                        : 'pointer'
+                  }}
+                >
+                  {savingAllocations ? 'Menyimpan...' : 'Simpan'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

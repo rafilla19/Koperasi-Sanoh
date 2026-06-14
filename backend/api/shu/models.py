@@ -127,3 +127,18 @@ class ShuMemberBases(models.Model):
         unique_together = (('shu_result', 'member'),)
 
 
+class ShuComponentAllocation(models.Model):
+    shu_result = models.ForeignKey('ShuResults', models.DO_NOTHING, db_column='shu_result_id')
+    master_configuration = models.ForeignKey('MasterConfiguration', models.DO_NOTHING, db_column='master_configuration_id')
+    component_name = models.CharField(max_length=255)
+    percentage = models.DecimalField(max_digits=10, decimal_places=2)
+    allocated_amount = models.DecimalField(max_digits=20, decimal_places=2)
+    period_month = models.IntegerField()
+    period_year = models.IntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    deleted_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'shu_component_allocations'
