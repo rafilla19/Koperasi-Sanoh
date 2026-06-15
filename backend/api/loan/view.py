@@ -9,6 +9,18 @@ from django.core.files.storage import default_storage
 from django.conf import settings
 from django.utils.html import strip_tags
 from decimal import Decimal
+
+def is_user_admin(user):
+    if not user or not user.is_authenticated:
+        return False
+    from django.db import connection
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT role_id FROM users WHERE email = %s", [user.email])
+            row = cursor.fetchone()
+            return row and row[0] == 1
+    except Exception:
+        return False
 import datetime
 import calendar
 import os
@@ -245,6 +257,33 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
 
             if not proof_file:
                 return Response({'error': 'Bukti transfer wajib diunggah untuk menyetujui pinjaman.'}, status=400)
+
+            # Check Remaining Allocation
+            import datetime
+            now = datetime.datetime.now()
+            sel_month = now.month
+            sel_year = now.year
+
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT monthly_limit FROM loan_funding_settings WHERE is_active = TRUE ORDER BY effective_date DESC LIMIT 1")
+                ml_row = cursor.fetchone()
+                monthly_limit = float(ml_row[0]) if ml_row and ml_row[0] is not None else 0.0
+
+                cursor.execute(
+                    "SELECT COALESCE(SUM(principal_amount),0) FROM loans WHERE EXTRACT(YEAR FROM start_date) = %s AND EXTRACT(MONTH FROM start_date) = %s AND status_id = 25",
+                    [sel_year, sel_month]
+                )
+                alloc_row = cursor.fetchone()
+                allocated = float(alloc_row[0]) if alloc_row and alloc_row[0] is not None else 0.0
+
+            remaining_allocation = monthly_limit - allocated
+            if remaining_allocation < 0:
+                remaining_allocation = 0.0
+
+            if float(updated_amount) > remaining_allocation:
+                # Format to Rupiah roughly
+                rupiah_format = "Rp " + "{:,.0f}".format(remaining_allocation).replace(',', '.')
+                return Response({'error': f'Sisa alokasi dana pinjaman bulan ini tidak mencukupi (Sisa: {rupiah_format}).'}, status=400)
 
             safe_name = os.path.basename(proof_file.name or 'proof_of_transfer')
             safe_name = safe_name.replace(' ', '_')
@@ -784,37 +823,19 @@ class LoanViewSet(viewsets.ModelViewSet):
             li.amount_principal, 
             li.amount_interest, 
             li.amount_total, 
-            s.status_code,
-            mp.proof_file_path as payment_proof
+            COALESCE(s.status_code, 'UNPAID') as status_code,
+            NULL as payment_proof
         FROM loan_installments li 
-        INNER JOIN loans la ON la.id = li.loan_id 
-        INNER JOIN statuses s ON s.id = li.status_id 
-        LEFT JOIN (
-            SELECT DISTINCT ON (installment_id) *
-            FROM loan_payments
-            ORDER BY installment_id, created_at DESC
-        ) lp ON lp.installment_id = li.id
-        LEFT JOIN manual_payments mp ON mp.payment_reference_id = lp.payment_reference_id
-        WHERE la.id = %s
+        LEFT JOIN statuses s ON s.id = li.status_id 
+        WHERE li.loan_id = %s
+        ORDER BY li.installment_number ASC;
         """
         params = [pk]
-        
-        # If not staff, filter by member_id for security
-        if not request.user.is_staff:
-            member_id = request.query_params.get('member_id', 1)
-            query += " AND la.member_id = %s"
-            params.append(member_id)
-            
-        query += " ORDER BY li.installment_number ASC;"
         
         with connection.cursor() as cursor:
             cursor.execute(query, params)
             columns = [col[0] for col in cursor.description]
             results = [dict(zip(columns, row)) for row in cursor.fetchall()]
-            
-        for r in results:
-            if r.get('payment_proof'):
-                r['payment_proof'] = get_absolute_media_url(request, r['payment_proof'])
             
         return Response(results)
 
@@ -843,7 +864,7 @@ class LoanViewSet(viewsets.ModelViewSet):
         WHERE l.id = %s AND s.status_code = 'PENDING'
         """
         params = [pk]
-        if not request.user.is_staff:
+        if not is_user_admin(request.user):
             member_id = request.query_params.get('member_id', 1)
             query += " AND l.member_id = %s"
             params.append(member_id)
@@ -923,7 +944,7 @@ class LoanViewSet(viewsets.ModelViewSet):
             WHERE l.id = %s AND li.status_id IN (28, 30)
             """
             unpaid_params = [pk]
-            if not request.user.is_staff:
+            if not is_user_admin(request.user):
                 member_id = request.query_params.get('member_id', 1)
                 unpaid_query += " AND l.member_id = %s"
                 unpaid_params.append(member_id)
@@ -987,7 +1008,7 @@ class LoanViewSet(viewsets.ModelViewSet):
         WHERE l.id = %s AND li.status_id IN (28, 30)
         """
         params = [pk]
-        if not request.user.is_staff:
+        if not is_user_admin(request.user):
             member_id = request.query_params.get('member_id', 1)
             query_installment += " AND l.member_id = %s"
             params.append(member_id)
@@ -1233,7 +1254,7 @@ class LoanViewSet(viewsets.ModelViewSet):
         """
         params = [pk]
 
-        if not request.user.is_staff:
+        if not is_user_admin(request.user):
             member_id = request.query_params.get('member_id', 1)
             query += " AND l.member_id = %s"
             params.append(member_id)
@@ -1430,22 +1451,19 @@ class LoanViewSet(viewsets.ModelViewSet):
                 ----------------------------------------------------------------
                 -- SHU DISTRIBUTION
                 ----------------------------------------------------------------
-                SELECT
+                 SELECT
                     w.paid_at AS transaction_date,
                     m.full_name,
                     'SHU DISTRIBUTION' AS transaction_type,
                     'MANUAL TRANSFER' AS payment_method,
                     w.total_shu AS amount,
-                    s.status_code AS status,
+                    CASE w.status_shu WHEN 'TRUE' THEN 'COMPLETED' ELSE 'FALSE' END AS status,
                     w.tf_reference_id AS reference_number
 
                 FROM shu_member_distributions w
 
                 INNER JOIN members m
                     ON m.id = w.member_id
-
-                INNER JOIN statuses s
-                    ON s.id = w.status
 
                 WHERE w.distributed_status = TRUE
             
@@ -2101,6 +2119,70 @@ class LoanViewSet(viewsets.ModelViewSet):
             'allocated_this_month': allocated,
             'remaining_allocation': remaining_allocation
         })
+
+    @action(detail=False, methods=['get', 'post'], url_path='loan-funding-settings')
+    def loan_funding_settings(self, request):
+        """
+        GET  : Return latest active loan funding setting.
+        POST : Update latest active loan funding setting.
+        """
+        with connection.cursor() as cursor:
+            if request.method == 'GET':
+                cursor.execute(
+                    "SELECT id, monthly_limit, effective_date, is_active "
+                    "FROM loan_funding_settings "
+                    "WHERE is_active = TRUE "
+                    "ORDER BY effective_date DESC LIMIT 1"
+                )
+                row = cursor.fetchone()
+                if not row:
+                    return Response({'error': 'No active loan funding setting found.'}, status=404)
+
+                return Response({
+                    'id': row[0],
+                    'monthly_limit': float(row[1]) if row[1] is not None else None,
+                    'effective_date': row[2].isoformat() if row[2] else None,
+                    'is_active': row[3],
+                })
+
+            monthly_limit = request.data.get('monthly_limit')
+            effective_date = request.data.get('effective_date')
+
+            if monthly_limit is None or effective_date is None:
+                return Response(
+                    {'error': 'monthly_limit and effective_date are required.'},
+                    status=400
+                )
+
+            try:
+                monthly_limit_value = float(monthly_limit)
+            except (TypeError, ValueError):
+                return Response({'error': 'monthly_limit must be a number.'}, status=400)
+
+            try:
+                parsed_effective_date = datetime.datetime.strptime(effective_date, '%Y-%m-%d').date()
+            except (TypeError, ValueError):
+                return Response({'error': 'effective_date must be in YYYY-MM-DD format.'}, status=400)
+
+            cursor.execute(
+                "SELECT id FROM loan_funding_settings WHERE is_active = TRUE ORDER BY effective_date DESC LIMIT 1"
+            )
+            active_row = cursor.fetchone()
+
+            if active_row:
+                cursor.execute(
+                    "UPDATE loan_funding_settings SET monthly_limit = %s, effective_date = %s "
+                    "WHERE id = %s",
+                    [monthly_limit_value, parsed_effective_date, active_row[0]]
+                )
+            else:
+                cursor.execute(
+                    "INSERT INTO loan_funding_settings (monthly_limit, effective_date, is_active) "
+                    "VALUES (%s, %s, TRUE)",
+                    [monthly_limit_value, parsed_effective_date]
+                )
+
+        return Response({'message': 'Loan funding settings updated successfully.'})
 
     @action(detail=False, methods=['post'])
     def send_reminder_email(self, request):
@@ -3318,10 +3400,14 @@ class LoanViewSet(viewsets.ModelViewSet):
         loan_q = " ".join(loan_parts)
 
         shu_parts = [
-            "SELECT w.paid_at AS transaction_date, 'SHU DISTRIBUTION' AS transaction_type, w.total_shu AS amount, s.status_code AS status, w.tf_reference_id AS reference",
+            """SELECT 
+                w.paid_at AS transaction_date, 
+                'SHU DISTRIBUTION' AS transaction_type, 
+                w.total_shu AS amount, 
+                CASE WHEN w.status_shu IS TRUE THEN 'PAID' ELSE 'PENDING' END AS status, 
+                COALESCE(w.transfer_proof_name, w.transfer_proof_url, w.transfer_proof, CAST(w.id AS VARCHAR)) AS reference""",
             "FROM shu_member_distributions w",
-            "INNER JOIN statuses s ON s.id = w.status",
-            "WHERE w.distributed_status = TRUE AND w.member_id = %s"
+            "WHERE w.paid_at IS NOT NULL AND w.member_id = %s"
         ]
         shu_params = [member_id]
         if start_date:

@@ -123,7 +123,7 @@
   border-radius: 12px;
 }
 
-table {
+.mandatory-savings table {
   width: 100%;
   min-width: 900px;
   border-collapse: collapse;
@@ -132,17 +132,17 @@ table {
   overflow: hidden;
 }
 
-thead {
+.mandatory-savings thead {
   background: #f3f4f6;
 }
 
-th,
-td {
+.mandatory-savings th,
+.mandatory-savings td {
   padding: 12px;
   text-align: left;
 }
 
-tr {
+.mandatory-savings tr {
   border-bottom: 1px solid #e5e7eb;
 }
 
@@ -176,23 +176,23 @@ tr {
   color: white;
 }
 
-thead {
+.mandatory-savings thead {
   background: linear-gradient(135deg, #3b82f6, #2563eb);
 }
 
-thead th {
+.mandatory-savings thead th {
   color: white;
   font-weight: 600;
   letter-spacing: 0.5px;
 }
 
 
-thead {
+.mandatory-savings thead {
   background: linear-gradient(135deg, #3b82f6, #2563eb);
   color: white;
 }
 
-th {
+.mandatory-savings th {
   font-weight: 500;
 }
 

@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import AuthLayout from './components/AuthLayout';
 import RegistrationLayout from './components/RegistrationLayout';
+import GlobalPopup from './components/GlobalPopup';
 
 import Login from './pages/auth/Login';
 import ForgotPassword from './pages/auth/ForgotPassword';
@@ -116,6 +117,7 @@ function App() {
           <Route path="/dashboard/admin/withdrawal-requests/:id" element={<WithdrawalRequestDetail />} />
         </Route>
       </Routes>
+      <GlobalPopup />
     </BrowserRouter>
   );
 }

@@ -149,7 +149,7 @@ export default function MandatorySavings() {
   };
 
   return (
-    <div className="card">
+    <div className="card mandatory-savings">
       <div className="savings-header">
         <h2>Savings Obligations</h2>
         <SavingsTabNav />

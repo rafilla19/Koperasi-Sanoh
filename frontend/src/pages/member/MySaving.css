@@ -713,12 +713,14 @@
 /* ── Withdrawal detail modal (kept for WD detail page) ─ */
 .modal-overlay {
   position: fixed; inset: 0;
-  background: rgba(10, 22, 40, 0.5);
-  backdrop-filter: blur(3px);
+  background: rgba(10, 22, 40, 0.45);
+  /* stronger, more professional backdrop blur + subtle saturation */
+  backdrop-filter: blur(8px) saturate(1.05);
+  -webkit-backdrop-filter: blur(8px) saturate(1.05);
   display: flex; align-items: center; justify-content: center;
-  z-index: 1000;
-  padding: 16px;
-  animation: fadeUp 0.15s ease;
+  z-index: 1100;
+  padding: 24px;
+  animation: overlayFade 0.18s ease;
 }
 .wd-detail-modal {
   background: #fff; border-radius: 20px; padding: 28px;
@@ -743,3 +745,173 @@
 
 .pay-modal-inner { background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px; padding: 16px; margin-top: 16px; margin-bottom: 24px; }
 .pay-row { display: flex; justify-content: space-between; font-size: 13px; color: #334155; padding: 8px 0; }
+
+.sv-bank-popup {
+  width: 100%;
+  max-width: 520px;
+  background: #fff;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 18px;
+  padding: 26px;
+  box-shadow: 0 26px 80px rgba(15, 23, 42, 0.28);
+  animation: slideUpModal 0.2s ease;
+}
+
+/* When modal is open, blur the page content (but not the modal overlay itself) */
+.sv-page.sv-page--blurred > *:not(.modal-overlay) {
+  /* kept for backward-compat if needed */
+  filter: blur(6px) saturate(0.98);
+  transform: translateZ(0);
+  pointer-events: none;
+  user-select: none;
+  transition: filter 180ms ease, transform 180ms ease;
+}
+
+/* Global modal: blur everything in the document body except the overlay appended to body */
+body.has-global-modal > *:not(.global-modal-overlay) {
+  filter: blur(8px) saturate(0.98);
+  -webkit-filter: blur(8px) saturate(0.98);
+  transform: translateZ(0);
+  pointer-events: none;
+  user-select: none;
+  transition: filter 200ms ease;
+}
+
+.global-modal-overlay {
+  position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+  z-index: 9999; padding: 24px;
+}
+
+@keyframes overlayFade {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.sv-bank-popup-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.sv-bank-popup-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #BE123C;
+  background: #FFE4E6;
+}
+
+.sv-bank-popup-heading {
+  flex: 1;
+  min-width: 0;
+}
+
+.sv-bank-popup-kicker {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #E11D48;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sv-bank-popup-title {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.25;
+  color: #0A1628;
+}
+
+.sv-bank-popup-subtitle {
+  margin: 10px 0 0;
+  color: #475569;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.sv-bank-popup-close,
+.sv-bank-popup-secondary {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.sv-bank-popup-close {
+  color: #64748B;
+  padding: 4px;
+  flex: 0 0 auto;
+  border-radius: 8px;
+}
+
+.sv-bank-popup-close:hover {
+  background: #F1F5F9;
+}
+
+.sv-bank-popup-panel {
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 14px;
+  padding: 16px;
+  margin-bottom: 22px;
+}
+
+.sv-bank-popup-panel-title {
+  margin: 0 0 12px;
+  color: #0A1628;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.sv-bank-popup-checklist {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.sv-bank-popup-checklist span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.sv-bank-popup-checklist svg {
+  color: #059669;
+  flex: 0 0 auto;
+}
+
+.sv-bank-popup-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.sv-bank-popup-secondary {
+  color: #64748B;
+  font-weight: 700;
+  padding: 12px 14px;
+}
+
+@media (max-width: 640px) {
+  .sv-bank-popup {
+    padding: 22px;
+  }
+
+  .sv-bank-popup-checklist {
+    grid-template-columns: 1fr;
+  }
+
+  .sv-bank-popup-actions .btn,
+  .sv-bank-popup-secondary {
+    width: 100%;
+    justify-content: center;
+  }
+}

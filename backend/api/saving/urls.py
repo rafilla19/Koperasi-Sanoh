@@ -5,6 +5,7 @@ from . import views
 urlpatterns = [
     # ── Member ──────────────────────────────────────────────────
     path('my-profile/', views.my_member_profile, name='my-profile'),
+    path('my-savings/bank-account-status/', views.my_bank_account_status, name='my-bank-account-status'),
     path('my-savings/wallets/', views.my_saving_wallets, name='my-saving-wallets'),
     path('my-savings/transactions/', views.my_saving_transactions, name='my-saving-transactions'),
     path('my-savings/withdrawals/', views.my_withdrawals, name='my-withdrawals'),

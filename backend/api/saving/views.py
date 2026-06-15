@@ -6,6 +6,7 @@ from decimal import Decimal, InvalidOperation
 from django.db.models import Q, Sum, Count
 from django.db.models.functions import TruncMonth
 from django.db import connection, transaction as db_transaction
+from django.db.utils import ProgrammingError
 from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework.decorators import api_view
@@ -36,6 +37,7 @@ from .serializers import (
 from .email_utils import send_member_notification_email
 
 TEMP_MEMBER_ID = 5
+_MEMBER_SAVINGS_CONFIG_TABLE_EXISTS = None
 
 
 def _get_member_id_from_request(request):
@@ -78,6 +80,91 @@ def _get_member_id_from_request(request):
     return TEMP_MEMBER_ID
 
 
+def _member_savings_config_table_exists():
+    global _MEMBER_SAVINGS_CONFIG_TABLE_EXISTS
+    if _MEMBER_SAVINGS_CONFIG_TABLE_EXISTS is not None:
+        return _MEMBER_SAVINGS_CONFIG_TABLE_EXISTS
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT EXISTS ("
+            "SELECT 1 FROM information_schema.tables "
+            "WHERE table_schema = 'public' AND table_name = 'member_savings_configs'"
+            ")"
+        )
+        _MEMBER_SAVINGS_CONFIG_TABLE_EXISTS = bool(cursor.fetchone()[0])
+    return _MEMBER_SAVINGS_CONFIG_TABLE_EXISTS
+
+
+def _get_member_savings_config(member_id):
+    if not _member_savings_config_table_exists():
+        return None
+
+    try:
+        return MemberSavingsConfig.objects.filter(member_id=member_id).first()
+    except ProgrammingError as exc:
+        if 'member_savings_configs' not in str(exc):
+            raise
+        return None
+
+
+def _get_active_voluntary_amount(member_id):
+    voluntary_type = SavingTypes.objects.filter(is_mandatory=False).first()
+    if not voluntary_type:
+        return Decimal('0')
+
+    obligation = MemberSavingObligations.objects.filter(
+        member_id=member_id,
+        saving_type=voluntary_type,
+        is_active=True,
+        deleted_at__isnull=True,
+    ).first()
+    return obligation.monthly_amount if obligation else Decimal('0')
+
+
+def _get_member_bank_account_status(member_id):
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT mba.bank_id, mba.account_number, mba.account_holder_name
+            FROM member_bank_accounts mba
+            WHERE mba.member_id = %s
+            LIMIT 1
+            """,
+            [member_id],
+        )
+        row = cursor.fetchone()
+
+    if not row:
+        return {
+            'is_complete': False,
+            'bank_id': None,
+            'account_number': None,
+            'account_holder_name': None,
+            'missing_fields': ['bank_id', 'account_number', 'account_holder_name'],
+        }
+
+    bank_id, account_number, account_holder_name = row
+    fields = {
+        'bank_id': bank_id,
+        'account_number': account_number,
+        'account_holder_name': account_holder_name,
+    }
+    missing_fields = [
+        field_name
+        for field_name, value in fields.items()
+        if value is None or str(value).strip() == ''
+    ]
+
+    return {
+        'is_complete': len(missing_fields) == 0,
+        'bank_id': bank_id,
+        'account_number': account_number,
+        'account_holder_name': account_holder_name,
+        'missing_fields': missing_fields,
+    }
+
+
 # ── MEMBER ───────────────────────────────────────────────────────
 
 @api_view(['GET'])
@@ -86,7 +173,9 @@ def my_member_profile(request):
     try:
         member_id = _get_member_id_from_request(request)
         member = Members.objects.get(id=member_id)
-        config = MemberSavingsConfig.objects.filter(member_id=member_id).first()
+        config = _get_member_savings_config(member_id)
+        employee_status_id = member.employee_status_id
+        is_payroll = config.is_payroll if config else employee_status_id in (1, 2)
 
         # try to get linked user email for display
         user_email = None
@@ -103,8 +192,8 @@ def my_member_profile(request):
             'full_name': member.full_name,
             'nik_employee': member.nik_employee,
             'nik_ktp': member.nik_ktp,
-            'employee_status_id': 3 if not (config and config.is_payroll) else 2,  # 3=non-payroll, 2=payroll
-            'is_payroll': config.is_payroll if config else False,
+            'employee_status_id': employee_status_id,
+            'is_payroll': is_payroll,
             'email': user_email,
         })
     except Members.DoesNotExist:
@@ -119,6 +208,12 @@ def my_saving_wallets(request):
         deleted_at__isnull=True,
     )
     return Response(SavingWalletsSerializer(wallets, many=True).data)
+
+
+@api_view(['GET'])
+def my_bank_account_status(request):
+    member_id = _get_member_id_from_request(request)
+    return Response(_get_member_bank_account_status(member_id))
 
 
 @api_view(['GET'])
@@ -148,6 +243,18 @@ def my_withdrawals(request):
     if not serializer.is_valid():
         return Response(serializer.errors, status=400)
 
+    member_id = _get_member_id_from_request(request)
+    bank_status = _get_member_bank_account_status(member_id)
+    if not bank_status['is_complete']:
+        return Response(
+            {
+                'error': 'Lengkapi rekening bank pencairan terlebih dahulu.',
+                'code': 'BANK_ACCOUNT_INCOMPLETE',
+                'missing_fields': bank_status['missing_fields'],
+            },
+            status=400,
+        )
+
     try:
         voluntary_type = SavingTypes.objects.get(is_mandatory=False)
     except SavingTypes.DoesNotExist:
@@ -160,7 +267,6 @@ def my_withdrawals(request):
         return Response({'error': 'Status REQUESTED tidak ditemukan di database'}, status=500)
 
     try:
-        member_id = _get_member_id_from_request(request)
         with connection.cursor() as cursor:
             cursor.execute(
                 "SELECT sp_create_withdrawal_request(%s, %s, %s, %s, %s)",
@@ -200,11 +306,8 @@ def my_voluntary_request(request):
     if not serializer.is_valid():
         return Response(serializer.errors, status=400)
 
-    try:
-        config = MemberSavingsConfig.objects.get(member_id=member_id)
-        current_amount = config.voluntary_amount
-    except MemberSavingsConfig.DoesNotExist:
-        current_amount = Decimal('0')
+    config = _get_member_savings_config(member_id)
+    current_amount = config.voluntary_amount if config else _get_active_voluntary_amount(member_id)
 
     VoluntarySavingsRequests.objects.create(
         member_id=member_id,
@@ -555,11 +658,12 @@ def admin_approve_voluntary_request(request, pk):
     except VoluntarySavingsRequests.DoesNotExist:
         return Response({'error': 'Pengajuan tidak ditemukan atau sudah diproses'}, status=404)
 
-    # Update legacy config storage for voluntary amount.
-    MemberSavingsConfig.objects.update_or_create(
-        member_id=req.member_id,
-        defaults={'voluntary_amount': req.requested_amount},
-    )
+    # Update legacy config storage when the optional table exists.
+    if _member_savings_config_table_exists():
+        MemberSavingsConfig.objects.update_or_create(
+            member_id=req.member_id,
+            defaults={'voluntary_amount': req.requested_amount},
+        )
 
     # Update actual obligation record for voluntary saving type.
     voluntary_type = SavingTypes.objects.filter(is_mandatory=False).first()
@@ -1697,5 +1801,3 @@ def admin_upload_transfer(request, pk):
         pass
 
     return Response({'message': 'Bukti transfer berhasil diupload', 'file_path': public_url})
-
-

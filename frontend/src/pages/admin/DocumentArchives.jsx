@@ -139,7 +139,7 @@ const DocumentArchives = () => {
   };
 
   return (
-    <div className="card">
+    <div className="card da-container">
       {/* PDF VIEWER MODAL */}
       {viewerDoc && (
         <div className="da-viewer-overlay" onClick={() => setViewerDoc(null)}>

@@ -52,10 +52,143 @@ const AdminLoansDashboard = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedLoans, setSelectedLoans] = useState([]);
   const [selectAll, setSelectAll] = useState(false);
+  const [showFundingModal, setShowFundingModal] = useState(false);
+  const [fundingSetting, setFundingSetting] = useState({ id: null, monthly_limit: '', effective_date: '' });
+  const [fundingError, setFundingError] = useState('');
+  const [isSavingFunding, setIsSavingFunding] = useState(false);
 
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery, statusFilter]);
+
+  const formatRupiah = (number) => {
+    return new Intl.NumberFormat('id-ID', {
+      style: 'currency',
+      currency: 'IDR',
+      minimumFractionDigits: 0
+    }).format(number || 0).replace(',00', '');
+  };
+
+  const fetchDashboardData = async () => {
+    try {
+      const response = await fetch(apiUrl('/loan/loans/admin_dashboard_stats/'));
+      const response2 = await fetch(
+        apiUrl(`/loan/loans/admin_pending_stats/?month=${selectedMonth}&year=${selectedYear}`)
+      );
+
+      let row1Stats = [];
+      let row2Stats = [];
+
+      if (response.ok) {
+        const data = await response.json();
+        row1Stats = [
+          { title: 'Total Outstanding', value: formatRupiah(data.total_outstanding), up: data.outstanding_trend },
+          { title: 'Active Borrowers', value: formatRupiah(data.active_borrowers), up: data.borrowers_trend },
+          { title: 'Interest Achieved', value: formatRupiah(data.interest_achieved), up: data.interest_trend },
+          { title: 'Pending Approvals', value: (data.pending_approvals || 0).toString(), up: '' }
+        ];
+      }
+
+      if (response2.ok) {
+        const data = await response2.json();
+        row2Stats = [
+          { title: 'Total Active Loan', value: `${data.active_loans}/${data.total_members} Members`, up: '' },
+          { title: 'Collected This Month', value: `${formatRupiah(data.collected_this_month)}`, up: '' },
+          { title: 'Total Overdue Loans This Month', value: formatRupiah(data.total_overdue), up: '' },
+          { title: 'Remaining Loan Allocation This Month', value: formatRupiah(data.remaining_allocation || data.monthly_limit || 0), up: '' }
+        ];
+      }
+
+      setStats([...row1Stats, ...row2Stats]);
+
+      const pendingRes = await fetch(apiUrl('/loan/loan-applications/admin_pending_list/'), { headers: getAuthHeaders() });
+      if (pendingRes.ok) {
+        const pendingData = await pendingRes.json();
+        setPendingList(pendingData);
+      }
+
+      const activeLoansRes = await fetch(
+        apiUrl(`/loan/loans/admin_loans_list/?month=${selectedMonth}&year=${selectedYear}`),
+        { headers: getAuthHeaders() }
+      );
+      if (activeLoansRes.ok) {
+        const activeLoansData = await activeLoansRes.json();
+        setActiveLoans(activeLoansData);
+      }
+    } catch (error) {
+      console.error('Failed to fetch data:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [selectedMonth, selectedYear]);
+
+  const openFundingModal = async () => {
+    setFundingError('');
+    try {
+      const response = await fetch(apiUrl('/loan/loans/loan-funding-settings/'), { headers: getAuthHeaders() });
+      if (response.ok) {
+        const data = await response.json();
+        setFundingSetting({
+          id: data.id,
+          monthly_limit: data.monthly_limit || '',
+          effective_date: data.effective_date || ''
+        });
+      } else if (response.status === 404) {
+        setFundingSetting({ id: null, monthly_limit: '', effective_date: '' });
+      } else {
+        const error = await response.json();
+        setFundingError(error.error || 'Failed to load funding settings');
+      }
+      setShowFundingModal(true);
+    } catch (error) {
+      console.error('Failed to load funding settings:', error);
+      setFundingError('Failed to load funding settings');
+      setShowFundingModal(true);
+    }
+  };
+
+  const handleFundingFieldChange = (field, value) => {
+    setFundingSetting(prev => ({ ...prev, [field]: value }));
+  };
+
+  const saveFundingSettings = async () => {
+    setFundingError('');
+    if (!fundingSetting.monthly_limit || !fundingSetting.effective_date) {
+      setFundingError('Monthly limit and effective date are required.');
+      return;
+    }
+
+    setIsSavingFunding(true);
+    try {
+      const response = await fetch(apiUrl('/loan/loans/loan-funding-settings/'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        },
+        body: JSON.stringify({
+          monthly_limit: fundingSetting.monthly_limit,
+          effective_date: fundingSetting.effective_date
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        setFundingError(error.error || 'Failed to save funding settings');
+        return;
+      }
+
+      await fetchDashboardData();
+      setShowFundingModal(false);
+    } catch (error) {
+      console.error('Failed to save funding settings:', error);
+      setFundingError('Failed to save funding settings');
+    } finally {
+      setIsSavingFunding(false);
+    }
+  };
 
   // Month/year options
   const MONTHS = [
@@ -68,70 +201,6 @@ const AdminLoansDashboard = () => {
   ];
   const currentYear = new Date().getFullYear();
   const YEARS = Array.from({ length: currentYear - 2020 + 3 }, (_, i) => 2020 + i);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const formatRupiah = (number) => {
-          return new Intl.NumberFormat('id-ID', {
-            style: 'currency',
-            currency: 'IDR',
-            minimumFractionDigits: 0
-          }).format(number || 0).replace(',00', '');
-        };
-
-        // Fetch both stats endpoints
-        const response = await fetch(apiUrl('/loan/loans/admin_dashboard_stats/'));
-        const response2 = await fetch(
-          apiUrl(`/loan/loans/admin_pending_stats/?month=${selectedMonth}&year=${selectedYear}`)
-        );
-
-        let row1Stats = [];
-        let row2Stats = [];
-
-        if (response.ok) {
-          const data = await response.json();
-          row1Stats = [
-            { title: 'Total Outstanding', value: formatRupiah(data.total_outstanding), up: data.outstanding_trend },
-            { title: 'Active Borrowers', value: formatRupiah(data.active_borrowers), up: data.borrowers_trend },
-            { title: 'Interest Achieved', value: formatRupiah(data.interest_achieved), up: data.interest_trend },
-            { title: 'Pending Approvals', value: (data.pending_approvals || 0).toString(), up: '' }
-          ];
-        }
-
-        if (response2.ok) {
-          const data = await response2.json();
-          row2Stats = [
-            { title: 'Total Active Loan', value: `${data.active_loans}/${data.total_members} Members`, up: '' },
-            { title: 'Collected This Month', value: `${formatRupiah(data.collected_this_month)}`, up: '' },
-            { title: 'Total Overdue Loans This Month', value: formatRupiah(data.total_overdue), up: '' },
-            { title: 'Remaining Loan Allocation This Month', value: formatRupiah(data.remaining_allocation || data.monthly_limit || 0), up: '' }
-          ];
-        }
-
-        // Combine both rows into one setStats call
-        setStats([...row1Stats, ...row2Stats]);
-
-        const pendingRes = await fetch(apiUrl('/loan/loan-applications/admin_pending_list/'), { headers: getAuthHeaders() });
-        if (pendingRes.ok) {
-          const pendingData = await pendingRes.json();
-          setPendingList(pendingData);
-        }
-
-        const activeLoansRes = await fetch(
-          apiUrl(`/loan/loans/admin_loans_list/?month=${selectedMonth}&year=${selectedYear}`),
-          { headers: getAuthHeaders() }
-        );
-        if (activeLoansRes.ok) {
-          const activeLoansData = await activeLoansRes.json();
-          setActiveLoans(activeLoansData);
-        }
-      } catch (error) {
-        console.error('Failed to fetch data:', error);
-      }
-    };
-    fetchData();
-  }, [selectedMonth, selectedYear]);
 
   const handlePendingDetails = (id) => {
     navigate(`/dashboard/admin/ls-loans/${id}`);
@@ -278,7 +347,13 @@ const AdminLoansDashboard = () => {
   };
 
   const handleAutoSendAll = async () => {
-    if (!window.confirm('This will send reminder emails to ALL members with overdue installments. Continue?')) return;
+    const confirmed = await window.appConfirm({
+      title: 'Send all reminders?',
+      message: 'This will send reminder emails to all members with overdue installments. Continue?',
+      confirmText: 'Send Reminders',
+      cancelText: 'Cancel',
+    });
+    if (!confirmed) return;
 
     try {
       const response = await fetch(apiUrl('/loan/loans/send_auto_all_reminders/'), {
@@ -361,8 +436,15 @@ const AdminLoansDashboard = () => {
       <div className="ald-stats">
         {stats.map((stat, i) => {
           const iconCfg = STAT_ICONS[i] || STAT_ICONS[0];
+          const isEditableStat = stat.title === 'Remaining Loan Allocation This Month';
           return (
-            <div key={i} className="ald-stat-card">
+            <div
+              key={i}
+              className="ald-stat-card"
+              onDoubleClick={isEditableStat ? openFundingModal : undefined}
+              style={{ cursor: isEditableStat ? 'pointer' : 'default' }}
+              title={isEditableStat ? 'Double click to edit funding settings' : stat.tooltip}
+            >
               <div className="ald-stat-top">
                 <div className="ald-stat-title">{stat.title}</div>
                 <div
@@ -389,6 +471,47 @@ const AdminLoansDashboard = () => {
         })}
       </div>
 
+      {showFundingModal && (
+        <div className="ald-modal-overlay" onClick={() => setShowFundingModal(false)}>
+          <div className="ald-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="ald-modal-header">
+              <div>
+                <h3>Edit Loan Funding Settings</h3>
+                <p>Update the active monthly limit and effective date.</p>
+              </div>
+              <button className="ald-modal-close" onClick={() => setShowFundingModal(false)}>
+                ×
+              </button>
+            </div>
+            <div className="ald-modal-body">
+              <label>
+                Monthly Limit
+                <input
+                  type="number"
+                  value={fundingSetting.monthly_limit}
+                  onChange={(e) => handleFundingFieldChange('monthly_limit', e.target.value)}
+                  placeholder="Enter monthly limit"
+                />
+              </label>
+              <label>
+                Effective Date
+                <input
+                  type="date"
+                  value={fundingSetting.effective_date}
+                  onChange={(e) => handleFundingFieldChange('effective_date', e.target.value)}
+                />
+              </label>
+              {fundingError && <div className="ald-modal-error">{fundingError}</div>}
+            </div>
+            <div className="ald-modal-actions">
+              <button className="ald-modal-cancel" onClick={() => setShowFundingModal(false)}>Cancel</button>
+              <button className="ald-modal-save" onClick={saveFundingSettings} disabled={isSavingFunding}>
+                {isSavingFunding ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="ald-pending-section">
         <div className="ald-pending-header">
           <h2>Pending Approvals</h2>

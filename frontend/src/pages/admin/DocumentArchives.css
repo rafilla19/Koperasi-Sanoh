@@ -6,7 +6,7 @@
 }
 
 /* TABLE — matches MandatorySavings global table styles */
-table {
+.da-container table {
   width: 100%;
   border-collapse: collapse;
   background: #f9fafb;
@@ -14,25 +14,25 @@ table {
   overflow: hidden;
 }
 
-thead {
+.da-container thead {
   background: linear-gradient(135deg, #3b82f6, #2563eb);
   color: #ffffff;
 }
 
-thead th {
+.da-container thead th {
   color: #ffffff !important;
   font-weight: 600;
   letter-spacing: 0.5px;
   text-shadow: 0 1px 2px rgba(0,0,0,0.15);
 }
 
-th,
-td {
+.da-container th,
+.da-container td {
   padding: 12px;
   text-align: left;
 }
 
-tr {
+.da-container tr {
   border-bottom: 1px solid #e5e7eb;
 }
 

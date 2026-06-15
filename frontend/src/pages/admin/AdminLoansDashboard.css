@@ -358,6 +358,122 @@
 
 .ald-send-reminder-btn:hover {
   background: #3d5fbf;
+}
+
+.ald-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+}
+
+.ald-modal-card {
+  width: min(520px, calc(100% - 40px));
+  background: white;
+  border-radius: 20px;
+  padding: 24px;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.18);
+  animation: ald-modal-enter 0.24s ease;
+}
+
+@keyframes ald-modal-enter {
+  from { transform: translateY(-18px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.ald-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.ald-modal-header h3 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.ald-modal-header p {
+  margin: 6px 0 0;
+  color: #475569;
+  font-size: 14px;
+}
+
+.ald-modal-close {
+  border: none;
+  background: transparent;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  color: #475569;
+}
+
+.ald-modal-body {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.ald-modal-body label {
+  display: grid;
+  gap: 8px;
+  font-size: 14px;
+  color: #344054;
+}
+
+.ald-modal-body input {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid #dfe3eb;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 14px;
+  outline: none;
+}
+
+.ald-modal-error {
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+.ald-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.ald-modal-cancel,
+.ald-modal-save {
+  min-width: 120px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+}
+
+.ald-modal-cancel {
+  background: #f8fafc;
+  color: #334155;
+}
+
+.ald-modal-save {
+  background: #2563eb;
+  color: white;
+}
+
+.ald-modal-save:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
   border-color: #3d5fbf;
 }
 

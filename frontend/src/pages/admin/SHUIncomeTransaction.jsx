@@ -110,7 +110,13 @@ const SHUIncomeTransaction = () => {
 
   const handleDistributeMonthly = async () => {
     const monthLabel = MONTHS.find(m => m.value === Number(month))?.label ?? month;
-    if (!window.confirm(`Distribusikan SHU Jasa Modal bulan ${monthLabel} ${year} ke semua anggota?\n\nData yang sudah ada akan diperbarui jumlahnya.`)) return;
+    const confirmed = await window.appConfirm({
+      title: 'Distribusikan SHU bulanan?',
+      message: `Distribusikan SHU Jasa Modal bulan ${monthLabel} ${year} ke semua anggota?\n\nData yang sudah ada akan diperbarui jumlahnya.`,
+      confirmText: 'Distribusikan',
+      cancelText: 'Batal',
+    });
+    if (!confirmed) return;
     setDistributingMonthly(true);
     setMonthlyDistributeMsg('');
     setMonthlyDistributeError('');
@@ -125,7 +131,13 @@ const SHUIncomeTransaction = () => {
   };
 
   const handleDistribute = async () => {
-    if (!window.confirm(`Distribusikan SHU Jasa Modal tahun ${year} ke semua anggota?\n\nData distribusi yang sudah ada akan diupdate jumlahnya (status PAID tidak akan berubah).`)) return;
+    const confirmed = await window.appConfirm({
+      title: 'Distribusikan SHU tahunan?',
+      message: `Distribusikan SHU Jasa Modal tahun ${year} ke semua anggota?\n\nData distribusi yang sudah ada akan diupdate jumlahnya (status PAID tidak akan berubah).`,
+      confirmText: 'Distribusikan',
+      cancelText: 'Batal',
+    });
+    if (!confirmed) return;
     setDistributing(true);
     setDistributeError('');
     try {

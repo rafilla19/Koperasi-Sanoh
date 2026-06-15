@@ -134,7 +134,14 @@ const SHUMasterData = () => {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this item?')) return;
+    const confirmed = await window.appConfirm({
+      title: 'Delete item?',
+      message: 'Are you sure you want to delete this item?',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
     
     try {
       const res = await fetch(`${currentTab.apiUrl}${id}/`, { method: 'DELETE' });

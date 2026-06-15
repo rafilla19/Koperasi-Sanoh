@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { apiUrl } from '../../services/api';
 import { X, Check, Banknote, CalendarCheck, Wallet } from 'lucide-react';
@@ -53,6 +54,9 @@ const savingsApi = {
 
   getWithdrawals: () =>
     fetch(apiUrl('/my-savings/withdrawals/'), { headers: getAuthHeaders() }).then(r => r.json()),
+
+  getBankAccountStatus: () =>
+    fetch(apiUrl('/my-savings/bank-account-status/'), { headers: getAuthHeaders() }).then(r => r.json()),
 
   getObligations: () =>
     fetch(apiUrl('/my-savings/obligations/'), { headers: getAuthHeaders() }).then(r => r.json()),
@@ -109,6 +113,8 @@ const MySaving = () => {
   const [wdAgreed, setWdAgreed] = useState(false);
   const [wdLoading, setWdLoading] = useState(false);
   const [wdError, setWdError] = useState('');
+  const [checkingBankAccount, setCheckingBankAccount] = useState(false);
+  const [showBankPopup, setShowBankPopup] = useState(false);
   const [vrAmount, setVrAmount] = useState('');
   const [vrLoading, setVrLoading] = useState(false);
   const [vrError, setVrError] = useState('');
@@ -260,6 +266,23 @@ const MySaving = () => {
     setWdError('');
   };
 
+  const handleWithdrawClick = async () => {
+    setWdError('');
+    setCheckingBankAccount(true);
+    try {
+      const bankStatus = await savingsApi.getBankAccountStatus();
+      if (bankStatus?.is_complete) {
+        setShowWithdrawForm(true);
+        return;
+      }
+      setShowBankPopup(true);
+    } catch {
+      setWdError('Gagal mengecek rekening bank pencairan. Coba lagi.');
+    } finally {
+      setCheckingBankAccount(false);
+    }
+  };
+
   const handleWithdrawSubmit = async () => {
     setWdError('');
     if (!wdAmount || Number(wdAmount) < 50000) {
@@ -281,7 +304,12 @@ const MySaving = () => {
         savingsApi.getWithdrawals().then(data => setWithdrawals(Array.isArray(data) ? data : []));
         savingsApi.getWallets().then(data => setWallets(Array.isArray(data) ? data : []));
       } else {
-        setWdError(res.error || 'Gagal submit withdrawal');
+        if (res.code === 'BANK_ACCOUNT_INCOMPLETE') {
+          setShowWithdrawForm(false);
+          setShowBankPopup(true);
+        } else {
+          setWdError(res.error || 'Gagal submit withdrawal');
+        }
       }
     } catch {
       setWdError('Terjadi kesalahan, coba lagi');
@@ -387,6 +415,16 @@ const MySaving = () => {
       default: return 'pending';
     }
   };
+
+  useEffect(() => {
+    // toggle a body-level class so we can blur the entire window via CSS
+    if (showBankPopup) {
+      document.body.classList.add('has-global-modal');
+    } else {
+      document.body.classList.remove('has-global-modal');
+    }
+    return () => { document.body.classList.remove('has-global-modal'); };
+  }, [showBankPopup]);
 
   return (
     <div className="sv-page">
@@ -785,10 +823,11 @@ const MySaving = () => {
               <div className="sv-banner-right">
                 <button
                   className="btn-banner"
-                  onClick={() => setShowWithdrawForm(true)}
+                  onClick={handleWithdrawClick}
+                  disabled={checkingBankAccount}
                   style={{ display: showWithdrawForm ? 'none' : 'inline-flex' }}
                 >
-                  Withdraw
+                  {checkingBankAccount ? 'Checking...' : 'Withdraw'}
                 </button>
               </div>
             </div>
@@ -926,6 +965,57 @@ const MySaving = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {showBankPopup && createPortal(
+        <div className="modal-overlay global-modal-overlay">
+          <div className="sv-bank-popup">
+            <div className="sv-bank-popup-header">
+              <div className="sv-bank-popup-icon">
+                <Banknote size={22} />
+              </div>
+              <div className="sv-bank-popup-heading">
+                <p className="sv-bank-popup-kicker">Rekening pencairan belum lengkap</p>
+                <h3 className="sv-bank-popup-title">Lengkapi rekening bank dulu</h3>
+                <p className="sv-bank-popup-subtitle">
+                  Withdrawal hanya dapat diajukan setelah rekening tujuan pencairan tervalidasi di profil member.
+                </p>
+              </div>
+              <button
+                className="sv-bank-popup-close"
+                onClick={() => setShowBankPopup(false)}
+                aria-label="Close"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="sv-bank-popup-panel">
+              <p className="sv-bank-popup-panel-title">Data yang wajib dilengkapi</p>
+              <div className="sv-bank-popup-checklist">
+                <span><Check size={14} /> Bank tujuan</span>
+                <span><Check size={14} /> Nomor rekening</span>
+                <span><Check size={14} /> Nama pemilik rekening</span>
+              </div>
+            </div>
+
+            <div className="sv-bank-popup-actions">
+              <button
+                className="btn btn-navy"
+                onClick={() => navigate('/dashboard/profile')}
+              >
+                Lengkapi Rekening
+              </button>
+              <button
+                className="sv-bank-popup-secondary"
+                onClick={() => setShowBankPopup(false)}
+              >
+                Nanti
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );

@@ -1010,15 +1010,15 @@ def admin_shu_weekly_cashflow(request):
             UNION ALL
 
             -- MONEY OUT: SHU distributions
-            SELECT
+             SELECT
                 smd.paid_at::date AS transaction_date,
                 smd.total_shu AS amount,
                 'OUT' AS flow
             FROM shu_member_distributions smd
-            INNER JOIN statuses s ON s.id = smd.status
             WHERE smd.paid_at::date >= %s
-              AND smd.paid_at::date <= %s
-              AND smd.distributed_status = TRUE
+                AND smd.paid_at::date <= %s
+                AND smd.distributed_status = TRUE
+                AND smd.status_shu = TRUE
 
         ) combined
         WHERE transaction_date IS NOT NULL
