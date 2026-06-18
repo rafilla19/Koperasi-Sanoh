@@ -90,6 +90,14 @@ export const shuApi = {
       method: 'DELETE',
     }),
 
+  // Annual aggregation from monthly table
+  getAnnualFromMonthly: ({ year, search } = {}) => {
+    const params = new URLSearchParams()
+    if (year) params.append('year', year)
+    if (search) params.append('search', search)
+    return fetchJson(apiUrl(`/admin/shu/annual-from-monthly/?${params}`))
+  },
+
   // Annual Jasa Modal Distributions
   getAnnualJasaModalDistributions: ({ year, search } = {}) => {
     const params = new URLSearchParams()
@@ -108,14 +116,21 @@ export const shuApi = {
       return r.json()
     }),
 
-  distributeAnnualJasaModal: ({ year }) =>
+  distributeAnnualJasaModal: ({ year, member_ids }) =>
     fetch(apiUrl('/admin/shu/jasa-modal-annual/distribute/'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ year }),
+      body: JSON.stringify(member_ids ? { year, member_ids } : { year }),
     }).then(r => {
       if (!r.ok) return r.json().then(err => Promise.reject(err))
       return r.json()
+    }),
+
+  updateJasaModalNotes: (id, notes) =>
+    fetchJson(apiUrl(`/admin/shu/jasa-modal-annual/${id}/notes/`), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ notes }),
     }),
 
   uploadJasaModalProof: (id, file) => {
@@ -175,6 +190,30 @@ export const shuApi = {
       return r.json()
     }),
 
+  // Monthly Distributions CRUD
+  getMonthlyDistributions: ({ year, month, search } = {}) => {
+    const params = new URLSearchParams()
+    if (year) params.append('year', year)
+    if (month) params.append('month', month)
+    if (search) params.append('search', search)
+    return fetchJson(apiUrl(`/admin/shu/jasa-modal-monthly/?${params}`))
+  },
+
+  updateMonthlyDistribution: (id, data) =>
+    fetchJson(apiUrl(`/admin/shu/jasa-modal-monthly/${id}/`), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }),
+
+  deleteMonthlyDistribution: (id) =>
+    fetch(apiUrl(`/admin/shu/jasa-modal-monthly/${id}/`), {
+      method: 'DELETE',
+    }).then(r => {
+      if (!r.ok) return r.json().then(err => Promise.reject(err))
+      return null
+    }),
+
   // Excel Template & Upload
   downloadOutcomeTemplate: () =>
     fetch(apiUrl('/admin/shu/outcome/template/')).then(r => {
@@ -190,4 +229,11 @@ export const shuApi = {
       body: formData,
     }).then(r => r.json())
   },
+
+  syncResults: ({ year } = {}) =>
+    fetch(apiUrl('/admin/shu/outcome/sync-results/'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(year ? { year } : {}),
+    }).then(r => r.json()),
 }

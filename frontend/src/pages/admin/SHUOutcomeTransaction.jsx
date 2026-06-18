@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Upload, X, UploadCloud, Download, AlertCircle, ArrowLeft, TrendingUp, TrendingDown, Database, Scale, CheckCircle2, Send } from 'lucide-react';
+import { Plus, Upload, X, UploadCloud, Download, AlertCircle, ArrowLeft, TrendingUp, TrendingDown, Database, Scale, CheckCircle2, Pencil, Trash2 } from 'lucide-react';
 import { shuApi } from '../../api/shuApi';
 import './SHUManagement.css';
 
@@ -38,7 +38,6 @@ const emptyForm = {
 
 const SHUOutcomeTransaction = () => {
   const navigate = useNavigate();
-  const now = new Date();
 
   // filter state (pending — applied on "Cari")
   const [search, setSearch]   = useState('');
@@ -59,23 +58,29 @@ const SHUOutcomeTransaction = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [filterType, setFilterType] = useState('');
 
-  // distribusi SHU state
-  const [shuResult, setShuResult]               = useState(null);
-  const [showDistribusiModal, setShowDistribusiModal] = useState(false);
-  const [distributing, setDistributing]         = useState(false);
-  const [distribusiSuccess, setDistribusiSuccess] = useState('');
-
-  // modals
+  // Add manually modal
   const [showManualModal, setShowManualModal] = useState(false);
-  const [showUploadModal, setShowUploadModal] = useState(false);
   const [form, setForm]         = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError]   = useState(null);
 
+  // Edit modal
+  const [showEditModal, setShowEditModal]     = useState(false);
+  const [editRow, setEditRow]                 = useState(null);
+  const [editForm, setEditForm]               = useState(emptyForm);
+  const [editSubmitting, setEditSubmitting]   = useState(false);
+  const [editError, setEditError]             = useState(null);
+
+  // Delete confirmation
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteRow, setDeleteRow]                 = useState(null);
+  const [deleting, setDeleting]                   = useState(false);
+
   // upload excel state
+  const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadFile, setUploadFile]       = useState(null);
   const [uploading, setUploading]         = useState(false);
-  const [uploadResult, setUploadResult]   = useState(null); // { inserted, errors }
+  const [uploadResult, setUploadResult]   = useState(null);
   const [uploadError, setUploadError]     = useState(null);
   const [dragOver, setDragOver]           = useState(false);
   const fileInputRef = React.useRef(null);
@@ -94,29 +99,21 @@ const SHUOutcomeTransaction = () => {
       .finally(() => setLoading(false));
   }, []);
 
-  const fetchShuResult = useCallback((m, y) => {
-    setShuResult(null);
-    setDistribusiSuccess('');
-    shuApi.getShuResult({ year: y || '', month: m || '' })
-      .then(data => setShuResult(data))
-      .catch(() => {});
-  }, []);
-
   useEffect(() => {
     shuApi.getOutcomeCategories().then(setCategories).catch(() => {});
+    shuApi.syncResults({ year: String(CURRENT_YEAR) }).catch(() => {});
   }, []);
 
   useEffect(() => {
     fetchTransactions('', '', '', String(CURRENT_YEAR));
-    fetchShuResult('', String(CURRENT_YEAR));
   }, []); // eslint-disable-line
 
   const handleApply = () => {
     setCurrentPage(1);
     const monthParam = month === '' ? '' : String(MONTH_NAMES.indexOf(month) + 1);
     const yearParam = year === '' ? '' : year;
+    if (yearParam) shuApi.syncResults({ year: yearParam }).catch(() => {});
     fetchTransactions(search, day, monthParam, yearParam);
-    fetchShuResult(monthParam, yearParam);
   };
 
   const handleClear = () => {
@@ -126,39 +123,9 @@ const SHUOutcomeTransaction = () => {
     setFilterType('');
     setCurrentPage(1);
     fetchTransactions('', '', '', String(CURRENT_YEAR));
-    fetchShuResult('', String(CURRENT_YEAR));
   };
 
-  const handleDistribusi = async () => {
-    setDistributing(true);
-    const monthNum = month === '' ? 13 : MONTH_NAMES.indexOf(month) + 1;
-    const yearNum  = year === '' ? null : Number(year);
-    try {
-      const res = await shuApi.distributeShu({
-        period_year:   yearNum,
-        period_month:  monthNum,
-        total_revenue: totalIncome,
-        total_expense: totalExpense,
-        net_profit:    shu,
-      });
-      setShuResult(res);
-
-      // Setelah ShuResults tersimpan, persist per-member bases ke tabel shu_member_bases
-      try {
-        await shuApi.distributeMemberBases({ year: yearNum, month: monthNum });
-        setDistribusiSuccess(`SHU berhasil didistribusikan untuk periode ${month || 'semua bulan'} ${year}.`);
-      } catch (err2) {
-        setError('SHU tersimpan, namun gagal menyimpan member bases: ' + (err2.message || err2));
-      }
-    } catch {
-      setError('Gagal menyimpan distribusi SHU.');
-    } finally {
-      setDistributing(false);
-      setShowDistribusiModal(false);
-    }
-  };
-
-  // apply client-side type filter — type now comes from category.type (INCOME/EXPENSE)
+  // apply client-side type filter
   const filteredTransactions = transactions.filter(r => {
     if (!filterType) return true;
     return String(r.type || '').toUpperCase() === String(filterType).toUpperCase();
@@ -185,6 +152,7 @@ const SHUOutcomeTransaction = () => {
   const count = filteredTransactions.length;
   const shu = totalIncome - totalExpense;
 
+  // ── Add manually ──────────────────────────────────────────────────
   const handleFormChange = (e) =>
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
 
@@ -203,13 +171,79 @@ const SHUOutcomeTransaction = () => {
       setShowManualModal(false);
       setForm(emptyForm);
       const monthParam = month === '' ? '' : String(MONTH_NAMES.indexOf(month) + 1);
-      const yearParam = year === '' ? '' : year;
-      fetchTransactions(search, day, monthParam, yearParam);
+      fetchTransactions(search, day, monthParam, year === '' ? '' : year);
     } else {
       setFormError(Object.values(res).flat().join(' '));
     }
   };
 
+  // ── Edit ──────────────────────────────────────────────────────────
+  const handleEditClick = (row) => {
+    setEditRow(row);
+    setEditForm({
+      transaction_date: row.transaction_date ? String(row.transaction_date).slice(0, 10) : '',
+      category: String(row.category ?? ''),
+      invoice_number: row.invoice_number ?? '',
+      supplier_customer: row.supplier_customer ?? '',
+      quantity: row.quantity !== null && row.quantity !== undefined ? String(row.quantity) : '',
+      amount: row.amount !== null && row.amount !== undefined ? String(row.amount) : '',
+    });
+    setEditError(null);
+    setShowEditModal(true);
+  };
+
+  const handleEditFormChange = (e) =>
+    setEditForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    setEditSubmitting(true);
+    setEditError(null);
+    try {
+      const res = await shuApi.updateOutcomeTransaction(editRow.id, {
+        ...editForm,
+        category: Number(editForm.category),
+        quantity: editForm.quantity !== '' ? Number(editForm.quantity) : null,
+        amount: Number(editForm.amount),
+      });
+      if (res.id) {
+        setShowEditModal(false);
+        setEditRow(null);
+        const monthParam = month === '' ? '' : String(MONTH_NAMES.indexOf(month) + 1);
+        fetchTransactions(search, day, monthParam, year === '' ? '' : year);
+      } else {
+        setEditError(Object.values(res).flat().join(' '));
+      }
+    } catch {
+      setEditError('Gagal menyimpan perubahan.');
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
+
+  // ── Delete ────────────────────────────────────────────────────────
+  const handleDeleteClick = (row) => {
+    setDeleteRow(row);
+    setShowDeleteConfirm(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteRow) return;
+    setDeleting(true);
+    try {
+      await shuApi.deleteOutcomeTransaction(deleteRow.id);
+      setShowDeleteConfirm(false);
+      setDeleteRow(null);
+      const monthParam = month === '' ? '' : String(MONTH_NAMES.indexOf(month) + 1);
+      fetchTransactions(search, day, monthParam, year === '' ? '' : year);
+    } catch {
+      setError('Gagal menghapus transaksi.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  // ── Upload Excel ──────────────────────────────────────────────────
   const handleOpenUpload = () => {
     setUploadFile(null);
     setUploadResult(null);
@@ -269,17 +303,6 @@ const SHUOutcomeTransaction = () => {
     }
   };
 
-  // shared input/select style — matches MandatorySavings
-  const filterInput = {
-    padding: '10px 14px',
-    borderRadius: 10,
-    border: '1px solid #e5e7eb',
-    fontSize: 13,
-    outline: 'none',
-    background: '#fff',
-    color: '#374151',
-  };
-
   const filterSelect = {
     padding: '10px 12px',
     borderRadius: 10,
@@ -289,6 +312,13 @@ const SHUOutcomeTransaction = () => {
     background: '#fff',
     color: '#374151',
   };
+
+  const formFields = [
+    { label: 'Invoice Number', name: 'invoice_number', type: 'text', placeholder: 'e.g. INV-31122025001' },
+    { label: 'Supplier/Customer', name: 'supplier_customer', type: 'text' },
+    { label: 'Quantity', name: 'quantity', type: 'number' },
+    { label: 'Amount Payment', name: 'amount', type: 'number' },
+  ];
 
   return (
     <div className="shu-container shu-page-shell">
@@ -304,7 +334,7 @@ const SHUOutcomeTransaction = () => {
         Report for the {year} Financial Year
       </p>
 
-      {/* KPI Summary Cards — card-box style dari MandatorySavings */}
+      {/* KPI Summary Cards */}
       <div className="shu-card-grid shu-section-block">
         <div className="shu-stat-card" style={{ borderTop: '4px solid #16a34a' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
@@ -348,7 +378,7 @@ const SHUOutcomeTransaction = () => {
         </div>
       </div>
 
-      {/* Filter bar — sama persis dengan MandatorySavings */}
+      {/* Filter bar */}
       <div className="shu-toolbar shu-section-block">
         <input
           className="shu-search-input"
@@ -378,38 +408,13 @@ const SHUOutcomeTransaction = () => {
         <button className="shu-pill-button" onClick={handleClear}>
           Clear
         </button>
-        <button
-          className="shu-pill-button active"
-          onClick={handleApply}
-        >
+        <button className="shu-pill-button active" onClick={handleApply}>
           Cari
         </button>
       </div>
 
-      {/* Success banner */}
-      {distribusiSuccess && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, padding: '12px 16px' }}>
-          <CheckCircle2 size={16} color="#16a34a" />
-          <span style={{ fontSize: 13, color: '#15803d', fontWeight: 500 }}>{distribusiSuccess}</span>
-        </div>
-      )}
-
       {/* Action bar */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, alignItems: 'center' }}>
-        {shuResult?.distributed_status ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 10, background: '#f0fdf4', border: '1px solid #bbf7d0', fontSize: 13, color: '#15803d', fontWeight: 600 }}>
-            <CheckCircle2 size={14} color="#16a34a" />
-            Sudah Didistribusikan
-          </div>
-        ) : (
-          <button
-            onClick={() => setShowDistribusiModal(true)}
-            disabled={!year}
-            style={{ padding: '8px 18px', borderRadius: 10, border: 'none', background: year ? '#7c3aed' : '#e5e7eb', color: year ? '#fff' : '#9ca3af', fontSize: 13, fontWeight: 600, cursor: year ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', gap: 6 }}
-          >
-            <Send size={14} /> Distribusi SHU
-          </button>
-        )}
         <button
           onClick={() => { setForm(emptyForm); setFormError(null); setShowManualModal(true); }}
           style={{ padding: '8px 18px', borderRadius: 10, border: '1px solid #d1d5db', background: '#fff', color: '#374151', fontSize: 13, fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
@@ -427,21 +432,21 @@ const SHUOutcomeTransaction = () => {
       {/* Table */}
       <div className="shu-data-panel shu-section-block">
         {error && (
-            <p style={{ color: '#dc2626', fontSize: 13, marginBottom: 8 }}>{error}</p>
+          <p style={{ color: '#dc2626', fontSize: 13, marginBottom: 8 }}>{error}</p>
         )}
         <table style={{ width: '100%', borderCollapse: 'collapse', background: '#f9fafb', borderRadius: 12, overflow: 'hidden' }}>
           <thead style={{ background: 'linear-gradient(135deg, #3b82f6, #2563eb)' }}>
             <tr>
-              {['No','Transaction Date','Jenis Transaksi','Type','Invoice Number','Supplier/Customer','Quantity','Amount Payment'].map(h => (
+              {['No','Transaction Date','Jenis Transaksi','Type','Invoice Number','Supplier/Customer','Quantity','Amount Payment','Aksi'].map(h => (
                 <th key={h} style={{ padding: 12, textAlign: 'left', color: '#fff', fontWeight: 600, fontSize: 13, letterSpacing: '0.3px' }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={8} style={{ padding: 32, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>Memuat...</td></tr>
+              <tr><td colSpan={9} style={{ padding: 32, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>Memuat...</td></tr>
             ) : paginatedRows.length === 0 ? (
-              <tr><td colSpan={8} style={{ padding: 32, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>Tidak ada data transaksi.</td></tr>
+              <tr><td colSpan={9} style={{ padding: 32, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>Tidak ada data transaksi.</td></tr>
             ) : (
               paginatedRows.map((row, idx) => (
                 <tr key={row.id} style={{ borderBottom: '1px solid #e5e7eb' }}>
@@ -468,13 +473,31 @@ const SHUOutcomeTransaction = () => {
                   <td style={{ padding: 12, fontSize: 13, color: '#374151' }}>{row.supplier_customer}</td>
                   <td style={{ padding: 12, fontSize: 13, color: '#374151' }}>{row.quantity}</td>
                   <td style={{ padding: 12, fontSize: 13, color: '#374151', fontWeight: 600 }}>Rp {formatCurrency(row.amount)}</td>
+                  <td style={{ padding: 12 }}>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button
+                        onClick={() => handleEditClick(row)}
+                        title="Edit"
+                        style={{ padding: '5px 8px', borderRadius: 7, border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                      >
+                        <Pencil size={13} color="#374151" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteClick(row)}
+                        title="Hapus"
+                        style={{ padding: '5px 8px', borderRadius: 7, border: '1px solid #fecaca', background: '#fff5f5', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                      >
+                        <Trash2 size={13} color="#dc2626" />
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))
             )}
           </tbody>
         </table>
 
-        {/* Pagination — sama persis dengan MandatorySavings */}
+        {/* Pagination */}
         {!loading && filteredTransactions.length > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, flexWrap: 'wrap', gap: 10 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#6b7280' }}>
@@ -508,56 +531,7 @@ const SHUOutcomeTransaction = () => {
         )}
       </div>
 
-      {/* Distribusi SHU Confirmation Modal */}
-      {showDistribusiModal && (
-        <div className="shu-modal-overlay" onClick={() => setShowDistribusiModal(false)}>
-          <div className="shu-modal-content" style={{ maxWidth: 480 }} onClick={e => e.stopPropagation()}>
-            <div className="shu-modal-header">
-              <div className="shu-modal-title">Konfirmasi Distribusi SHU</div>
-              <button className="shu-modal-close" onClick={() => setShowDistribusiModal(false)}><X size={20} /></button>
-            </div>
-            <div className="shu-form-container">
-              <p style={{ color: '#6b7280', fontSize: 13, marginBottom: 20 }}>
-                Data berikut akan disimpan ke database sebagai hasil SHU periode ini.
-              </p>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, marginBottom: 24 }}>
-                <tbody>
-                  {[
-                    { label: 'Tahun', value: year || '-' },
-                    { label: 'Bulan', value: month || 'Semua Bulan' },
-                    { label: 'Total Revenue', value: `Rp ${formatCurrency(totalIncome)}`, color: '#16a34a' },
-                    { label: 'Total Expense', value: `Rp ${formatCurrency(totalExpense)}`, color: '#dc2626' },
-                    { label: 'Net Profit (SHU)', value: `${shu < 0 ? '-' : ''}Rp ${formatCurrency(Math.abs(shu))}`, color: shu >= 0 ? '#16a34a' : '#dc2626', bold: true },
-                  ].map(({ label, value, color, bold }) => (
-                    <tr key={label} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                      <td style={{ padding: '10px 0', color: '#6b7280', width: '45%' }}>{label}</td>
-                      <td style={{ padding: '10px 0', color: color || '#0f172a', fontWeight: bold ? 700 : 500 }}>{value}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-                <button
-                  onClick={() => setShowDistribusiModal(false)}
-                  style={{ padding: '10px 20px', borderRadius: 10, border: '1px solid #d1d5db', background: '#f3f4f6', fontSize: 13, cursor: 'pointer' }}
-                >
-                  Batal
-                </button>
-                <button
-                  onClick={handleDistribusi}
-                  disabled={distributing}
-                  style={{ padding: '10px 24px', borderRadius: 10, background: '#7c3aed', color: '#fff', border: 'none', fontSize: 13, fontWeight: 600, cursor: distributing ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
-                >
-                  <Send size={14} />
-                  {distributing ? 'Menyimpan...' : 'Ya, Distribusikan'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Manual Entry Modal */}
+      {/* Add Manually Modal */}
       {showManualModal && (
         <div className="shu-modal-overlay" onClick={() => setShowManualModal(false)}>
           <div className="shu-modal-content" onClick={e => e.stopPropagation()}>
@@ -569,19 +543,12 @@ const SHUOutcomeTransaction = () => {
               <p style={{ color: '#6b7280', fontSize: 13, marginBottom: 24, borderBottom: '1px solid #e5e7eb', paddingBottom: 16 }}>
                 Laporan Periode Tahun Buku {year}
               </p>
-              {formError && (
-                <div style={{ color: '#dc2626', marginBottom: 16, fontSize: 13 }}>{formError}</div>
-              )}
+              {formError && <div style={{ color: '#dc2626', marginBottom: 16, fontSize: 13 }}>{formError}</div>}
               <form onSubmit={handleSubmit}>
-                {[
-                  { label: 'Transaction Date', name: 'transaction_date', type: 'date' },
-                ].map(({ label, name, type }) => (
-                  <div key={name} className="shu-form-grid">
-                    <label style={{ fontWeight: 700, color: '#374151', fontSize: 14 }}>{label}</label>
-                    <input type={type} name={name} className="shu-form-input" value={form[name]} onChange={handleFormChange} required />
-                  </div>
-                ))}
-
+                <div className="shu-form-grid">
+                  <label style={{ fontWeight: 700, color: '#374151', fontSize: 14 }}>Transaction Date</label>
+                  <input type="date" name="transaction_date" className="shu-form-input" value={form.transaction_date} onChange={handleFormChange} required />
+                </div>
                 <div className="shu-form-grid">
                   <label style={{ fontWeight: 700, color: '#374151', fontSize: 14 }}>Jenis Transaksi</label>
                   <select name="category" className="shu-form-input" value={form.category} onChange={handleFormChange} required>
@@ -589,19 +556,12 @@ const SHUOutcomeTransaction = () => {
                     {categories.map(c => <option key={c.id} value={c.id}>{c.category_name}</option>)}
                   </select>
                 </div>
-
-                {[
-                  { label: 'Invoice Number', name: 'invoice_number', type: 'text', placeholder: 'e.g. INV-31122025001' },
-                  { label: 'Supplier/Customer', name: 'supplier_customer', type: 'text' },
-                  { label: 'Quantity', name: 'quantity', type: 'number' },
-                  { label: 'Amount Payment', name: 'amount', type: 'number' },
-                ].map(({ label, name, type, placeholder }) => (
+                {formFields.map(({ label, name, type, placeholder }) => (
                   <div key={name} className="shu-form-grid">
                     <label style={{ fontWeight: 700, color: '#374151', fontSize: 14 }}>{label}</label>
                     <input type={type} name={name} className="shu-form-input" value={form[name]} onChange={handleFormChange} required placeholder={placeholder} min={type === 'number' ? 0 : undefined} step={type === 'number' ? '0.01' : undefined} />
                   </div>
                 ))}
-
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 32 }}>
                   <button type="submit" disabled={submitting}
                     style={{ padding: '10px 48px', borderRadius: 10, background: '#3b82f6', color: '#fff', border: 'none', fontSize: 13, fontWeight: 600, cursor: submitting ? 'not-allowed' : 'pointer' }}>
@@ -609,6 +569,98 @@ const SHUOutcomeTransaction = () => {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Modal */}
+      {showEditModal && (
+        <div className="shu-modal-overlay" onClick={() => setShowEditModal(false)}>
+          <div className="shu-modal-content" onClick={e => e.stopPropagation()}>
+            <div className="shu-modal-header">
+              <div className="shu-modal-title">SHU MANAGEMENT &gt; OUTCOME INCOME TRANSACTION &gt; Edit</div>
+              <button className="shu-modal-close" onClick={() => setShowEditModal(false)}><X size={20} /></button>
+            </div>
+            <div className="shu-form-container">
+              {editError && <div style={{ color: '#dc2626', marginBottom: 16, fontSize: 13 }}>{editError}</div>}
+              <form onSubmit={handleEditSubmit}>
+                <div className="shu-form-grid">
+                  <label style={{ fontWeight: 700, color: '#374151', fontSize: 14 }}>Transaction Date</label>
+                  <input type="date" name="transaction_date" className="shu-form-input" value={editForm.transaction_date} onChange={handleEditFormChange} required />
+                </div>
+                <div className="shu-form-grid">
+                  <label style={{ fontWeight: 700, color: '#374151', fontSize: 14 }}>Jenis Transaksi</label>
+                  <select name="category" className="shu-form-input" value={editForm.category} onChange={handleEditFormChange} required>
+                    <option value="">-- Pilih Kategori --</option>
+                    {categories.map(c => <option key={c.id} value={c.id}>{c.category_name}</option>)}
+                  </select>
+                </div>
+                {formFields.map(({ label, name, type, placeholder }) => (
+                  <div key={name} className="shu-form-grid">
+                    <label style={{ fontWeight: 700, color: '#374151', fontSize: 14 }}>{label}</label>
+                    <input type={type} name={name} className="shu-form-input" value={editForm[name]} onChange={handleEditFormChange} required placeholder={placeholder} min={type === 'number' ? 0 : undefined} step={type === 'number' ? '0.01' : undefined} />
+                  </div>
+                ))}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 32 }}>
+                  <button type="button" onClick={() => setShowEditModal(false)}
+                    style={{ padding: '10px 20px', borderRadius: 10, border: '1px solid #d1d5db', background: '#f3f4f6', fontSize: 13, cursor: 'pointer' }}>
+                    Batal
+                  </button>
+                  <button type="submit" disabled={editSubmitting}
+                    style={{ padding: '10px 48px', borderRadius: 10, background: '#3b82f6', color: '#fff', border: 'none', fontSize: 13, fontWeight: 600, cursor: editSubmitting ? 'not-allowed' : 'pointer' }}>
+                    {editSubmitting ? 'Menyimpan...' : 'Simpan'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && deleteRow && (
+        <div className="shu-modal-overlay" onClick={() => setShowDeleteConfirm(false)}>
+          <div className="shu-modal-content" style={{ maxWidth: 420 }} onClick={e => e.stopPropagation()}>
+            <div className="shu-modal-header">
+              <div className="shu-modal-title">Hapus Transaksi</div>
+              <button className="shu-modal-close" onClick={() => setShowDeleteConfirm(false)}><X size={20} /></button>
+            </div>
+            <div className="shu-form-container">
+              <p style={{ color: '#6b7280', fontSize: 13, marginBottom: 20 }}>
+                Yakin ingin menghapus transaksi berikut? Data tidak dapat dikembalikan.
+              </p>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, marginBottom: 24 }}>
+                <tbody>
+                  {[
+                    { label: 'Tanggal', value: formatDate(deleteRow.transaction_date) },
+                    { label: 'Jenis Transaksi', value: deleteRow.category_name },
+                    { label: 'Invoice', value: deleteRow.invoice_number || '-' },
+                    { label: 'Amount', value: `Rp ${formatCurrency(deleteRow.amount)}`, bold: true },
+                  ].map(({ label, value, bold }) => (
+                    <tr key={label} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                      <td style={{ padding: '8px 0', color: '#6b7280', width: '45%' }}>{label}</td>
+                      <td style={{ padding: '8px 0', color: '#0f172a', fontWeight: bold ? 700 : 400 }}>{value}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  style={{ padding: '10px 20px', borderRadius: 10, border: '1px solid #d1d5db', background: '#f3f4f6', fontSize: 13, cursor: 'pointer' }}
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={handleDeleteConfirm}
+                  disabled={deleting}
+                  style={{ padding: '10px 24px', borderRadius: 10, background: '#dc2626', color: '#fff', border: 'none', fontSize: 13, fontWeight: 600, cursor: deleting ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                >
+                  <Trash2 size={14} />
+                  {deleting ? 'Menghapus...' : 'Ya, Hapus'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -627,8 +679,6 @@ const SHUOutcomeTransaction = () => {
                 Report for the {year} Financial Year
               </p>
               <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 24 }}>
-
-                {/* Download template */}
                 <button
                   onClick={handleDownloadTemplate}
                   style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#3b82f6', fontWeight: 600, fontSize: 13, cursor: 'pointer', background: 'none', border: 'none', padding: 0, marginBottom: 16 }}
@@ -637,7 +687,6 @@ const SHUOutcomeTransaction = () => {
                   <span style={{ textDecoration: 'underline' }}>Download Excel Template</span>
                 </button>
 
-                {/* Instruction */}
                 <div className="shu-upload-instruction">
                   <AlertCircle size={18} color="#3b82f6" style={{ flexShrink: 0 }} />
                   <div style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.6 }}>
@@ -647,7 +696,6 @@ const SHUOutcomeTransaction = () => {
                   </div>
                 </div>
 
-                {/* Drop zone */}
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -686,7 +734,6 @@ const SHUOutcomeTransaction = () => {
                   </div>
                 </div>
 
-                {/* Error */}
                 {uploadError && (
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 14px', marginTop: 12 }}>
                     <AlertCircle size={15} color="#dc2626" style={{ flexShrink: 0, marginTop: 1 }} />
@@ -694,7 +741,6 @@ const SHUOutcomeTransaction = () => {
                   </div>
                 )}
 
-                {/* Upload result */}
                 {uploadResult && (
                   <div style={{ marginTop: 12 }}>
                     {uploadResult.inserted > 0 && (

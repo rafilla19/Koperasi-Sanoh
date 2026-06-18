@@ -1,10 +1,6 @@
 # shu/models.py
 from django.db import models
-from api.models import Members, Statuses  # noqa: F401
-
-# Status IDs from the `statuses` table
-STATUS_PENDING_ID = 41
-STATUS_PAID_ID = 39
+from api.models import Members  # noqa: F401
 
 
 class AccountingPeriods(models.Model):
@@ -61,23 +57,27 @@ class MasterConfiguration(models.Model):
 
 
 class ShuMemberDistributions(models.Model):
-    period = models.ForeignKey('ShuResults', models.DO_NOTHING)
     member = models.ForeignKey(Members, models.DO_NOTHING)
     total_savings = models.DecimalField(max_digits=20, decimal_places=2, default=0)
     total_shu = models.DecimalField(max_digits=20, decimal_places=2, default=0)
-    status = models.ForeignKey(Statuses, models.DO_NOTHING, db_column='status')
+    simp_wajib = models.DecimalField(max_digits=20, decimal_places=2, default=0)
+    simp_sukarela = models.DecimalField(max_digits=20, decimal_places=2, default=0)
+    period_year = models.IntegerField(blank=True, null=True)
     paid_at = models.DateTimeField(blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
     transfer_proof = models.TextField(blank=True, null=True)
     transfer_proof_url = models.TextField(blank=True, null=True)
     transfer_proof_name = models.TextField(blank=True, null=True)
+    tf_reference_id = models.TextField(blank=True, null=True)
+    distributed_status = models.BooleanField(default=False)
+    status_shu = models.BooleanField(default=False)
     created_at = models.DateTimeField(blank=True, null=True)
     updated_at = models.DateTimeField(blank=True, null=True)
 
     class Meta:
         managed = False
         db_table = 'shu_member_distributions'
-        unique_together = (('period', 'member'),)
+        unique_together = (('period_year', 'member'),)
 
 
 class ShuResults(models.Model):
@@ -103,6 +103,11 @@ class ShuMemberDistributionsMonthly(models.Model):
     total_savings = models.DecimalField(max_digits=20, decimal_places=2, default=0)
     total_shu = models.DecimalField(max_digits=20, decimal_places=2, default=0)
     distributed_status = models.BooleanField(default=False)
+    simp_wajib = models.DecimalField(max_digits=20, decimal_places=2, default=0)
+    simp_sukarela = models.DecimalField(max_digits=20, decimal_places=2, default=0)
+    status_shu = models.BooleanField(default=False)
+    period_month = models.IntegerField(blank=True, null=True)
+    period_year = models.IntegerField(blank=True, null=True)
     created_at = models.DateTimeField(blank=True, null=True)
     updated_at = models.DateTimeField(blank=True, null=True)
 

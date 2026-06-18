@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { apiUrl } from '../../services/api';
+import { apiUrl, API_URL } from '../../services/api';
+
+const BANKS_URL = API_URL.replace(/\/v1$/, '') + '/banks/';
 import { X, Check, Banknote, CalendarCheck, Wallet } from 'lucide-react';
 import { Line } from 'react-chartjs-2';
 import {
@@ -115,11 +117,16 @@ const MySaving = () => {
   const [wdError, setWdError] = useState('');
   const [checkingBankAccount, setCheckingBankAccount] = useState(false);
   const [showBankPopup, setShowBankPopup] = useState(false);
+  const [banksList, setBanksList] = useState([]);
+  const [bankFormData, setBankFormData] = useState({ bank_id: '', account_number: '', account_holder_name: '' });
+  const [bankFormLoading, setBankFormLoading] = useState(false);
+  const [bankFormError, setBankFormError] = useState('');
   const [vrAmount, setVrAmount] = useState('');
   const [vrLoading, setVrLoading] = useState(false);
   const [vrError, setVrError] = useState('');
   const [vrMessage, setVrMessage] = useState('');
   const [showVoluntaryForm, setShowVoluntaryForm] = useState(false);
+  const [selectedWd, setSelectedWd] = useState(null);
   const [voluntaryRequests, setVoluntaryRequests] = useState([]);
   const [loadingVR, setLoadingVR] = useState(true);
   const [paymentSchedule, setPaymentSchedule] = useState({ paid: [], upcoming: [] });
@@ -275,11 +282,49 @@ const MySaving = () => {
         setShowWithdrawForm(true);
         return;
       }
+      setBankFormData({
+        bank_id: bankStatus?.bank_id || '',
+        account_number: bankStatus?.account_number || '',
+        account_holder_name: bankStatus?.account_holder_name || '',
+      });
+      setBankFormError('');
+      if (banksList.length === 0) {
+        fetch(BANKS_URL, { headers: getAuthHeaders() })
+          .then(r => r.json())
+          .then(data => setBanksList(Array.isArray(data) ? data : []))
+          .catch(() => {});
+      }
       setShowBankPopup(true);
     } catch {
       setWdError('Gagal mengecek rekening bank pencairan. Coba lagi.');
     } finally {
       setCheckingBankAccount(false);
+    }
+  };
+
+  const handleBankFormSubmit = async () => {
+    setBankFormError('');
+    if (!bankFormData.bank_id || !bankFormData.account_number.trim() || !bankFormData.account_holder_name.trim()) {
+      setBankFormError('Semua field wajib diisi');
+      return;
+    }
+    setBankFormLoading(true);
+    try {
+      const res = await fetch(apiUrl('/my-savings/bank-account-status/'), {
+        method: 'POST',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, getAuthHeaders()),
+        body: JSON.stringify(bankFormData),
+      }).then(r => r.json());
+      if (res.error) {
+        setBankFormError(res.error);
+        return;
+      }
+      setShowBankPopup(false);
+      setShowWithdrawForm(true);
+    } catch {
+      setBankFormError('Gagal menyimpan. Coba lagi.');
+    } finally {
+      setBankFormLoading(false);
     }
   };
 
@@ -306,6 +351,14 @@ const MySaving = () => {
       } else {
         if (res.code === 'BANK_ACCOUNT_INCOMPLETE') {
           setShowWithdrawForm(false);
+          setBankFormData({ bank_id: '', account_number: '', account_holder_name: '' });
+          setBankFormError('');
+          if (banksList.length === 0) {
+            fetch(BANKS_URL, { headers: getAuthHeaders() })
+              .then(r => r.json())
+              .then(data => setBanksList(Array.isArray(data) ? data : []))
+              .catch(() => {});
+          }
           setShowBankPopup(true);
         } else {
           setWdError(res.error || 'Gagal submit withdrawal');
@@ -417,14 +470,13 @@ const MySaving = () => {
   };
 
   useEffect(() => {
-    // toggle a body-level class so we can blur the entire window via CSS
-    if (showBankPopup) {
+    if (showBankPopup || selectedWd) {
       document.body.classList.add('has-global-modal');
     } else {
       document.body.classList.remove('has-global-modal');
     }
     return () => { document.body.classList.remove('has-global-modal'); };
-  }, [showBankPopup]);
+  }, [showBankPopup, selectedWd]);
 
   return (
     <div className="sv-page">
@@ -932,7 +984,7 @@ const MySaving = () => {
                     <div
                       className="appr-item appr-item--clickable"
                       key={w.id}
-                      onClick={() => navigate(`/dashboard/saving/withdrawal/${w.id}`, { state: { withdrawal: w } })}
+                      onClick={() => setSelectedWd(w)}
                     >
                       <p>
                         {w.notes || 'Tidak ada catatan'}
@@ -967,6 +1019,11 @@ const MySaving = () => {
         </div>
       )}
 
+      {selectedWd && createPortal(
+        <WithdrawalDetailPopup withdrawal={selectedWd} onClose={() => setSelectedWd(null)} />,
+        document.body
+      )}
+
       {showBankPopup && createPortal(
         <div className="modal-overlay global-modal-overlay">
           <div className="sv-bank-popup">
@@ -976,9 +1033,9 @@ const MySaving = () => {
               </div>
               <div className="sv-bank-popup-heading">
                 <p className="sv-bank-popup-kicker">Rekening pencairan belum lengkap</p>
-                <h3 className="sv-bank-popup-title">Lengkapi rekening bank dulu</h3>
+                <h3 className="sv-bank-popup-title">Isi Rekening Bank Tujuan</h3>
                 <p className="sv-bank-popup-subtitle">
-                  Withdrawal hanya dapat diajukan setelah rekening tujuan pencairan tervalidasi di profil member.
+                  Lengkapi data rekening bank untuk pencairan dana withdrawal.
                 </p>
               </div>
               <button
@@ -990,27 +1047,61 @@ const MySaving = () => {
               </button>
             </div>
 
-            <div className="sv-bank-popup-panel">
-              <p className="sv-bank-popup-panel-title">Data yang wajib dilengkapi</p>
-              <div className="sv-bank-popup-checklist">
-                <span><Check size={14} /> Bank tujuan</span>
-                <span><Check size={14} /> Nomor rekening</span>
-                <span><Check size={14} /> Nama pemilik rekening</span>
+            <div className="sv-bank-form">
+              <div className="inp-group">
+                <label className="inp-label">Bank Tujuan</label>
+                <select
+                  className="prof-input"
+                  value={bankFormData.bank_id}
+                  onChange={e => setBankFormData(d => ({ ...d, bank_id: e.target.value }))}
+                >
+                  <option value="">— Pilih Bank —</option>
+                  {banksList.map(b => (
+                    <option key={b.id} value={b.id}>{b.bank_name} ({b.bank_code})</option>
+                  ))}
+                </select>
               </div>
+
+              <div className="inp-group">
+                <label className="inp-label">Nomor Rekening</label>
+                <input
+                  className="prof-input"
+                  type="text"
+                  placeholder="Contoh: 1234567890"
+                  value={bankFormData.account_number}
+                  onChange={e => setBankFormData(d => ({ ...d, account_number: e.target.value }))}
+                />
+              </div>
+
+              <div className="inp-group">
+                <label className="inp-label">Nama Pemilik Rekening</label>
+                <input
+                  className="prof-input"
+                  type="text"
+                  placeholder="Sesuai buku tabungan"
+                  value={bankFormData.account_holder_name}
+                  onChange={e => setBankFormData(d => ({ ...d, account_holder_name: e.target.value }))}
+                />
+              </div>
+
+              {bankFormError && (
+                <p style={{ color: '#E11D48', fontSize: 12, margin: '0 0 12px' }}>{bankFormError}</p>
+              )}
             </div>
 
             <div className="sv-bank-popup-actions">
               <button
                 className="btn btn-navy"
-                onClick={() => navigate('/dashboard/profile')}
+                onClick={handleBankFormSubmit}
+                disabled={bankFormLoading}
               >
-                Lengkapi Rekening
+                {bankFormLoading ? 'Menyimpan...' : 'Simpan & Lanjut Withdraw'}
               </button>
               <button
                 className="sv-bank-popup-secondary"
                 onClick={() => setShowBankPopup(false)}
               >
-                Nanti
+                Batal
               </button>
             </div>
           </div>
@@ -1020,5 +1111,174 @@ const MySaving = () => {
     </div>
   );
 };
+
+/* ── Withdrawal Detail Popup ─────────────────────────────────── */
+
+const WD_STATUS = {
+  REQUESTED:            { label: 'Menunggu',      bg: '#FEF3C7', color: '#D97706' },
+  PENDING_VERIFICATION: { label: 'Verifikasi',    bg: '#FFF7ED', color: '#EA580C' },
+  APPROVED:             { label: 'Disetujui',     bg: '#D1FAE5', color: '#059669' },
+  REJECTED:             { label: 'Ditolak',       bg: '#FEE2E2', color: '#DC2626' },
+  PAID:                 { label: 'Sudah Dibayar', bg: '#DBEAFE', color: '#2563EB' },
+  CANCELLED:            { label: 'Dibatalkan',    bg: '#F1F5F9', color: '#64748B' },
+};
+
+const fmtDate = (v) =>
+  v ? new Date(v).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }) : '-';
+const fmtDateTime = (v) =>
+  v ? new Date(v).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
+
+const MEDIA_BASE_URL = apiUrl('').replace(/\/$/, '').replace('/api/v1', '/media');
+
+function WithdrawalDetailPopup({ withdrawal: w, onClose }) {
+  const [imgError, setImgError] = useState(false);
+  const [imgLoading, setImgLoading] = useState(true);
+
+  const st = WD_STATUS[w.status_code] || { label: w.status_name || '-', bg: '#F1F5F9', color: '#64748B' };
+
+  const proofUrl = w.proof_file_path
+    ? (w.proof_file_path.startsWith('http') ? w.proof_file_path : `${MEDIA_BASE_URL}${w.proof_file_path}`)
+    : null;
+
+  const steps = [
+    { key: 'req', label: 'Diajukan', date: w.request_date, done: true },
+    { key: 'apr', label: 'Disetujui', date: w.approved_date, done: !!w.approved_date },
+    { key: 'paid', label: 'Dibayar', date: w.paid_date, done: !!w.paid_date },
+  ];
+  if (w.status_code === 'REJECTED') {
+    steps.splice(1, 2, { key: 'rej', label: 'Ditolak', date: w.approved_date, done: true, isReject: true });
+  }
+
+  return (
+    <div
+      className="modal-overlay global-modal-overlay"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="wd-popup">
+        {/* Header */}
+        <div className="wd-popup__header">
+          <div>
+            <p className="wd-popup__kicker">Penarikan #{w.id}</p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <h2 className="wd-popup__amount">Rp {formatRp(w.amount)},00</h2>
+              <span style={{ background: st.bg, color: st.color, padding: '5px 12px', borderRadius: 99, fontSize: 11, fontWeight: 700 }}>
+                {st.label}
+              </span>
+            </div>
+          </div>
+          <button className="wd-popup__close" onClick={onClose} aria-label="Tutup">
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Timeline */}
+        <div className="wd-popup__timeline">
+          {steps.map((s, i) => (
+            <div key={s.key} className="wd-popup__step">
+              {i > 0 && (
+                <div className="wd-popup__step-line" style={{
+                  background: s.done ? (s.isReject ? '#FCA5A5' : '#86EFAC') : '#E2E8F0',
+                }} />
+              )}
+              <div className={`wd-popup__step-dot ${s.done ? (s.isReject ? 'reject' : 'done') : ''}`}>
+                {s.done ? (s.isReject ? '✕' : '✓') : (i + 1)}
+              </div>
+              <span className={`wd-popup__step-label ${s.done ? 'active' : ''}`}>{s.label}</span>
+              {s.date && <span className="wd-popup__step-date">{fmtDate(s.date)}</span>}
+            </div>
+          ))}
+        </div>
+
+        <div className="wd-popup__body">
+          {/* Info Penarikan */}
+          <div className="wd-popup__section">
+            <p className="wd-popup__section-title">Informasi Penarikan</p>
+            <div className="wd-popup__rows">
+              <div className="wd-popup__row">
+                <span>Jenis Simpanan</span><span>{w.saving_type_name || '-'}</span>
+              </div>
+              <div className="wd-popup__row">
+                <span>Jumlah</span><span>Rp {formatRp(w.amount)},00</span>
+              </div>
+              <div className="wd-popup__row">
+                <span>Tanggal Pengajuan</span><span>{fmtDateTime(w.request_date)}</span>
+              </div>
+              {w.notes && (
+                <div className="wd-popup__row">
+                  <span>Catatan</span><span>{w.notes}</span>
+                </div>
+              )}
+              {w.payment_reference_id && (
+                <div className="wd-popup__row">
+                  <span>Referensi</span><span>{w.payment_reference_id}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Alasan Penolakan */}
+          {w.reject_reason && (
+            <div className="wd-popup__reject">
+              <p style={{ margin: '0 0 2px', fontWeight: 700, fontSize: 12 }}>Alasan Penolakan</p>
+              <p style={{ margin: 0, fontSize: 13 }}>{w.reject_reason}</p>
+            </div>
+          )}
+
+          {/* Respon Admin */}
+          {(w.approved_date || w.paid_date || proofUrl) && (
+            <div className="wd-popup__section">
+              <p className="wd-popup__section-title">Respon Admin</p>
+              <div className="wd-popup__rows">
+                {w.approved_date && (
+                  <div className="wd-popup__row">
+                    <span>Tanggal Disetujui</span><span>{fmtDateTime(w.approved_date)}</span>
+                  </div>
+                )}
+                {w.paid_date && (
+                  <div className="wd-popup__row">
+                    <span>Tanggal Dibayar</span><span>{fmtDateTime(w.paid_date)}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Bukti Transfer */}
+              {proofUrl && (
+                <div className="wd-popup__proof">
+                  <p className="wd-popup__proof-label">Bukti Transfer</p>
+                  {!imgError ? (
+                    <>
+                      {imgLoading && (
+                        <div style={{ textAlign: 'center', padding: '20px 0', color: '#94A3B8', fontSize: 13 }}>Memuat gambar...</div>
+                      )}
+                      <img
+                        src={proofUrl}
+                        alt="Bukti transfer"
+                        className="wd-popup__proof-img"
+                        onLoad={() => setImgLoading(false)}
+                        onError={() => { setImgError(true); setImgLoading(false); }}
+                        style={{ display: imgLoading ? 'none' : 'block', cursor: 'pointer' }}
+                        onClick={() => window.open(proofUrl, '_blank')}
+                      />
+                      {!imgLoading && (
+                        <p style={{ fontSize: 11, color: '#94A3B8', margin: '6px 0 0', textAlign: 'center' }}>
+                          Klik gambar untuk ukuran penuh
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <div className="wd-popup__proof-fallback">
+                      Gambar tidak dapat dimuat.{' '}
+                      <a href={proofUrl} target="_blank" rel="noopener noreferrer">Buka link langsung</a>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default MySaving;

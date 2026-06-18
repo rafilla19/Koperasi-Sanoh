@@ -160,7 +160,7 @@ const AdminDashboard = () => {
     datasets: [
       {
         fill: true,
-        label: 'Net Sales',
+        label: 'SHU (Net Profit)',
         data: netSalesChart.data,
         borderColor: '#4CAF50',
         backgroundColor: 'rgba(76, 175, 80, 0.1)',

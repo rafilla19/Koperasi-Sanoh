@@ -17,7 +17,6 @@ from .models import (
     AccountingPeriods, MasterConfiguration,
     ShuPeriods, ShuMemberDistributions, ShuMemberDistributionsMonthly,
     ShuResults, ShuMemberBases, ShuComponentAllocation,
-    STATUS_PENDING_ID, STATUS_PAID_ID,
 )
 from django.db import transaction, IntegrityError, connection
 from .serializers import (
@@ -35,6 +34,33 @@ from .serializers import (
 )
 
 TEMP_MEMBER_ID = 5
+
+
+def _get_bank_map(member_ids):
+    """Fetch bank info keyed by member_id using raw SQL (MemberBankAccount has no bank FK)."""
+    if not member_ids:
+        return {}
+    placeholders = ','.join(['%s'] * len(member_ids))
+    with connection.cursor() as cursor:
+        cursor.execute(
+            f"SELECT mba.member_id, b.bank_name, b.bank_code, mba.account_number, mba.account_holder_name "
+            f"FROM member_bank_accounts mba "
+            f"JOIN banks b ON b.id = mba.bank_id "
+            f"WHERE mba.member_id IN ({placeholders})",
+            list(member_ids),
+        )
+        rows = cursor.fetchall()
+    bank_map = {}
+    for row in rows:
+        mid = row[0]
+        if mid not in bank_map:
+            bank_map[mid] = {
+                'bank_name': row[1],
+                'bank_code': row[2],
+                'account_number': row[3],
+                'account_holder_name': row[4],
+            }
+    return bank_map
 
 
 # ── MASTER CONFIGURATION ─────────────────────────────────────────
@@ -181,7 +207,7 @@ def my_shu_distributions(request):
     """Daftar SHU yang diterima member yang sedang login."""
     distributions = ShuMemberDistributions.objects.filter(
         member_id=TEMP_MEMBER_ID,
-    ).select_related('period').order_by('-period__year')
+    ).order_by('-period_year')
     return Response(MemberShuDistributionSerializer(distributions, many=True).data)
 
 
@@ -189,9 +215,7 @@ def my_shu_distributions(request):
 def my_shu_detail(request, pk):
     """Detail SHU untuk satu periode tertentu."""
     try:
-        dist = ShuMemberDistributions.objects.select_related('period').get(
-            pk=pk, member_id=TEMP_MEMBER_ID
-        )
+        dist = ShuMemberDistributions.objects.get(pk=pk, member_id=TEMP_MEMBER_ID)
     except ShuMemberDistributions.DoesNotExist:
         return Response({'error': 'Data SHU tidak ditemukan'}, status=404)
     return Response(MemberShuDistributionSerializer(dist).data)
@@ -312,15 +336,11 @@ def admin_shu_calculate(request, pk):
         total_shu = savings_share + transaction_share
 
         dist, is_new = ShuMemberDistributions.objects.update_or_create(
-            period=period,
+            period_year=period.year,
             member=member,
             defaults={
                 'total_savings': member_savings,
-                'total_transactions': member_transactions,
-                'savings_share': savings_share.quantize(Decimal('0.01')),
-                'transaction_share': transaction_share.quantize(Decimal('0.01')),
                 'total_shu': total_shu.quantize(Decimal('0.01')),
-                'status': 'pending',
             },
         )
         if is_new:
@@ -347,7 +367,12 @@ def admin_shu_distributions(request, period_pk):
     Daftar distribusi SHU per member untuk satu periode.
     Query params: ?search=<nama/nik> ?status=pending|approved|paid
     """
-    qs = ShuMemberDistributions.objects.filter(period_id=period_pk).select_related('member', 'period')
+    try:
+        shu_result = ShuResults.objects.get(pk=period_pk)
+        year = shu_result.period_year
+    except ShuResults.DoesNotExist:
+        return Response([])
+    qs = ShuMemberDistributions.objects.filter(period_year=year).select_related('member')
 
     search = request.query_params.get('search')
     if search:
@@ -379,11 +404,18 @@ def admin_shu_distribution_update(request, pk):
         return Response(serializer.errors, status=400)
 
     new_status = serializer.validated_data['status']
-    dist.status = new_status
     if new_status == 'paid':
         dist.paid_at = timezone.now()
+        dist.distributed_status = True
+        dist.status_shu = True
+    elif new_status == 'approved':
+        dist.distributed_status = True
+    elif new_status == 'cancelled':
+        dist.distributed_status = False
+        dist.status_shu = False
     if 'notes' in serializer.validated_data:
         dist.notes = serializer.validated_data['notes']
+    dist.updated_at = timezone.now()
     dist.save()
 
     return Response(AdminShuDistributionSerializer(dist).data)
@@ -392,9 +424,13 @@ def admin_shu_distribution_update(request, pk):
 @api_view(['POST'])
 def admin_shu_bulk_approve(request, period_pk):
     """Approve semua distribusi SHU yang masih pending untuk satu periode."""
+    try:
+        year = ShuResults.objects.get(pk=period_pk).period_year
+    except ShuResults.DoesNotExist:
+        return Response({'message': '0 distribusi berhasil di-approve'})
     updated = ShuMemberDistributions.objects.filter(
-        period_id=period_pk, status='pending'
-    ).update(status='approved', updated_at=timezone.now())
+        period_year=year, distributed_status=False
+    ).update(distributed_status=True, updated_at=timezone.now())
 
     return Response({'message': f'{updated} distribusi berhasil di-approve'})
 
@@ -403,9 +439,13 @@ def admin_shu_bulk_approve(request, period_pk):
 def admin_shu_bulk_pay(request, period_pk):
     """Tandai semua distribusi SHU yang sudah approved menjadi paid."""
     now = timezone.now()
+    try:
+        year = ShuResults.objects.get(pk=period_pk).period_year
+    except ShuResults.DoesNotExist:
+        return Response({'message': '0 distribusi berhasil dibayarkan'})
     updated = ShuMemberDistributions.objects.filter(
-        period_id=period_pk, status='approved'
-    ).update(status='paid', paid_at=now, updated_at=now)
+        period_year=year, distributed_status=False
+    ).update(paid_at=now, distributed_status=True, status_shu=True, updated_at=now)
 
     if updated > 0:
         ShuPeriods.objects.filter(pk=period_pk).update(status='distributed', updated_at=now)
@@ -424,6 +464,56 @@ def admin_shu_outcome_categories(request):
     return Response(IncomeExpenseCategorySerializer(categories, many=True).data)
 
 
+def _auto_recalculate_shu_results(year: int, month: int):
+    """Recalculate and upsert ShuResults for annual (period_month=13) and monthly aggregates."""
+    from django.db import transaction as db_txn
+
+    def _upsert(period_year, period_month, filter_kwargs):
+        qs = IncomeExpenses.objects.filter(deleted_at__isnull=True, **filter_kwargs)
+        agg = qs.aggregate(
+            total_income=Sum('amount', filter=Q(category__type__iexact=IncomeExpenses.TYPE_INCOME)),
+            total_expense=Sum('amount', filter=Q(category__type__iexact=IncomeExpenses.TYPE_EXPENSE)),
+        )
+        total_revenue = Decimal(str(agg['total_income'] or 0))
+        total_expense_val = Decimal(str(agg['total_expense'] or 0))
+        net_profit = (total_revenue - total_expense_val).quantize(Decimal('0.01'))
+
+        with db_txn.atomic():
+            result, _ = ShuResults.objects.update_or_create(
+                period_year=period_year,
+                period_month=period_month,
+                defaults={
+                    'total_revenue': total_revenue,
+                    'total_expense': total_expense_val,
+                    'net_profit': net_profit,
+                    'distributed_status': True,
+                    'deleted_at': None,
+                },
+            )
+            # shu_component_allocations has a DB CHECK period_month BETWEEN 1 AND 12,
+            # so skip rebuilding allocations for the annual sentinel (period_month=13).
+            if 1 <= period_month <= 12:
+                ShuComponentAllocation.objects.filter(shu_result=result).delete()
+                active_configs = MasterConfiguration.objects.filter(deleted_at__isnull=True).order_by('id')
+                allocations = [
+                    ShuComponentAllocation(
+                        shu_result=result,
+                        master_configuration=config,
+                        component_name=config.component_name,
+                        percentage=config.percentage,
+                        allocated_amount=(result.net_profit * config.percentage / Decimal('100')).quantize(Decimal('0.01')),
+                        period_month=result.period_month,
+                        period_year=result.period_year,
+                    )
+                    for config in active_configs
+                ]
+                if allocations:
+                    ShuComponentAllocation.objects.bulk_create(allocations)
+
+    _upsert(year, 13, {'transaction_date__year': year})
+    _upsert(year, month, {'transaction_date__year': year, 'transaction_date__month': month})
+
+
 @api_view(['GET', 'POST'])
 def admin_shu_outcome_transactions(request):
     """
@@ -435,8 +525,9 @@ def admin_shu_outcome_transactions(request):
         serializer = IncomeExpenseOutcomeCreateSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=400)
-        transaction = serializer.save()
-        return Response(IncomeExpenseOutcomeSerializer(transaction).data, status=201)
+        txn_obj = serializer.save()
+        _auto_recalculate_shu_results(txn_obj.transaction_date.year, txn_obj.transaction_date.month)
+        return Response(IncomeExpenseOutcomeSerializer(txn_obj).data, status=201)
 
     qs = IncomeExpenses.objects.filter(
         deleted_at__isnull=True,
@@ -473,26 +564,33 @@ def admin_shu_outcome_transactions(request):
 
 @api_view(['GET', 'PATCH', 'DELETE'])
 def admin_shu_outcome_transaction_detail(request, pk):
-    """GET / PATCH / DELETE satu transaksi outcome dari income_expenses."""
+    """GET / PATCH / DELETE satu transaksi dari income_expenses."""
     try:
-        transaction = IncomeExpenses.objects.select_related('category').get(
-            pk=pk, type=IncomeExpenses.TYPE_EXPENSE, deleted_at__isnull=True
+        txn_obj = IncomeExpenses.objects.select_related('category').get(
+            pk=pk, deleted_at__isnull=True
         )
     except IncomeExpenses.DoesNotExist:
         return Response({'error': 'Transaksi tidak ditemukan'}, status=404)
 
     if request.method == 'GET':
-        return Response(IncomeExpenseOutcomeSerializer(transaction).data)
+        return Response(IncomeExpenseOutcomeSerializer(txn_obj).data)
 
     if request.method == 'DELETE':
-        transaction.delete()
+        old_date = txn_obj.transaction_date
+        txn_obj.delete()
+        _auto_recalculate_shu_results(old_date.year, old_date.month)
         return Response(status=204)
 
-    serializer = IncomeExpenseOutcomeCreateSerializer(transaction, data=request.data, partial=True)
+    old_date = txn_obj.transaction_date
+    serializer = IncomeExpenseOutcomeCreateSerializer(txn_obj, data=request.data, partial=True)
     if not serializer.is_valid():
         return Response(serializer.errors, status=400)
-    serializer.save()
-    return Response(IncomeExpenseOutcomeSerializer(transaction).data)
+    updated = serializer.save()
+    new_date = updated.transaction_date
+    _auto_recalculate_shu_results(new_date.year, new_date.month)
+    if old_date.year != new_date.year or old_date.month != new_date.month:
+        _auto_recalculate_shu_results(old_date.year, old_date.month)
+    return Response(IncomeExpenseOutcomeSerializer(updated).data)
 
 
 @api_view(['GET'])
@@ -575,7 +673,7 @@ def admin_shu_member_bases(request):
     ).aggregate(total=Sum('monthly_amount'))
     total_all_savings = (all_obligations_agg['total'] or Decimal('0')) * months_multiplier
 
-    # Hitung jasa modal pool: net_profit periode × persentase komponen "Jasa Modal"
+    # Hitung jasa modal pool dari shu_component_allocations (master_configuration_id=1)
     jasa_modal_pool = None
     try:
         period_month_for_result = (month or now.month) if summary == 'month' else 13
@@ -584,14 +682,21 @@ def admin_shu_member_bases(request):
             period_month=period_month_for_result,
             deleted_at__isnull=True,
         )
-        jasa_modal_cfg = MasterConfiguration.objects.filter(
-            component_name__icontains='jasa modal',
-            deleted_at__isnull=True,
-        ).first()
-        if jasa_modal_cfg:
-            jasa_modal_pool = (
-                shu_result.net_profit * jasa_modal_cfg.percentage / Decimal('100')
-            ).quantize(Decimal('0.01'))
+        try:
+            jasa_modal_alloc = ShuComponentAllocation.objects.get(
+                shu_result=shu_result,
+                master_configuration_id=1,
+                deleted_at__isnull=True,
+            )
+            jasa_modal_pool = jasa_modal_alloc.allocated_amount
+        except ShuComponentAllocation.DoesNotExist:
+            jasa_modal_cfg = MasterConfiguration.objects.filter(
+                pk=1, deleted_at__isnull=True,
+            ).first()
+            if jasa_modal_cfg:
+                jasa_modal_pool = (
+                    shu_result.net_profit * jasa_modal_cfg.percentage / Decimal('100')
+                ).quantize(Decimal('0.01'))
     except ShuResults.DoesNotExist:
         pass
 
@@ -813,8 +918,8 @@ def admin_shu_results(request):
             qs = qs.filter(transaction_date__year=int(year))
 
         agg = qs.aggregate(
-            total_income=Sum('amount', filter=Q(category__type__iexact=IncomeExpenseCategories.TYPE_INCOME)),
-            total_expense=Sum('amount', filter=Q(category__type__iexact=IncomeExpenseCategories.TYPE_EXPENSE)),
+            total_income=Sum('amount', filter=Q(category__type__iexact=IncomeExpenses.TYPE_INCOME)),
+            total_expense=Sum('amount', filter=Q(category__type__iexact=IncomeExpenses.TYPE_EXPENSE)),
         )
 
         computed_income = agg['total_income'] or 0
@@ -875,9 +980,8 @@ def _build_month_labels(year, month, count):
 
 @api_view(['GET'])
 def admin_shu_net_sales(request):
-    """Return net sales series from shu_member_distributions_monthly grouped by year/month."""
+    """Return SHU (net_profit) series from shu_results grouped by period_year/period_month."""
     from datetime import date
-    from django.db import connection
 
     range_option = request.query_params.get('range', '3month')
     range_map = {
@@ -894,19 +998,14 @@ def admin_shu_net_sales(request):
     start_code = start_year * 100 + start_month
 
     query = """
-        SELECT 
-            sr.period_year, 
-            sr.period_month, 
-            COALESCE(SUM(smdm.total_shu), 0) AS total_shu
-        FROM shu_member_distributions_monthly smdm
-        INNER JOIN shu_results sr ON smdm.period_id = sr.id
-        WHERE sr.deleted_at IS NULL
-          AND sr.period_month <= 12
-          AND (sr.period_year * 100 + sr.period_month) >= %s
-        GROUP BY sr.period_year, sr.period_month
-        ORDER BY sr.period_year, sr.period_month
+        SELECT period_year, period_month, COALESCE(net_profit, 0)
+        FROM shu_results
+        WHERE deleted_at IS NULL
+          AND period_month BETWEEN 1 AND 12
+          AND (period_year * 100 + period_month) >= %s
+        ORDER BY period_year, period_month
     """
-    
+
     with connection.cursor() as cursor:
         cursor.execute(query, [start_code])
         rows = cursor.fetchall()
@@ -1210,6 +1309,14 @@ def admin_shu_outcome_upload_excel(request):
 
     IncomeExpenses.objects.bulk_create(records)
 
+    # Auto-recalculate ShuResults for every affected year+month
+    affected_periods = set()
+    for r in records:
+        d = r.transaction_date
+        affected_periods.add((d.year, d.month))
+    for yr, mo in affected_periods:
+        _auto_recalculate_shu_results(yr, mo)
+
     return Response({
         'inserted': len(records),
         'errors': errors,
@@ -1239,8 +1346,8 @@ def admin_shu_jasa_modal_list(request):
         return Response({'distributed': False, 'results': []})
 
     qs = ShuMemberDistributions.objects.filter(
-        period=period
-    ).select_related('member', 'period', 'status').order_by('member__full_name')
+        period_year=year_int
+    ).select_related('member').order_by('member__full_name')
 
     search = request.query_params.get('search', '')
     if search:
@@ -1250,15 +1357,102 @@ def admin_shu_jasa_modal_list(request):
         )
 
     member_ids = list(qs.values_list('member_id', flat=True))
-    bank_accounts = MemberBankAccounts.objects.filter(
-        member_id__in=member_ids, deleted_at__isnull=True
-    ).select_related('bank')
-    bank_map = {ba.member_id: ba for ba in bank_accounts}
+    bank_map = _get_bank_map(member_ids)
+
+    from api.models import Departments
+    departments = {d.id: d.department_name for d in Departments.objects.all()}
 
     return Response({
         'distributed': True,
         'period_id': period.id,
-        'results': AdminAnnualJasaModalSerializer(qs, many=True, context={'bank_map': bank_map}).data,
+        'results': AdminAnnualJasaModalSerializer(
+            qs, many=True, context={'bank_map': bank_map, 'departments': departments}
+        ).data,
+    })
+
+
+@api_view(['GET'])
+def admin_shu_annual_from_monthly(request):
+    """
+    Agregasi data dari shu_member_distributions_monthly per tahun.
+    Menjumlahkan simp_wajib, simp_sukarela, total_savings, total_shu untuk semua bulan di tahun yang dipilih.
+    Query params: ?year=<yyyy> &search=<nama/nik>
+    """
+    from api.models import Departments
+
+    now = timezone.now()
+    try:
+        year = int(request.query_params.get('year', now.year))
+    except (ValueError, TypeError):
+        return Response({'error': 'year tidak valid'}, status=400)
+
+    monthly_agg = (
+        ShuMemberDistributionsMonthly.objects
+        .filter(period_year=year)
+        .values('member_id')
+        .annotate(
+            total_simp_wajib=Sum('simp_wajib'),
+            total_simp_sukarela=Sum('simp_sukarela'),
+            total_simpanan=Sum('total_savings'),
+            total_shu_sum=Sum('total_shu'),
+        )
+    )
+
+    member_data = {
+        row['member_id']: {
+            'simp_wajib': row['total_simp_wajib'] or Decimal('0'),
+            'simp_sukarela': row['total_simp_sukarela'] or Decimal('0'),
+            'total_savings': row['total_simpanan'] or Decimal('0'),
+            'total_shu': row['total_shu_sum'] or Decimal('0'),
+        }
+        for row in monthly_agg
+    }
+
+    search = request.query_params.get('search', '')
+    members_qs = Members.objects.filter(deleted_at__isnull=True)
+    if search:
+        members_qs = members_qs.filter(
+            Q(full_name__icontains=search) |
+            Q(nik_employee__icontains=search)
+        )
+    members_qs = members_qs.order_by('full_name')
+
+    departments = {d.id: d.department_name for d in Departments.objects.all()}
+
+    all_member_ids = list(members_qs.values_list('id', flat=True))
+    bank_map = _get_bank_map(all_member_ids)
+
+    results = []
+    for m in members_qs:
+        d = member_data.get(m.id, {
+            'simp_wajib': Decimal('0'),
+            'simp_sukarela': Decimal('0'),
+            'total_savings': Decimal('0'),
+            'total_shu': Decimal('0'),
+        })
+        bank_info = bank_map.get(m.id)
+
+        results.append({
+            'member_id': m.id,
+            'full_name': m.full_name,
+            'nik_employee': m.nik_employee or '-',
+            'department_name': departments.get(m.department_id, '-'),
+            'simp_wajib': float(d['simp_wajib']),
+            'simp_sukarela': float(d['simp_sukarela']),
+            'total_savings': float(d['total_savings']),
+            'total_shu': float(d['total_shu']),
+            'bank_info': bank_info,
+        })
+
+    has_data = any(r['total_savings'] > 0 or r['total_shu'] > 0 for r in results)
+    total_shu_pool = sum(r['total_shu'] for r in results)
+
+    return Response({
+        'count': len(results),
+        'year': year,
+        'has_data': has_data,
+        'total_shu_pool': total_shu_pool if has_data else None,
+        'results': results,
     })
 
 
@@ -1266,7 +1460,7 @@ def admin_shu_jasa_modal_list(request):
 def admin_shu_jasa_modal_distribute(request):
     """
     Distribusikan SHU Jasa Modal tahunan ke seluruh member.
-    Membuat AccountingPeriods (annual) jika belum ada, lalu create/update ShuMemberDistributions.
+    Mengambil data dari shu_member_distributions_monthly (sum per tahun) lalu disimpan ke shu_member_distributions.
     Body: { year: <yyyy> }
     """
     now = timezone.now()
@@ -1281,24 +1475,6 @@ def admin_shu_jasa_modal_distribute(request):
     if year > now.year:
         return Response({'error': 'Tidak dapat mendistribusikan SHU untuk tahun yang akan datang'}, status=400)
 
-    months_multiplier = Decimal('12') if year < now.year else Decimal(str(now.month))
-
-    obligations = MemberSavingObligations.objects.filter(
-        saving_type_id__in=[1, 2],
-        is_active=True,
-        deleted_at__isnull=True,
-        member__deleted_at__isnull=True,
-    ).values('member_id', 'saving_type_id', 'monthly_amount')
-
-    member_savings = {}
-    for o in obligations:
-        mid = o['member_id']
-        if mid not in member_savings:
-            member_savings[mid] = Decimal('0')
-        member_savings[mid] += o['monthly_amount'] * months_multiplier
-
-    total_all_savings = sum(member_savings.values()) or Decimal('0')
-
     try:
         shu_result = ShuResults.objects.get(
             period_year=year, period_month=13, deleted_at__isnull=True
@@ -1309,42 +1485,71 @@ def admin_shu_jasa_modal_distribute(request):
             status=404,
         )
 
-    jasa_modal_cfg = MasterConfiguration.objects.filter(
-        component_name__icontains='jasa modal', deleted_at__isnull=True
-    ).first()
-    if not jasa_modal_cfg:
-        return Response({'error': 'Konfigurasi komponen "Jasa Modal" belum diset'}, status=400)
+    # Aggregate from monthly distributions table
+    monthly_agg = (
+        ShuMemberDistributionsMonthly.objects
+        .filter(period_year=year)
+        .values('member_id')
+        .annotate(
+            total_simp_wajib=Sum('simp_wajib'),
+            total_simp_sukarela=Sum('simp_sukarela'),
+            total_simpanan=Sum('total_savings'),
+            total_shu_sum=Sum('total_shu'),
+        )
+    )
 
-    jasa_modal_pool = (
-        shu_result.net_profit * jasa_modal_cfg.percentage / Decimal('100')
-    ).quantize(Decimal('0.01'))
+    member_data = {
+        row['member_id']: {
+            'simp_wajib': row['total_simp_wajib'] or Decimal('0'),
+            'simp_sukarela': row['total_simp_sukarela'] or Decimal('0'),
+            'total_savings': row['total_simpanan'] or Decimal('0'),
+            'total_shu': row['total_shu_sum'] or Decimal('0'),
+        }
+        for row in monthly_agg
+    }
 
+    if not member_data:
+        return Response(
+            {'error': f'Belum ada data distribusi bulanan untuk tahun {year}. Distribusikan SHU bulanan terlebih dahulu.'},
+            status=404,
+        )
+
+    # Optional: only distribute to a specific subset of member IDs
+    member_ids = request.data.get('member_ids')
     members = Members.objects.filter(deleted_at__isnull=True)
+    if member_ids:
+        members = members.filter(id__in=member_ids)
     created = updated = 0
     now_ts = timezone.now()
 
     try:
         with transaction.atomic():
             for m in members:
-                total = member_savings.get(m.id, Decimal('0'))
-                shu_jasa_modal = (
-                    (total / total_all_savings * jasa_modal_pool).quantize(Decimal('0.01'))
-                    if total_all_savings > 0 else Decimal('0')
-                )
+                d = member_data.get(m.id, {
+                    'simp_wajib': Decimal('0'),
+                    'simp_sukarela': Decimal('0'),
+                    'total_savings': Decimal('0'),
+                    'total_shu': Decimal('0'),
+                })
                 try:
-                    dist = ShuMemberDistributions.objects.get(period=shu_result, member=m)
-                    dist.total_savings = total
-                    dist.total_shu = shu_jasa_modal
+                    dist = ShuMemberDistributions.objects.get(period_year=year, member=m)
+                    dist.simp_wajib = d['simp_wajib']
+                    dist.simp_sukarela = d['simp_sukarela']
+                    dist.total_savings = d['total_savings']
+                    dist.total_shu = d['total_shu']
+                    dist.status_shu = True
                     dist.updated_at = now_ts
-                    dist.save(update_fields=['total_savings', 'total_shu', 'updated_at'])
+                    dist.save(update_fields=['simp_wajib', 'simp_sukarela', 'total_savings', 'total_shu', 'status_shu', 'updated_at'])
                     updated += 1
                 except ShuMemberDistributions.DoesNotExist:
                     ShuMemberDistributions.objects.create(
-                        period=shu_result,
                         member=m,
-                        total_savings=total,
-                        total_shu=shu_jasa_modal,
-                        status_id=STATUS_PENDING_ID,
+                        simp_wajib=d['simp_wajib'],
+                        simp_sukarela=d['simp_sukarela'],
+                        total_savings=d['total_savings'],
+                        total_shu=d['total_shu'],
+                        status_shu=True,
+                        period_year=year,
                         created_at=now_ts,
                         updated_at=now_ts,
                     )
@@ -1356,7 +1561,6 @@ def admin_shu_jasa_modal_distribute(request):
         'message': f'SHU Jasa Modal tahun {year} berhasil didistribusikan',
         'created': created,
         'updated': updated,
-        'jasa_modal_pool': float(jasa_modal_pool),
     })
 
 
@@ -1372,7 +1576,7 @@ def admin_shu_jasa_modal_proof_upload(request, pk):
     import boto3
 
     try:
-        dist = ShuMemberDistributions.objects.select_related('member', 'period', 'status').get(pk=pk)
+        dist = ShuMemberDistributions.objects.select_related('member').get(pk=pk)
     except ShuMemberDistributions.DoesNotExist:
         return Response({'error': 'Distribusi tidak ditemukan'}, status=404)
 
@@ -1405,19 +1609,102 @@ def admin_shu_jasa_modal_proof_upload(request, pk):
         return Response({'error': f'Gagal upload file: {exc}'}, status=500)
 
     public_url = f"{SUPABASE_URL}/storage/v1/object/public/{S3_BUCKET}/{s3_key}"
+
+    with connection.cursor() as cur:
+        cur.execute("SELECT sp_generate_shu_transfer_reference()")
+        tf_ref = cur.fetchone()[0]
+
     dist.transfer_proof = public_url
     dist.transfer_proof_url = public_url
     dist.transfer_proof_name = file.name
-    dist.status_id = STATUS_PAID_ID
+    dist.tf_reference_id = tf_ref
     dist.paid_at = timezone.now()
-    dist.save(update_fields=['transfer_proof', 'transfer_proof_url', 'transfer_proof_name', 'status', 'paid_at', 'updated_at'])
+    dist.distributed_status = True
+    dist.status_shu = True
+    dist.save(update_fields=[
+        'transfer_proof', 'transfer_proof_url', 'transfer_proof_name',
+        'tf_reference_id', 'paid_at', 'distributed_status', 'status_shu', 'updated_at',
+    ])
 
-    bank_accounts = MemberBankAccounts.objects.filter(
-        member_id=dist.member_id, deleted_at__isnull=True
-    ).select_related('bank')
-    bank_map = {ba.member_id: ba for ba in bank_accounts}
+    bank_map = _get_bank_map([dist.member_id])
 
-    return Response(AdminAnnualJasaModalSerializer(dist, context={'bank_map': bank_map}).data)
+    from api.models import Departments
+    departments = {d.id: d.department_name for d in Departments.objects.all()}
+
+    return Response(AdminAnnualJasaModalSerializer(dist, context={'bank_map': bank_map, 'departments': departments}).data)
+
+
+@api_view(['PATCH'])
+def admin_shu_jasa_modal_update_notes(request, pk):
+    """Update notes for one annual jasa modal distribution."""
+    try:
+        dist = ShuMemberDistributions.objects.select_related('member').get(pk=pk)
+    except ShuMemberDistributions.DoesNotExist:
+        return Response({'error': 'Distribusi tidak ditemukan'}, status=404)
+
+    dist.notes = request.data.get('notes', '') or None
+    dist.updated_at = timezone.now()
+    dist.save(update_fields=['notes', 'updated_at'])
+
+    bank_map = _get_bank_map([dist.member_id])
+
+    from api.models import Departments
+    departments = {d.id: d.department_name for d in Departments.objects.all()}
+
+    return Response(AdminAnnualJasaModalSerializer(dist, context={'bank_map': bank_map, 'departments': departments}).data)
+
+
+def _sync_annual_distributions(year: int):
+    """
+    Agregasi data dari shu_member_distributions_monthly untuk semua bulan di tahun tertentu,
+    lalu upsert ke shu_member_distributions (tahunan).
+    Hanya berjalan jika ShuResults period_month=13 untuk tahun tersebut sudah ada.
+    """
+    try:
+        annual_result = ShuResults.objects.get(period_year=year, period_month=13, deleted_at__isnull=True)
+    except ShuResults.DoesNotExist:
+        return  # Annual SHU result belum dibuat, skip
+
+    monthly_agg = (
+        ShuMemberDistributionsMonthly.objects
+        .filter(period_year=year)
+        .values('member_id')
+        .annotate(
+            total_simp_wajib=Sum('simp_wajib'),
+            total_simp_sukarela=Sum('simp_sukarela'),
+            total_simpanan=Sum('total_savings'),
+            total_shu_sum=Sum('total_shu'),
+        )
+    )
+
+    if not monthly_agg:
+        return
+
+    now_ts = timezone.now()
+    for row in monthly_agg:
+        simp_wajib = row['total_simp_wajib'] or Decimal('0')
+        simp_sukarela = row['total_simp_sukarela'] or Decimal('0')
+        total_savings = row['total_simpanan'] or Decimal('0')
+        total_shu = row['total_shu_sum'] or Decimal('0')
+        try:
+            dist = ShuMemberDistributions.objects.get(period_year=year, member_id=row['member_id'])
+            dist.simp_wajib = simp_wajib
+            dist.simp_sukarela = simp_sukarela
+            dist.total_savings = total_savings
+            dist.total_shu = total_shu
+            dist.updated_at = now_ts
+            dist.save(update_fields=['simp_wajib', 'simp_sukarela', 'total_savings', 'total_shu', 'updated_at'])
+        except ShuMemberDistributions.DoesNotExist:
+            ShuMemberDistributions.objects.create(
+                member_id=row['member_id'],
+                simp_wajib=simp_wajib,
+                simp_sukarela=simp_sukarela,
+                total_savings=total_savings,
+                total_shu=total_shu,
+                period_year=year,
+                created_at=now_ts,
+                updated_at=now_ts,
+            )
 
 
 @api_view(['POST'])
@@ -1461,17 +1748,23 @@ def admin_shu_monthly_distribute(request):
             status=404,
         )
 
-    # Konfigurasi komponen Jasa Modal
-    jasa_modal_cfg = MasterConfiguration.objects.filter(
-        component_name__icontains='jasa modal',
-        deleted_at__isnull=True,
-    ).first()
-    if not jasa_modal_cfg:
-        return Response({'error': 'Konfigurasi komponen "Jasa Modal" belum diset'}, status=400)
-
-    jasa_modal_pool = (
-        shu_result.net_profit * jasa_modal_cfg.percentage / Decimal('100')
-    ).quantize(Decimal('0.01'))
+    # Ambil jasa modal pool dari shu_component_allocations (master_configuration_id=1)
+    try:
+        jasa_modal_alloc = ShuComponentAllocation.objects.get(
+            shu_result=shu_result,
+            master_configuration_id=1,
+            deleted_at__isnull=True,
+        )
+        jasa_modal_pool = jasa_modal_alloc.allocated_amount
+    except ShuComponentAllocation.DoesNotExist:
+        jasa_modal_cfg = MasterConfiguration.objects.filter(
+            pk=1, deleted_at__isnull=True,
+        ).first()
+        if not jasa_modal_cfg:
+            return Response({'error': 'Konfigurasi komponen "Jasa Modal" (id=1) belum diset'}, status=400)
+        jasa_modal_pool = (
+            shu_result.net_profit * jasa_modal_cfg.percentage / Decimal('100')
+        ).quantize(Decimal('0.01'))
 
     # Hitung simpanan per anggota untuk bulan ini (1 bulan)
     obligations = MemberSavingObligations.objects.filter(
@@ -1485,10 +1778,15 @@ def admin_shu_monthly_distribute(request):
     for o in obligations:
         mid = o['member_id']
         if mid not in member_savings:
-            member_savings[mid] = Decimal('0')
-        member_savings[mid] += o['monthly_amount']
+            member_savings[mid] = {'wajib': Decimal('0'), 'sukarela': Decimal('0')}
+        if o['saving_type_id'] == 1:
+            member_savings[mid]['wajib'] += o['monthly_amount']
+        elif o['saving_type_id'] == 2:
+            member_savings[mid]['sukarela'] += o['monthly_amount']
 
-    total_all_savings = sum(member_savings.values()) or Decimal('0')
+    total_all_savings = sum(
+        v['wajib'] + v['sukarela'] for v in member_savings.values()
+    ) or Decimal('0')
 
     members = Members.objects.filter(deleted_at__isnull=True)
     created = updated = 0
@@ -1497,24 +1795,35 @@ def admin_shu_monthly_distribute(request):
     try:
         with transaction.atomic():
             for m in members:
-                total = member_savings.get(m.id, Decimal('0'))
+                sv = member_savings.get(m.id, {'wajib': Decimal('0'), 'sukarela': Decimal('0')})
+                simp_wajib = sv['wajib']
+                simp_sukarela = sv['sukarela']
+                total = simp_wajib + simp_sukarela
                 shu_jasa_modal = (
                     (total / total_all_savings * jasa_modal_pool).quantize(Decimal('0.01'))
                     if total_all_savings > 0 else Decimal('0')
                 )
                 try:
                     dist = ShuMemberDistributionsMonthly.objects.get(period=shu_result, member=m)
+                    dist.simp_wajib = simp_wajib
+                    dist.simp_sukarela = simp_sukarela
                     dist.total_savings = total
                     dist.total_shu = shu_jasa_modal
+                    dist.status_shu = True
                     dist.updated_at = now_ts
-                    dist.save(update_fields=['total_savings', 'total_shu', 'updated_at'])
+                    dist.save(update_fields=['simp_wajib', 'simp_sukarela', 'total_savings', 'total_shu', 'status_shu', 'updated_at'])
                     updated += 1
                 except ShuMemberDistributionsMonthly.DoesNotExist:
                     ShuMemberDistributionsMonthly.objects.create(
                         period=shu_result,
                         member=m,
+                        simp_wajib=simp_wajib,
+                        simp_sukarela=simp_sukarela,
                         total_savings=total,
                         total_shu=shu_jasa_modal,
+                        status_shu=True,
+                        period_month=month,
+                        period_year=year,
                         created_at=now_ts,
                         updated_at=now_ts,
                     )
@@ -1524,6 +1833,9 @@ def admin_shu_monthly_distribute(request):
             {'error': f'[shu_member_distributions_monthly] {type(exc).__name__}: {exc}'},
             status=500,
         )
+
+    # Auto-sync ke tabel tahunan shu_member_distributions
+    _sync_annual_distributions(year)
 
     MONTH_NAMES = [
         '', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
@@ -1542,6 +1854,185 @@ def admin_shu_monthly_distribute(request):
 
 
 @api_view(['GET'])
+def admin_shu_monthly_distributions(request):
+    """
+    GET → list shu_member_distributions_monthly untuk periode bulan tertentu.
+    Auto-creates missing records for active members when ShuResult exists.
+    Query params: ?year=<yyyy> &month=<1-12> &search=<nama/nik>
+    """
+    now = timezone.now()
+    try:
+        year = int(request.query_params.get('year', now.year))
+        month = int(request.query_params.get('month', now.month))
+    except (ValueError, TypeError):
+        return Response({'error': 'year/month tidak valid'}, status=400)
+
+    try:
+        shu_result = ShuResults.objects.get(
+            period_year=year, period_month=month, deleted_at__isnull=True
+        )
+    except ShuResults.DoesNotExist:
+        return Response({'count': 0, 'results': []})
+
+    # Resolve jasa_modal_pool
+    jasa_modal_pool = None
+    try:
+        jasa_modal_alloc = ShuComponentAllocation.objects.get(
+            shu_result=shu_result, master_configuration_id=1, deleted_at__isnull=True,
+        )
+        jasa_modal_pool = jasa_modal_alloc.allocated_amount
+    except ShuComponentAllocation.DoesNotExist:
+        cfg = MasterConfiguration.objects.filter(pk=1, deleted_at__isnull=True).first()
+        if cfg:
+            jasa_modal_pool = (shu_result.net_profit * cfg.percentage / Decimal('100')).quantize(Decimal('0.01'))
+
+    # Auto-create missing member records
+    if jasa_modal_pool is not None:
+        obligations = MemberSavingObligations.objects.filter(
+            saving_type_id__in=[1, 2], is_active=True,
+            deleted_at__isnull=True, member__deleted_at__isnull=True,
+        ).values('member_id', 'saving_type_id', 'monthly_amount')
+
+        member_savings = {}
+        for o in obligations:
+            mid = o['member_id']
+            if mid not in member_savings:
+                member_savings[mid] = {'wajib': Decimal('0'), 'sukarela': Decimal('0')}
+            if o['saving_type_id'] == 1:
+                member_savings[mid]['wajib'] += o['monthly_amount']
+            elif o['saving_type_id'] == 2:
+                member_savings[mid]['sukarela'] += o['monthly_amount']
+
+        total_all_savings = sum(
+            v['wajib'] + v['sukarela'] for v in member_savings.values()
+        ) or Decimal('0')
+
+        existing_ids = set(
+            ShuMemberDistributionsMonthly.objects.filter(period=shu_result)
+            .values_list('member_id', flat=True)
+        )
+
+        now_ts = timezone.now()
+        new_records = []
+        for m in Members.objects.filter(deleted_at__isnull=True):
+            if m.id not in existing_ids:
+                sv = member_savings.get(m.id, {'wajib': Decimal('0'), 'sukarela': Decimal('0')})
+                simp_wajib = sv['wajib']
+                simp_sukarela = sv['sukarela']
+                total = simp_wajib + simp_sukarela
+                shu_jm = (
+                    (total / total_all_savings * jasa_modal_pool).quantize(Decimal('0.01'))
+                    if total_all_savings > 0 else Decimal('0')
+                )
+                new_records.append(ShuMemberDistributionsMonthly(
+                    period=shu_result, member=m,
+                    simp_wajib=simp_wajib, simp_sukarela=simp_sukarela,
+                    total_savings=total, total_shu=shu_jm,
+                    status_shu=True,
+                    period_month=shu_result.period_month,
+                    period_year=shu_result.period_year,
+                    created_at=now_ts, updated_at=now_ts,
+                ))
+        if new_records:
+            ShuMemberDistributionsMonthly.objects.bulk_create(new_records, ignore_conflicts=True)
+
+    qs = ShuMemberDistributionsMonthly.objects.filter(
+        period=shu_result
+    ).select_related('member')
+
+    search = request.query_params.get('search', '')
+    if search:
+        qs = qs.filter(
+            Q(member__full_name__icontains=search) |
+            Q(member__nik_employee__icontains=search)
+        )
+
+    data = []
+    for dist in qs.order_by('member__full_name'):
+        data.append({
+            'id': dist.id,
+            'member_id': dist.member_id,
+            'member_name': dist.member.full_name,
+            'simp_wajib': float(dist.simp_wajib or 0),
+            'simp_sukarela': float(dist.simp_sukarela or 0),
+            'total_savings': float(dist.total_savings),
+            'total_shu': float(dist.total_shu),
+            'distributed_status': dist.distributed_status,
+            'status_shu': dist.status_shu,
+        })
+
+    return Response({'count': len(data), 'results': data})
+
+
+@api_view(['PATCH', 'DELETE'])
+def admin_shu_monthly_distribution_detail(request, pk):
+    """
+    PATCH  → edit simp_wajib/simp_sukarela (recalculates total_savings & total_shu).
+    DELETE → hapus satu record distribusi bulanan.
+    """
+    try:
+        dist = ShuMemberDistributionsMonthly.objects.select_related('member', 'period').get(pk=pk)
+    except ShuMemberDistributionsMonthly.DoesNotExist:
+        return Response({'error': 'Data tidak ditemukan'}, status=404)
+
+    if request.method == 'DELETE':
+        dist.delete()
+        return Response(status=204)
+
+    try:
+        simp_wajib = Decimal(str(request.data.get('simp_wajib', dist.simp_wajib or 0)))
+        simp_sukarela = Decimal(str(request.data.get('simp_sukarela', dist.simp_sukarela or 0)))
+    except (InvalidOperation, TypeError):
+        return Response({'error': 'Nilai simpanan tidak valid'}, status=400)
+
+    total_savings = simp_wajib + simp_sukarela
+
+    # Recalculate total_shu based on new savings
+    shu_result = dist.period
+    jasa_modal_pool = None
+    try:
+        jasa_modal_alloc = ShuComponentAllocation.objects.get(
+            shu_result=shu_result, master_configuration_id=1, deleted_at__isnull=True,
+        )
+        jasa_modal_pool = jasa_modal_alloc.allocated_amount
+    except ShuComponentAllocation.DoesNotExist:
+        cfg = MasterConfiguration.objects.filter(pk=1, deleted_at__isnull=True).first()
+        if cfg:
+            jasa_modal_pool = (shu_result.net_profit * cfg.percentage / Decimal('100')).quantize(Decimal('0.01'))
+
+    total_all_savings = MemberSavingObligations.objects.filter(
+        saving_type_id__in=[1, 2], is_active=True,
+        deleted_at__isnull=True, member__deleted_at__isnull=True,
+    ).aggregate(total=Sum('monthly_amount'))['total'] or Decimal('0')
+
+    total_shu = Decimal('0')
+    if jasa_modal_pool is not None and total_all_savings > 0:
+        total_shu = (total_savings / total_all_savings * jasa_modal_pool).quantize(Decimal('0.01'))
+
+    dist.simp_wajib = simp_wajib
+    dist.simp_sukarela = simp_sukarela
+    dist.total_savings = total_savings
+    dist.total_shu = total_shu
+    dist.updated_at = timezone.now()
+    dist.save(update_fields=['simp_wajib', 'simp_sukarela', 'total_savings', 'total_shu', 'updated_at'])
+
+    # Auto-sync ke tabel tahunan
+    _sync_annual_distributions(dist.period_year or shu_result.period_year)
+
+    return Response({
+        'id': dist.id,
+        'member_id': dist.member_id,
+        'member_name': dist.member.full_name,
+        'simp_wajib': float(dist.simp_wajib),
+        'simp_sukarela': float(dist.simp_sukarela),
+        'total_savings': float(dist.total_savings),
+        'total_shu': float(dist.total_shu),
+        'distributed_status': dist.distributed_status,
+        'status_shu': dist.status_shu,
+    })
+
+
+@api_view(['GET'])
 def admin_shu_stats(request):
     """
     Ringkasan statistik SHU.
@@ -1550,7 +2041,7 @@ def admin_shu_stats(request):
     - Jumlah member yang sudah menerima SHU
     """
     total_periods = ShuPeriods.objects.count()
-    distributed = ShuMemberDistributions.objects.filter(status='paid')
+    distributed = ShuMemberDistributions.objects.filter(distributed_status=True, status_shu=True)
     return Response({
         'total_periods': total_periods,
         'total_distributed': distributed.aggregate(total=Sum('total_shu'))['total'] or 0,
@@ -1618,6 +2109,32 @@ def get_component_allocations(request):
         'net_profit': float(shu_result.net_profit),
         'results': data
     })
+
+
+@api_view(['POST'])
+def admin_shu_sync_results(request):
+    """
+    Recalculate and upsert shu_results for all periods (or a specific year) that have transactions.
+    Called automatically on page load to ensure shu_results is always in sync.
+    Body: { year?: <yyyy> }
+    """
+    year_param = request.data.get('year')
+
+    qs = IncomeExpenses.objects.filter(deleted_at__isnull=True)
+    if year_param:
+        try:
+            qs = qs.filter(transaction_date__year=int(year_param))
+        except (TypeError, ValueError):
+            return Response({'error': 'year tidak valid'}, status=400)
+
+    month_dates = qs.dates('transaction_date', 'month')
+
+    synced = 0
+    for date in month_dates:
+        _auto_recalculate_shu_results(date.year, date.month)
+        synced += 1
+
+    return Response({'synced': synced})
 
 
 @api_view(['POST'])
@@ -1710,18 +2227,17 @@ def save_component_allocations(request):
                     if total_all_savings > 0 else Decimal('0')
                 )
                 try:
-                    dist = ShuMemberDistributions.objects.get(period=shu_result, member=m)
+                    dist = ShuMemberDistributions.objects.get(period_year=shu_result.period_year, member=m)
                     dist.total_savings = total
                     dist.total_shu = shu_jasa_modal
                     dist.updated_at = now
                     dist.save(update_fields=['total_savings', 'total_shu', 'updated_at'])
                 except ShuMemberDistributions.DoesNotExist:
                     ShuMemberDistributions.objects.create(
-                        period=shu_result,
                         member=m,
                         total_savings=total,
                         total_shu=shu_jasa_modal,
-                        status_id=STATUS_PENDING_ID,
+                        period_year=shu_result.period_year,
                         created_at=now,
                         updated_at=now,
                     )
@@ -1745,6 +2261,8 @@ def save_component_allocations(request):
                         member=m,
                         total_savings=total,
                         total_shu=shu_jasa_modal,
+                        period_month=shu_result.period_month,
+                        period_year=shu_result.period_year,
                         created_at=now,
                         updated_at=now,
                     )

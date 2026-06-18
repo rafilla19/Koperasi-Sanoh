@@ -57,14 +57,22 @@ urlpatterns = [
     # ── Admin: Monthly Jasa Modal Distribution ─────────────────
     # POST { year, month } → distribusikan SHU Jasa Modal bulanan ke shu_member_distributions_monthly
     path('admin/shu/jasa-modal-monthly/distribute/', views.admin_shu_monthly_distribute, name='admin-shu-monthly-distribute'),
+    # GET ?year= &month= &search= → list distribusi bulanan
+    path('admin/shu/jasa-modal-monthly/', views.admin_shu_monthly_distributions, name='admin-shu-monthly-distributions'),
+    # PATCH / DELETE → edit atau hapus satu record distribusi bulanan
+    path('admin/shu/jasa-modal-monthly/<int:pk>/', views.admin_shu_monthly_distribution_detail, name='admin-shu-monthly-distribution-detail'),
 
     # ── Admin: Annual Jasa Modal Distribution ──────────────────
+    # GET ?year= ?search= → agregasi dari shu_member_distributions_monthly per tahun
+    path('admin/shu/annual-from-monthly/', views.admin_shu_annual_from_monthly, name='admin-shu-annual-from-monthly'),
     # GET ?year= ?search= → daftar distribusi tahunan + info bank
     path('admin/shu/jasa-modal-annual/', views.admin_shu_jasa_modal_list, name='admin-shu-jasa-modal-list'),
     # POST { year } → buat/update distribusi di shu_member_distributions
     path('admin/shu/jasa-modal-annual/distribute/', views.admin_shu_jasa_modal_distribute, name='admin-shu-jasa-modal-distribute'),
-    # PATCH multipart → upload bukti transfer, otomatis set status=paid
+    # PATCH multipart → upload bukti transfer, otomatis set status=paid dan distributed_status=true
     path('admin/shu/jasa-modal-annual/<int:pk>/proof/', views.admin_shu_jasa_modal_proof_upload, name='admin-shu-jasa-modal-proof'),
+    # PATCH { notes } → update catatan distribusi
+    path('admin/shu/jasa-modal-annual/<int:pk>/notes/', views.admin_shu_jasa_modal_update_notes, name='admin-shu-jasa-modal-notes'),
 
     # ── Admin: Statistik ─────────────────────────────────────────
     # GET  → KPI stats SHU
@@ -81,4 +89,6 @@ urlpatterns = [
     path('admin/shu/outcome/template/', views.admin_shu_outcome_excel_template, name='admin-shu-outcome-excel-template'),
     # POST → upload Excel bulk insert
     path('admin/shu/outcome/upload/', views.admin_shu_outcome_upload_excel, name='admin-shu-outcome-upload-excel'),
+    # POST { year? } → auto-sync shu_results from income_expenses
+    path('admin/shu/outcome/sync-results/', views.admin_shu_sync_results, name='admin-shu-sync-results'),
 ]

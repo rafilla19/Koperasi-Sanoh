@@ -30,15 +30,13 @@ class ShuPeriodsSerializer(serializers.ModelSerializer):
 # ── MEMBER ────────────────────────────────────────────────────────
 
 class MemberShuDistributionSerializer(serializers.ModelSerializer):
-    year = serializers.IntegerField(source='period.period_year', read_only=True)
-    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    year = serializers.IntegerField(source='period_year', read_only=True)
 
     class Meta:
         model = ShuMemberDistributions
         fields = [
-            'id', 'year', 'total_savings', 'total_transactions',
-            'savings_share', 'transaction_share', 'total_shu',
-            'status', 'status_display', 'paid_at',
+            'id', 'year', 'total_savings', 'total_shu',
+            'distributed_status', 'status_shu', 'paid_at',
         ]
 
 
@@ -65,16 +63,14 @@ class ShuPeriodCreateSerializer(serializers.Serializer):
 class AdminShuDistributionSerializer(serializers.ModelSerializer):
     member_name = serializers.CharField(source='member.full_name', read_only=True)
     member_nik = serializers.CharField(source='member.nik_employee', read_only=True)
-    year = serializers.IntegerField(source='period.period_year', read_only=True)
-    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    year = serializers.IntegerField(source='period_year', read_only=True)
 
     class Meta:
         model = ShuMemberDistributions
         fields = [
             'id', 'year', 'member_name', 'member_nik',
-            'total_savings', 'total_transactions',
-            'savings_share', 'transaction_share', 'total_shu',
-            'status', 'status_display', 'paid_at', 'notes',
+            'total_savings', 'total_shu',
+            'distributed_status', 'status_shu', 'paid_at', 'notes',
         ]
 
 
@@ -84,37 +80,39 @@ class ShuDistributionUpdateSerializer(serializers.Serializer):
 
 
 class AdminAnnualJasaModalSerializer(serializers.ModelSerializer):
+    member_id = serializers.IntegerField(source='member.id', read_only=True)
     member_name = serializers.CharField(source='member.full_name', read_only=True)
     member_nik = serializers.CharField(source='member.nik_employee', read_only=True)
-    year = serializers.IntegerField(source='period.period_year', read_only=True)
-    status_id = serializers.IntegerField(source='status.id', read_only=True)
+    year = serializers.IntegerField(source='period_year', read_only=True)
     status_display = serializers.SerializerMethodField()
     bank_info = serializers.SerializerMethodField()
+    department_name = serializers.SerializerMethodField()
 
     class Meta:
         model = ShuMemberDistributions
         fields = [
-            'id', 'year', 'member_name', 'member_nik',
-            'total_savings', 'total_shu',
-            'status_id', 'status_display', 'paid_at', 'notes',
+            'id', 'year', 'member_id', 'member_name', 'member_nik',
+            'department_name',
+            'simp_wajib', 'simp_sukarela', 'total_savings', 'total_shu',
+            'distributed_status', 'status_shu', 'status_display', 'paid_at', 'notes',
             'transfer_proof', 'transfer_proof_url', 'transfer_proof_name',
-            'bank_info',
+            'tf_reference_id', 'bank_info',
         ]
 
     def get_status_display(self, obj):
-        from .models import STATUS_PAID_ID
-        return 'PAID' if obj.status_id == STATUS_PAID_ID else 'PENDING'
+        if obj.status_shu and obj.distributed_status:
+            return 'PAID'
+        if obj.distributed_status:
+            return 'DISTRIBUTED'
+        return 'PENDING'
 
     def get_bank_info(self, obj):
         bank_map = self.context.get('bank_map', {})
-        account = bank_map.get(obj.member_id)
-        if account:
-            return {
-                'bank_name': account.bank.bank_name,
-                'account_number': account.account_number,
-                'account_holder_name': account.account_holder_name,
-            }
-        return None
+        return bank_map.get(obj.member_id)
+
+    def get_department_name(self, obj):
+        departments = self.context.get('departments', {})
+        return departments.get(obj.member.department_id, '-')
 
 
 # ── OUTCOME TRANSACTION (income_expenses table) ───────────────────
@@ -148,6 +146,17 @@ class IncomeExpenseOutcomeCreateSerializer(serializers.ModelSerializer):
             'transaction_date', 'category',
             'invoice_number', 'supplier_customer', 'quantity', 'amount',
         ]
+
+    def create(self, validated_data):
+        category = validated_data.get('category')
+        if category:
+            validated_data['type'] = category.type
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        if 'category' in validated_data:
+            validated_data['type'] = validated_data['category'].type
+        return super().update(instance, validated_data)
 
 
 # ── SHU RESULTS ───────────────────────────────────────────────────

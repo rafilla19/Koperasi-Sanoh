@@ -48,7 +48,7 @@ class WithdrawalSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'saving_type_name', 'amount', 'status_name',
             'status_code', 'notes', 'request_date', 'approved_date', 'paid_date',
-            'reject_reason', 'proof_file_path',
+            'reject_reason', 'proof_file_path', 'payment_reference_id',
         ]
 
 

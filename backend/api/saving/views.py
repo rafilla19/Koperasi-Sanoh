@@ -34,7 +34,7 @@ from .serializers import (
     WithdrawalCreateSerializer,
     WithdrawalSerializer,
 )
-from .email_utils import send_member_notification_email
+from .email_utils import send_member_notification_email, send_withdrawal_paid_email
 
 TEMP_MEMBER_ID = 5
 _MEMBER_SAVINGS_CONFIG_TABLE_EXISTS = None
@@ -210,10 +210,43 @@ def my_saving_wallets(request):
     return Response(SavingWalletsSerializer(wallets, many=True).data)
 
 
-@api_view(['GET'])
+@api_view(['GET', 'POST'])
 def my_bank_account_status(request):
     member_id = _get_member_id_from_request(request)
-    return Response(_get_member_bank_account_status(member_id))
+
+    if request.method == 'GET':
+        return Response(_get_member_bank_account_status(member_id))
+
+    bank_id = request.data.get('bank_id')
+    account_number = (request.data.get('account_number') or '').strip()
+    account_holder_name = (request.data.get('account_holder_name') or '').strip()
+
+    errors = []
+    if not bank_id:
+        errors.append('Bank wajib dipilih')
+    if not account_number:
+        errors.append('Nomor rekening wajib diisi')
+    if not account_holder_name:
+        errors.append('Nama pemilik rekening wajib diisi')
+    if errors:
+        return Response({'error': ', '.join(errors)}, status=400)
+
+    MemberBankAccounts.objects.update_or_create(
+        member_id=member_id,
+        defaults={
+            'bank_id': bank_id,
+            'account_number': account_number,
+            'account_holder_name': account_holder_name,
+        },
+    )
+
+    return Response({
+        'message': 'Rekening bank berhasil disimpan',
+        'is_complete': True,
+        'bank_id': bank_id,
+        'account_number': account_number,
+        'account_holder_name': account_holder_name,
+    })
 
 
 @api_view(['GET'])
@@ -1787,16 +1820,7 @@ def admin_upload_transfer(request, pk):
 
     try:
         withdrawal = Withdrawals.objects.select_related('member').get(pk=pk)
-        send_member_notification_email(
-            withdrawal.member_id,
-            'Withdrawal Anda Telah Dibayar',
-            (
-                f'Halo {withdrawal.member.full_name},\n\n'
-                f'Penarikan saldo simpanan sukarela sebesar Rp {int(withdrawal.amount):,} telah dibayar.\n'
-                f'Bukti transfer: {public_url}\n\n'
-                'Silakan cek status penarikan Anda di dashboard.'
-            )
-        )
+        send_withdrawal_paid_email(withdrawal, public_url)
     except Withdrawals.DoesNotExist:
         pass
 
