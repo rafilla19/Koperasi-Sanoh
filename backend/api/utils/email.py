@@ -3,7 +3,7 @@ from django.core.mail import EmailMultiAlternatives
 from django.utils.html import strip_tags
 from html import escape
 
-def build_email_html(title, intro, details=None, highlight=None, cta_label=None, cta_url=None, footer_note=None):
+def build_email_html(title, intro, details=None, highlight=None, cta_label=None, cta_url=None, footer_note=None, image_url=None, image_label=None):
     details = details or []
     detail_rows = ''.join(
         f'''
@@ -21,6 +21,15 @@ def build_email_html(title, intro, details=None, highlight=None, cta_label=None,
         <div style="margin: 22px 0; padding: 16px 18px; border-radius: 14px; background: linear-gradient(135deg, #eff6ff 0%, #f8fafc 100%); border: 1px solid #dbeafe;">
             <div style="font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: #2563eb; font-weight: 700; margin-bottom: 4px;">{escape(str(highlight_label))}</div>
             <div style="font-size: 18px; font-weight: 800; color: #0f172a;">{escape(str(highlight_value))}</div>
+        </div>
+        '''
+    image_html = ''
+    if image_url:
+        img_label = image_label or 'Lampiran'
+        image_html = f'''
+        <div style="margin: 22px 0; padding: 16px 18px; border-radius: 14px; background: #f8fafc; border: 1px solid #e2e8f0;">
+            <div style="font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: #64748b; font-weight: 700; margin-bottom: 10px;">{escape(str(img_label))}</div>
+            <img src="{escape(str(image_url))}" alt="{escape(str(img_label))}" style="max-width: 100%; height: auto; border-radius: 10px; border: 1px solid #e2e8f0;" />
         </div>
         '''
     cta_html = ''
@@ -47,6 +56,7 @@ def build_email_html(title, intro, details=None, highlight=None, cta_label=None,
                         <table style="width: 100%; border-collapse: collapse; margin-top: 8px;">
                             {detail_rows}
                         </table>
+                        {image_html}
                         {cta_html}
                         {footer_html}
                     </div>
@@ -56,8 +66,8 @@ def build_email_html(title, intro, details=None, highlight=None, cta_label=None,
     </html>
     '''
 
-def send_styled_email(subject, recipient, intro, details=None, highlight=None, cta_label=None, cta_url=None, footer_note=None, plain_fallback='', reply_to=None):
-    html_message = build_email_html(subject, intro, details=details, highlight=highlight, cta_label=cta_label, cta_url=cta_url, footer_note=footer_note)
+def send_styled_email(subject, recipient, intro, details=None, highlight=None, cta_label=None, cta_url=None, footer_note=None, plain_fallback='', reply_to=None, image_url=None, image_label=None):
+    html_message = build_email_html(subject, intro, details=details, highlight=highlight, cta_label=cta_label, cta_url=cta_url, footer_note=footer_note, image_url=image_url, image_label=image_label)
     text_content = plain_fallback or strip_tags(html_message)
     msg = EmailMultiAlternatives(
         subject,

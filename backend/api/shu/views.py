@@ -1626,6 +1626,9 @@ def admin_shu_jasa_modal_proof_upload(request, pk):
         'tf_reference_id', 'paid_at', 'distributed_status', 'status_shu', 'updated_at',
     ])
 
+    from api.saving.email_utils import send_shu_paid_email
+    send_shu_paid_email(dist, public_url)
+
     bank_map = _get_bank_map([dist.member_id])
 
     from api.models import Departments
