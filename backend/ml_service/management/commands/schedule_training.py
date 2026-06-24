@@ -8,7 +8,6 @@ import logging
 from datetime import datetime, timedelta
 from django.core.management.base import BaseCommand
 from django.db import connection
-from django.conf import settings
 
 from ml_service.config import AUTO_RETRAIN_CONFIG
 from ml_service.utils import ModelManager
@@ -53,9 +52,6 @@ class Command(BaseCommand):
                 self.stdout.write("\n[RETRAINING] Starting model training...")
                 from django.core.management import call_command
                 call_command('train_loan_model')
-                
-                # Update last training timestamp
-                self.update_training_timestamp()
                 logger.info("Model retrained successfully")
             else:
                 self.stdout.write("\n✓ Model is up-to-date, no retraining needed")
@@ -189,25 +185,3 @@ class Command(BaseCommand):
             logger.error(f"Error getting last training time: {str(e)}")
             return None
 
-    def update_training_timestamp(self):
-        """
-        Update timestamp training untuk tracking.
-        """
-        try:
-            # Simpan ke file untuk reference
-            import json
-            import os
-            
-            timestamp_file = os.path.join(
-                settings.BASE_DIR,
-                'ml_service',
-                'models',
-                'last_training_timestamp.json'
-            )
-            
-            with open(timestamp_file, 'w') as f:
-                json.dump({
-                    'last_training': datetime.now().isoformat()
-                }, f)
-        except Exception as e:
-            logger.warning(f"Could not update training timestamp: {str(e)}")

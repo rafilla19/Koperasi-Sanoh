@@ -6,3 +6,9 @@ apscheduler
 python-dotenv
 psycopg2-binary
 midtransclient
+pandas
+numpy
+scikit-learn
+xgboost
+imbalanced-learn
+joblib

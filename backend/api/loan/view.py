@@ -198,23 +198,24 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
         """
         try:
             application = self.get_object()
-            
-            # get_prediction sekarang otomatis mengambil fitur member di dalamnya
+
             prediction = get_prediction(
                 application.amount_requested,
                 application.duration_months,
                 application.member_id
             )
-            
+
+            suggested_rate = prediction.get('suggested_interest_rate')
+
             return Response({
                 'application_id': application.id,
-                'eligibility': prediction.get('eligibility', 'Medium'),
+                'eligibility': prediction.get('eligibility', 'PERLU REVIEW MANUAL'),
                 'confidence_score': round(prediction.get('probability', 0.5) * 100, 2),
-                'suggested_interest_rate': round(float(prediction.get('suggested_interest_rate', 1.25)), 2),
+                'suggested_interest_rate': round(float(suggested_rate), 2) if suggested_rate is not None else None,
+                'risk_level': prediction.get('risk_level', 'TINGGI'),
                 'member_stats': prediction.get('member_features', {}),
                 'recommendation': prediction.get('recommendation', ''),
                 'risk_factors': prediction.get('risk_factors', []),
-                'risk_scores': prediction.get('risk_scores', {})
             })
         except Exception as e:
             return Response({'error': str(e)}, status=400)
@@ -238,10 +239,13 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
                 member_id
             )
             
+            suggested_rate = prediction.get('suggested_interest_rate')
+
             return Response({
-                'eligibility': prediction.get('eligibility', 'Medium'),
+                'eligibility': prediction.get('eligibility', 'PERLU REVIEW MANUAL'),
                 'confidence_score': round(prediction.get('probability', 0.5) * 100, 2),
-                'suggested_interest_rate': round(float(prediction.get('suggested_interest_rate', 1.25)), 2)
+                'suggested_interest_rate': round(float(suggested_rate), 2) if suggested_rate is not None else None,
+                'risk_level': prediction.get('risk_level', 'TINGGI'),
             })
         except Exception as e:
             return Response({'error': str(e)}, status=400)
@@ -1944,7 +1948,7 @@ class LoanViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def rollback_payroll_savings(self, request):
-        member_id = request.data.get('saving_id') 
+        member_id = request.data.get('saving_id')
         period = request.data.get('period')
 
         if not member_id or not period:
@@ -1958,31 +1962,45 @@ class LoanViewSet(viewsets.ModelViewSet):
         try:
             with transaction.atomic():
                 with connection.cursor() as cursor:
-                    # Find paid bills for this member in the selected period (status_id in (39, 40))
-                    # and which actually have a payroll transaction (payment_method_id = 2) in saving_transactions
                     cursor.execute("""
-                        SELECT id, saving_type_id 
-                        FROM monthly_saving_bills 
-                        WHERE member_id = %s AND status_id IN (39, 40)
+                        SELECT id, saving_type_id, status_id
+                        FROM monthly_saving_bills
+                        WHERE member_id = %s
                           AND EXTRACT(YEAR FROM bill_period_start) = %s
                           AND EXTRACT(MONTH FROM bill_period_start) = %s
-                          AND id IN (
-                              SELECT monthly_saving_bill_id 
-                              FROM saving_transactions 
-                              WHERE member_id = %s AND payment_method_id = 2
-                          )
-                    """, [member_id, year, month, member_id])
-                    bills = cursor.fetchall()
+                    """, [member_id, year, month])
+                    all_bills = cursor.fetchall()
 
-                    if not bills:
-                        return Response({'error': 'No paid payroll bills found for this period to rollback.'}, status=400)
+                    if not all_bills:
+                        return Response({'error': f'No bills found for member {member_id} in period {period}.'}, status=400)
 
-                    for bill_id, saving_type_id in bills:
-                        cursor.execute(
-                            "CALL public.sp_rollback_savings_payroll_transaction(%s, %s, %s)",
-                            [bill_id, member_id, saving_type_id]
-                        )
+                    paid_bills = [(bid, stype) for bid, stype, sid in all_bills if sid in (39, 40)]
 
+                    if not paid_bills:
+                        statuses = [sid for _, _, sid in all_bills]
+                        return Response({'error': f'No paid bills (status 39/40) found. Current statuses: {statuses}'}, status=400)
+
+                    results = []
+                    failed = []
+                    for bill_id, saving_type_id in paid_bills:
+                        try:
+                            with transaction.atomic():
+                                cursor.execute(
+                                    "CALL public.sp_rollback_savings_payroll_transaction(%s, %s, %s)",
+                                    [bill_id, member_id, saving_type_id]
+                                )
+                            results.append(bill_id)
+                        except Exception as e:
+                            error_msg = str(e).split('\n')[0].strip()
+                            failed.append({'bill_id': bill_id, 'reason': error_msg})
+
+            if failed and not results:
+                return Response({'error': f'Rollback failed for all bills.', 'failed': failed}, status=400)
+            if failed:
+                return Response({
+                    'message': f'Partial rollback: {len(results)} succeeded, {len(failed)} failed.',
+                    'failed': failed
+                }, status=207)
             return Response({'message': 'Rollback processed successfully'})
         except Exception as e:
             return Response({'error': str(e)}, status=400)

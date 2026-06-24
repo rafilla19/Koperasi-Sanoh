@@ -175,7 +175,7 @@ const AdminLoanDetail = () => {
 
       const response = await fetch(apiUrl(`/loan/loan-applications/${id}/reject/`), {
         method: 'POST',
-        headers: getAuthHeaders(),
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({
           reject_reason: rejectReason,
           admin_id: adminId
