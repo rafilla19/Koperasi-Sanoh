@@ -6,3 +6,6 @@ apscheduler
 python-dotenv
 psycopg2-binary
 midtransclient
+scikit-learn
+numpy
+pandas

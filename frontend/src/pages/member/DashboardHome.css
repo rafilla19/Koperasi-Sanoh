@@ -630,6 +630,43 @@
   border-left: 1px solid var(--dh-border);
 }
 
+/* ─── SHU Metric Tooltip ─────────────────────────────────────────── */
+.shu-tooltip-wrap {
+  position: relative;
+}
+
+.shu-tooltip-box {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 260px;
+  padding: 12px 14px;
+  background: #0F172A;
+  color: #E2E8F0;
+  font-size: 12px;
+  line-height: 1.5;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.18);
+  z-index: 50;
+  pointer-events: none;
+}
+
+.shu-tooltip-box::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: #0F172A;
+}
+
+.shu-tooltip-wrap:hover .shu-tooltip-box {
+  display: block;
+}
+
 .metric-label-small {
   font-size: 10px;
   font-weight: 700;
