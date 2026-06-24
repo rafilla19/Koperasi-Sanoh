@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Download, TrendingUp, TrendingDown, ArrowUpRight, ArrowRight, PiggyBank, Calendar, X, AlertCircle } from 'lucide-react';
+import { TrendingUp, TrendingDown, ArrowUpRight, ArrowRight, PiggyBank, Calendar, X, AlertCircle } from 'lucide-react';
 import './SHUManagement.css';
 import { shuApi } from '../../api/shuApi';
 
@@ -266,7 +266,6 @@ const SHUDashboard = () => {
           <select className="shu-filter-select" value={selectedYear} onChange={e => setSelectedYear(e.target.value)}>
             {YEARS.map(y => <option key={y} value={String(y)}>{y}</option>)}
           </select>
-          <button className="shu-btn-icon"><Download size={16} /></button>
         </div>
       </div>
 

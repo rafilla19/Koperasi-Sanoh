@@ -6,7 +6,6 @@ from api.utils.email import send_styled_email
 
 logger = logging.getLogger(__name__)
 
-
 def _get_member_email(member):
     """Resolve email address from a Member instance."""
     if hasattr(member, 'user') and member.user:

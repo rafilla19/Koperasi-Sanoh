@@ -40,7 +40,7 @@ const dummyChartDataMap = {
   '5Y': { labels: ['2019', '2020', '2021', '2022', '2023'], data: [200000, 310000, 450000, 680000, 950000], grow: '110.5%', total: 'Rp 450.000' },
 };
 
-const PERIODS = ['3M', 'YTD', '1Y', '3Y', '5Y'];
+const PERIODS = ['3M', '6M', 'YTD', '1Y', 'ALL'];
 
 /* ─── CHART OPTIONS ─────────────────────────────────────────────────────────── */
 const chartOptions = {
@@ -58,7 +58,11 @@ const chartOptions = {
       cornerRadius: 8,
       displayColors: false,
       callbacks: {
-        label: (ctx) => 'Rp ' + ctx.parsed.y.toLocaleString('id-ID'),
+        label: (ctx) => {
+          if (ctx.parsed.y == null) return null;
+          const prefix = ctx.dataset.label === 'Forecast' ? '(Forecast) ' : '';
+          return prefix + 'Rp ' + ctx.parsed.y.toLocaleString('id-ID');
+        },
       },
     },
   },
@@ -103,6 +107,7 @@ const DashboardHome = () => {
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('');
   const [isInitiating, setIsInitiating] = useState(false);
   const [shuAnalytics, setShuAnalytics] = useState(null);
+  const [showShuHistory, setShowShuHistory] = useState(false);
 
   const itemsPerPage = 5;
   const chartRef = useRef(null);
@@ -499,36 +504,56 @@ const DashboardHome = () => {
     }
   };
 
+  const formatMonthLabel = (monthStr) => {
+    const [yy, mm] = monthStr.split('-');
+    const date = new Date(parseInt(yy), parseInt(mm) - 1, 1);
+    return date.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+  };
+
   const getFilteredChartData = () => {
     if (!shuAnalytics || !shuAnalytics.chart_data) {
-      return { labels: [], data: [], grow: '0%', total: 'Rp 0' };
+      return { labels: [], data: [], forecastLabels: [], forecastData: [], total: 'Rp 0', estimatedAnnual: null, confidence: null };
     }
-    
+
     let filtered = [...shuAnalytics.chart_data];
     const now = new Date();
-    
+
     if (shuFilter === '3M') {
       filtered = filtered.slice(-3);
+    } else if (shuFilter === '6M') {
+      filtered = filtered.slice(-6);
     } else if (shuFilter === 'YTD') {
       const currentYear = now.getFullYear().toString();
       filtered = filtered.filter(d => d.month.startsWith(currentYear));
     } else if (shuFilter === '1Y') {
       filtered = filtered.slice(-12);
-    } else if (shuFilter === '3Y') {
-      filtered = filtered.slice(-36);
-    } else if (shuFilter === '5Y') {
-      filtered = filtered.slice(-60);
     }
-    
+    // 'ALL' → no filter, show everything
+
+    const historicalLabels = filtered.map(d => formatMonthLabel(d.month));
+    const historicalData = filtered.map(d => d.total_shu);
+
+    let forecastLabels = [];
+    let forecastData = [];
+    let estimatedAnnual = null;
+    let confidence = null;
+
+    if (shuAnalytics.forecast && shuAnalytics.forecast.forecast_data) {
+      const fc = shuAnalytics.forecast;
+      forecastLabels = fc.forecast_data.map(d => formatMonthLabel(d.month));
+      forecastData = fc.forecast_data.map(d => d.total_shu);
+      estimatedAnnual = fc.estimated_annual_return;
+      confidence = fc.confidence;
+    }
+
     return {
-      labels: filtered.map(d => {
-          const [yy, mm] = d.month.split('-');
-          const date = new Date(parseInt(yy), parseInt(mm)-1, 1);
-          return date.toLocaleString('en-US', { month: 'short', year: 'numeric' });
-      }),
-      data: filtered.map(d => d.total_shu),
-      grow: `${shuAnalytics.growth_percentage > 0 ? '+' : ''}${shuAnalytics.growth_percentage}%`,
-      total: formatRupiah(shuAnalytics.total_shu)
+      labels: historicalLabels,
+      data: historicalData,
+      forecastLabels,
+      forecastData,
+      total: formatRupiah(shuAnalytics.total_shu),
+      estimatedAnnual,
+      confidence,
     };
   };
 
@@ -544,24 +569,48 @@ const DashboardHome = () => {
     return g;
   };
 
+  const hasForecast = activeChart.forecastData.length > 0;
+  const allLabels = [...activeChart.labels, ...activeChart.forecastLabels];
+
   const chartData = {
-    labels: activeChart.labels,
-    datasets: [{
-      fill: true,
-      label: 'SHU Value',
-      data: activeChart.data,
-      borderColor: '#2D6BE4',
-      borderWidth: 2.5,
-      backgroundColor: (context) => {
-        const chart = context.chart;
-        return getGradient(chart);
+    labels: allLabels,
+    datasets: [
+      {
+        fill: true,
+        label: 'SHU Value',
+        data: [
+          ...activeChart.data,
+          ...new Array(activeChart.forecastLabels.length).fill(null),
+        ],
+        borderColor: '#2D6BE4',
+        borderWidth: 2.5,
+        backgroundColor: (context) => {
+          const chart = context.chart;
+          return getGradient(chart);
+        },
       },
-    }],
+      ...(hasForecast ? [{
+        fill: false,
+        label: 'Forecast',
+        data: [
+          ...new Array(Math.max(0, activeChart.data.length - 1)).fill(null),
+          ...(activeChart.data.length > 0 ? [activeChart.data[activeChart.data.length - 1]] : []),
+          ...activeChart.forecastData,
+        ],
+        borderColor: '#94A3B8',
+        borderWidth: 2,
+        borderDash: [6, 4],
+        pointRadius: 0,
+        pointHoverRadius: 3,
+        pointHoverBackgroundColor: '#94A3B8',
+        pointHoverBorderColor: '#fff',
+      }] : []),
+    ],
   };
 
   /* Close modal on ESC */
   useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') setSelectedTx(null); };
+    const onKey = (e) => { if (e.key === 'Escape') { setSelectedTx(null); setShowShuHistory(false); } };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
@@ -680,7 +729,11 @@ const DashboardHome = () => {
               </div>
               <div>
                 <p className="chart-title">SHU Analytics</p>
-                <p className="chart-subtitle">Estimated annual return</p>
+                <p className="chart-subtitle">
+                  {activeChart.estimatedAnnual
+                    ? `Est. annual return: ${formatRupiah(activeChart.estimatedAnnual)}`
+                    : 'Estimated annual return'}
+                </p>
               </div>
             </div>
             {/* Period Tabs */}
@@ -702,17 +755,64 @@ const DashboardHome = () => {
           </div>
 
           <div className="chart-metrics-row">
-            <div className="chart-metric">
-              <p className="metric-label-small">Grow (Selected Range)</p>
-              <h4 className="metric-value-big green">
-                <ArrowUpRight size={14} style={{ display: 'inline', marginRight: 2, verticalAlign: 'middle' }} />
-                {activeChart.grow}
+            <div className="chart-metric shu-tooltip-wrap">
+              <p className="metric-label-small">
+                Current SHU {shuAnalytics?.current_year?.year || new Date().getFullYear()}
+                <Info size={11} style={{ marginLeft: 4, verticalAlign: 'middle', opacity: 0.5 }} />
+              </p>
+              <h4 className="metric-value-big dark">
+                {formatRupiah(shuAnalytics?.current_year?.total_shu || 0)}
               </h4>
+              <div className="shu-tooltip-box">
+                Total SHU yang sudah Anda terima sepanjang tahun {shuAnalytics?.current_year?.year || new Date().getFullYear()} ini.
+              </div>
             </div>
-            <div className="chart-metric">
-              <p className="metric-label-small">Total SHU</p>
-              <h4 className="metric-value-big dark">{activeChart.total}</h4>
-            </div>
+            {shuAnalytics?.forecast?.trend && (
+              <div className="chart-metric shu-tooltip-wrap">
+                <p className="metric-label-small">
+                  Predicted Growth (6 mo)
+                  <Info size={11} style={{ marginLeft: 4, verticalAlign: 'middle', opacity: 0.5 }} />
+                </p>
+                <h4 className="metric-value-big" style={{
+                  color: shuAnalytics.forecast.trend.direction === 'up' ? '#10B981'
+                    : shuAnalytics.forecast.trend.direction === 'down' ? '#EF4444'
+                    : '#64748B'
+                }}>
+                  {shuAnalytics.forecast.trend.direction === 'up' ? (
+                    <TrendingUp size={14} style={{ display: 'inline', marginRight: 3, verticalAlign: 'middle' }} />
+                  ) : shuAnalytics.forecast.trend.direction === 'down' ? (
+                    <TrendingDown size={14} style={{ display: 'inline', marginRight: 3, verticalAlign: 'middle' }} />
+                  ) : null}
+                  {shuAnalytics.forecast.trend.growth_6m_pct > 0 ? '+' : ''}
+                  {shuAnalytics.forecast.trend.growth_6m_pct}%
+                </h4>
+                <p style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>
+                  {activeChart.confidence === 'high'
+                    ? 'Akurasi tinggi'
+                    : activeChart.confidence === 'medium'
+                    ? 'Akurasi sedang'
+                    : 'Data masih sedikit'}
+                </p>
+                <div className="shu-tooltip-box">
+                  Perkiraan naik/turunnya SHU Anda dalam 6 bulan ke depan berdasarkan data sebelumnya.
+                </div>
+              </div>
+            )}
+            {shuAnalytics?.yearly_history?.length > 0 && (
+              <div
+                className="chart-metric"
+                style={{ cursor: 'pointer' }}
+                onClick={() => setShowShuHistory(true)}
+              >
+                <p className="metric-label-small" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <FileText size={12} />
+                  SHU History
+                </p>
+                <h4 className="metric-value-big" style={{ color: '#2D6BE4', fontSize: 13 }}>
+                  View details
+                </h4>
+              </div>
+            )}
           </div>
         </div>
 
@@ -1186,6 +1286,92 @@ const DashboardHome = () => {
               </button> */}
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* ── SHU History Modal ───────────────────────────────── */}
+      {showShuHistory && shuAnalytics && (
+        <div className="tx-modal-overlay" onClick={() => setShowShuHistory(false)}>
+          <div className="tx-modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520, width: '90%' }}>
+            <button
+              className="btn-modal-close"
+              onClick={() => setShowShuHistory(false)}
+            >
+              <X size={18} />
+            </button>
+
+            <div style={{ padding: '24px 24px 0' }}>
+              <h3 style={{ fontSize: 17, fontWeight: 700, color: '#0F172A', marginBottom: 4 }}>SHU History</h3>
+              <p style={{ fontSize: 13, color: '#64748B', marginBottom: 20 }}>Annual SHU summary &amp; current year breakdown</p>
+            </div>
+
+            {/* Current year breakdown */}
+            {shuAnalytics.current_year?.months?.length > 0 && (
+              <div style={{ padding: '0 24px 16px' }}>
+                <p style={{ fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 8 }}>
+                  {shuAnalytics.current_year.year} (Current Year)
+                </p>
+                <div style={{ maxHeight: 220, overflowY: 'auto', border: '1px solid #E8ECF1', borderRadius: 10 }}>
+                  <table className="tx-table" style={{ fontSize: 13 }}>
+                    <thead>
+                      <tr>
+                        <th>Month</th>
+                        <th style={{ textAlign: 'right' }}>Savings</th>
+                        <th style={{ textAlign: 'right' }}>SHU</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {shuAnalytics.current_year.months.map((m) => {
+                        const monthName = new Date(2026, m.month - 1, 1).toLocaleString('en-US', { month: 'long' });
+                        return (
+                          <tr key={m.month}>
+                            <td>{monthName}</td>
+                            <td style={{ textAlign: 'right' }}>{formatRupiah(m.total_savings)}</td>
+                            <td style={{ textAlign: 'right', fontWeight: 600 }}>{formatRupiah(m.total_shu)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0 0', fontSize: 14 }}>
+                  <span style={{ color: '#64748B', fontWeight: 500 }}>Total {shuAnalytics.current_year.year}</span>
+                  <span style={{ fontWeight: 700, color: '#0F172A' }}>{formatRupiah(shuAnalytics.current_year.total_shu)}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Past years */}
+            {shuAnalytics.yearly_history?.length > 0 && (
+              <div style={{ padding: '0 24px 24px' }}>
+                <p style={{ fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 8 }}>Past Years</p>
+                <div style={{ border: '1px solid #E8ECF1', borderRadius: 10 }}>
+                  <table className="tx-table" style={{ fontSize: 13 }}>
+                    <thead>
+                      <tr>
+                        <th>Year</th>
+                        <th style={{ textAlign: 'right' }}>Total Savings</th>
+                        <th style={{ textAlign: 'right' }}>Total SHU</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {shuAnalytics.yearly_history.map((y) => (
+                        <tr key={y.year}>
+                          <td style={{ fontWeight: 600 }}>{y.year}</td>
+                          <td style={{ textAlign: 'right' }}>{formatRupiah(y.total_savings)}</td>
+                          <td style={{ textAlign: 'right', fontWeight: 700 }}>{formatRupiah(y.total_shu)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            <div style={{ padding: '0 24px 24px', display: 'flex', justifyContent: 'flex-end' }}>
+              <button className="btn-modal-ghost" onClick={() => setShowShuHistory(false)}>Close</button>
+            </div>
           </div>
         </div>
       )}

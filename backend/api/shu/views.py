@@ -19,6 +19,7 @@ from .models import (
     ShuResults, ShuMemberBases, ShuComponentAllocation,
 )
 from django.db import transaction, IntegrityError, connection
+from .forecasting import forecast_shu
 from .serializers import (
     AdminAnnualJasaModalSerializer,
     AdminShuDistributionSerializer,
@@ -152,8 +153,6 @@ def my_shu_analytics(request):
     SHU Analytics data for logged-in member.
     Returns unpaid total SHU, monthly chart data, and growth percentage.
     """
-    from django.db.models.functions import TruncMonth
-
     member_id = request.query_params.get('member_id')
     if not member_id:
         if request.user.is_authenticated and hasattr(request.user, 'member'):
@@ -168,19 +167,26 @@ def my_shu_analytics(request):
     ).aggregate(total_shu=Sum('total_shu'))
     total_shu = total_shu_qs['total_shu'] or Decimal('0')
 
-    # 2. Data Chart Per Bulan
+    # 2. Data Chart Per Bulan — use FK period → ShuResults for reliable month
     monthly_data = (
-        ShuMemberDistributionsMonthly.objects.filter(member_id=member_id)
-        .annotate(month=TruncMonth('created_at'))
-        .values('month')
+        ShuMemberDistributionsMonthly.objects.filter(
+            member_id=member_id,
+            period__deleted_at__isnull=True,
+            period__period_month__gte=1,
+            period__period_month__lte=12,
+        )
+        .values(
+            p_year=F('period__period_year'),
+            p_month=F('period__period_month'),
+        )
         .annotate(total_shu=Sum('total_shu'))
-        .order_by('month')
+        .order_by('p_year', 'p_month')
     )
 
     chart_data = []
     for row in monthly_data:
         chart_data.append({
-            'month': row['month'].strftime('%Y-%m') if row['month'] else None,
+            'month': f"{row['p_year']}-{row['p_month']:02d}",
             'total_shu': float(row['total_shu'] or 0)
         })
 
@@ -194,11 +200,75 @@ def my_shu_analytics(request):
         if p_total > 0:
             growth_percentage = round(((c_total - p_total) / p_total) * 100, 1)
 
+    # 4. ML Forecast
+    forecast_result = None
+    try:
+        forecast_result = forecast_shu(chart_data)
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception("SHU forecast failed")
+
+    # 5. Current-year monthly SHU breakdown
+    current_year = timezone.now().year
+    current_year_monthly = (
+        ShuMemberDistributionsMonthly.objects.filter(
+            member_id=member_id,
+            period__period_year=current_year,
+            period__period_month__gte=1,
+            period__period_month__lte=12,
+            period__deleted_at__isnull=True,
+        )
+        .values(p_month=F('period__period_month'))
+        .annotate(
+            total_shu=Sum('total_shu'),
+            total_savings=Sum('total_savings'),
+        )
+        .order_by('p_month')
+    )
+    current_year_data = []
+    current_year_total = Decimal('0')
+    for row in current_year_monthly:
+        shu_val = row['total_shu'] or Decimal('0')
+        current_year_total += shu_val
+        current_year_data.append({
+            'month': row['p_month'],
+            'total_shu': float(shu_val),
+            'total_savings': float(row['total_savings'] or 0),
+        })
+
+    # 6. Yearly SHU history from shu_member_distributions
+    yearly_history = list(
+        ShuMemberDistributions.objects.filter(
+            member_id=member_id,
+            period_year__isnull=False,
+        )
+        .values('period_year')
+        .annotate(
+            total_shu=Sum('total_shu'),
+            total_savings=Sum('total_savings'),
+        )
+        .order_by('-period_year')
+    )
+    yearly_data = []
+    for row in yearly_history:
+        yearly_data.append({
+            'year': row['period_year'],
+            'total_shu': float(row['total_shu'] or 0),
+            'total_savings': float(row['total_savings'] or 0),
+        })
+
     return Response({
         'total_shu': float(total_shu),
         'chart_data': chart_data,
         'growth_percentage': growth_percentage,
-        'previous_total': previous_total
+        'previous_total': previous_total,
+        'forecast': forecast_result,
+        'current_year': {
+            'year': current_year,
+            'months': current_year_data,
+            'total_shu': float(current_year_total),
+        },
+        'yearly_history': yearly_data,
     })
 
 
