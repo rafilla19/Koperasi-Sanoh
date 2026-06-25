@@ -800,17 +800,21 @@ const DashboardHome = () => {
             )}
             {shuAnalytics?.yearly_history?.length > 0 && (
               <div
-                className="chart-metric"
+                className="chart-metric shu-tooltip-wrap"
                 style={{ cursor: 'pointer' }}
                 onClick={() => setShowShuHistory(true)}
               >
                 <p className="metric-label-small" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <FileText size={12} />
                   SHU History
+                  <Info size={11} style={{ opacity: 0.5 }} />
                 </p>
                 <h4 className="metric-value-big" style={{ color: '#2D6BE4', fontSize: 13 }}>
                   View details
                 </h4>
+                <div className="shu-tooltip-box">
+                  Klik untuk lihat rincian SHU bulanan tahun ini dan total SHU tahun-tahun sebelumnya.
+                </div>
               </div>
             )}
           </div>
