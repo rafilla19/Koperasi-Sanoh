@@ -1456,12 +1456,12 @@ class LoanViewSet(viewsets.ModelViewSet):
                 -- SHU DISTRIBUTION
                 ----------------------------------------------------------------
                  SELECT
-                    w.paid_at AS transaction_date,
+                    COALESCE(w.paid_at, w.created_at) AS transaction_date,
                     m.full_name,
                     'SHU DISTRIBUTION' AS transaction_type,
                     'MANUAL TRANSFER' AS payment_method,
                     w.total_shu AS amount,
-                    CASE w.status_shu WHEN 'TRUE' THEN 'COMPLETED' ELSE 'FALSE' END AS status,
+                    CASE WHEN w.status_shu = TRUE THEN 'COMPLETED' ELSE 'UNPAID' END AS status,
                     w.tf_reference_id AS reference_number
 
                 FROM shu_member_distributions w
@@ -1469,7 +1469,7 @@ class LoanViewSet(viewsets.ModelViewSet):
                 INNER JOIN members m
                     ON m.id = w.member_id
 
-                WHERE w.distributed_status = TRUE
+                WHERE w.distributed_status = TRUE AND w.status_shu = TRUE
             
                 UNION ALL
 
@@ -3418,14 +3418,14 @@ class LoanViewSet(viewsets.ModelViewSet):
         loan_q = " ".join(loan_parts)
 
         shu_parts = [
-            """SELECT 
-                w.paid_at AS transaction_date, 
-                'SHU DISTRIBUTION' AS transaction_type, 
-                w.total_shu AS amount, 
-                CASE WHEN w.status_shu IS TRUE THEN 'PAID' ELSE 'PENDING' END AS status, 
-                COALESCE(w.transfer_proof_name, w.transfer_proof_url, w.transfer_proof, CAST(w.id AS VARCHAR)) AS reference""",
+            """SELECT
+                COALESCE(w.paid_at, w.created_at) AS transaction_date,
+                'SHU DISTRIBUTION' AS transaction_type,
+                w.total_shu AS amount,
+                'COMPLETED' AS status,
+                w.tf_reference_id AS reference""",
             "FROM shu_member_distributions w",
-            "WHERE w.paid_at IS NOT NULL AND w.member_id = %s"
+            "WHERE w.distributed_status = TRUE AND w.status_shu = TRUE AND w.member_id = %s"
         ]
         shu_params = [member_id]
         if start_date:
