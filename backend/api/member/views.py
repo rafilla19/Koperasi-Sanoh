@@ -1126,6 +1126,15 @@ class MemberViewSet(viewsets.ViewSet):
                 """)
                 ref_code = cursor.fetchone()[0]
 
+                # Find unpaid monthly_saving_bill for principal (saving_type_id=3)
+                cursor.execute("""
+                    SELECT id FROM monthly_saving_bills
+                    WHERE member_id = %s AND saving_type_id = 3 AND status_id = 38
+                    ORDER BY bill_period_start ASC LIMIT 1
+                """, [member_id])
+                bill_row = cursor.fetchone()
+                bill_id = bill_row[0] if bill_row else None
+
                 # Insert saving_transaction with status 32 (pending gateway)
                 cursor.execute("""
                     INSERT INTO saving_transactions (
@@ -1136,11 +1145,12 @@ class MemberViewSet(viewsets.ViewSet):
                         amount,
                         status_id,
                         payment_reference_id,
+                        monthly_saving_bill_id,
                         transaction_date,
                         created_at,
                         updated_at
-                    ) VALUES (%s, 3, 1, 1, %s, 32, %s, NOW(), NOW(), NOW())
-                """, [member_id, amount, str(pgt_id)])
+                    ) VALUES (%s, 3, 1, 1, %s, 32, %s, %s, NOW(), NOW(), NOW())
+                """, [member_id, amount, str(pgt_id), bill_id])
 
             return Response({
                 'snap_token': snap_token,

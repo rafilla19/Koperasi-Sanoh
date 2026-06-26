@@ -3037,17 +3037,17 @@ class LoanViewSet(viewsets.ModelViewSet):
             FROM active_loan al
         ),
         next_payment AS (
-            SELECT 
+            SELECT
                 li.due_date as next_due_date,
                 li.amount_total as next_due_amount
             FROM loan_installments li
             JOIN active_loan al ON al.id = li.loan_id
-            WHERE li.status_id IN (27, 28, 30)
+            WHERE li.status_id IN (27, 28)
             ORDER BY li.due_date ASC
             LIMIT 1
         ),
         total_unpaid_installments AS (
-            SELECT 
+            SELECT
                 COALESCE(SUM(li.amount_total), 0) as total_unpaid_installments,
                 COALESCE(
                     JSON_AGG(
@@ -3061,7 +3061,7 @@ class LoanViewSet(viewsets.ModelViewSet):
                 ) as unpaid_installments_list
             FROM loan_installments li
             JOIN active_loan al ON al.id = li.loan_id
-            WHERE li.status_id IN (27, 28, 30)
+            WHERE li.status_id IN (27, 28)
         ),
         outstanding_bills AS (
             SELECT 

@@ -8,25 +8,6 @@ import { fetchWASettings } from '../services/waApi';
 const DashboardLayout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const navigate = useNavigate();
-  const location = useLocation();
-
-  // Get user data from localStorage
-  const userStr = localStorage.getItem('user');
-  const user = userStr ? JSON.parse(userStr) : null;
-
-  // Basic Auth Guard
-  React.useEffect(() => {
-    if (!user) {
-      navigate('/login');
-    }
-  }, [user, navigate]);
-
-  if (!user) return null;
-
-  const roleId = parseInt(user.role_id);
-
-  // Admin Accordion state
   const [openSections, setOpenSections] = useState({
     member: false,
     ls: false,
@@ -34,15 +15,21 @@ const DashboardLayout = () => {
     shu: false,
     transaction: false,
   });
-
-  const toggleSection = (sec) => {
-    setOpenSections(prev => ({ ...prev, [sec]: !prev[sec] }));
-  };
-
-  // WhatsApp menu state
   const [showWAMenu, setShowWAMenu] = useState(false);
   const [waQuestions, setWaQuestions] = useState([]);
   const [waPhone, setWaPhone] = useState('');
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const userStr = localStorage.getItem('user');
+  const user = userStr ? JSON.parse(userStr) : null;
+  const roleId = user ? parseInt(user.role_id) : 0;
+
+  useEffect(() => {
+    if (!user) {
+      navigate('/login');
+    }
+  }, [user, navigate]);
 
   useEffect(() => {
     let cancelled = false;
@@ -60,6 +47,12 @@ const DashboardLayout = () => {
     if (roleId === 2) load();
     return () => { cancelled = true; };
   }, [roleId]);
+
+  if (!user) return null;
+
+  const toggleSection = (sec) => {
+    setOpenSections(prev => ({ ...prev, [sec]: !prev[sec] }));
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('user');

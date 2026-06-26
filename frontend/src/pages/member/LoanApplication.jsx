@@ -293,14 +293,8 @@ const LoanApplication = () => {
               </div>
             </div>
 
-            {aiData && (
-              <div className={`la-ai-badge ${aiData.eligibility.toLowerCase()}`}>
-                Potensi Kelayakan: <strong>{aiData.eligibility}</strong>
-              </div>
-            )}
-
             <p className="la-sim-disclaimer">
-              Suku bunga dan kelayakan yang ditampilkan adalah rekomendasi AI berdasarkan profil Anda. Persetujuan akhir bergantung pada tinjauan admin.
+              Suku bunga yang ditampilkan adalah rekomendasi AI berdasarkan profil Anda. Persetujuan akhir bergantung pada tinjauan admin.
             </p>
 
             <label className="la-checkbox">
