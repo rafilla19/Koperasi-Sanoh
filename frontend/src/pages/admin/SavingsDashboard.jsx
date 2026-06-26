@@ -198,7 +198,7 @@ export default function SavingsDashboard() {
     <div className="savings-container">
       {/* HEADER */}
       <div className="savings-header">
-        <h2>Savings Dashboard</h2>
+        <h2>Dashboard Simpanan</h2>
         <SavingsTabNav />
       </div>
 
@@ -208,14 +208,14 @@ export default function SavingsDashboard() {
           <div className="rate-box">
             <div className="placeholder"></div>
             <p className="amount">{loadingAmount ? '...' : formatRupiah(amount)}</p>
-            <span>CURRENT RATE</span>
+            <span>TARIF SAAT INI</span>
           </div>
 
           <div className="mandatory-form">
-            <h3>Monthly Mandatory Amount</h3>
-            <p>Define amount mandatory for all members</p>
+            <h3>Jumlah Simpanan Wajib Bulanan</h3>
+            <p>Tentukan jumlah simpanan wajib untuk semua anggota</p>
 
-            <label>Amount (Rupiah)</label>
+            <label>Jumlah (Rupiah)</label>
             <input
               type="text"
               value={formatRupiah(tempAmount)}
@@ -235,7 +235,7 @@ export default function SavingsDashboard() {
 
             <div className="actions">
               <button className="btn primary" onClick={() => setShowUpdateConfirm(true)} disabled={updating}>
-                {updating ? 'Menyimpan...' : 'Update All Members'}
+                {updating ? 'Menyimpan...' : 'Perbarui Semua Anggota'}
               </button>
             </div>
           </div>
@@ -245,8 +245,8 @@ export default function SavingsDashboard() {
       {/* SAVINGS ANALYTICS */}
       <div className="analytics-section">
         <div className="analytics-header">
-          <h3>Savings Analytics</h3>
-          <span className="analytics-badge">Overview</span>
+          <h3>Analitik Simpanan</h3>
+          <span className="analytics-badge">Ringkasan</span>
         </div>
 
         <div className="analytics-cards">
@@ -256,7 +256,7 @@ export default function SavingsDashboard() {
             { label: 'Total Simp. Sukarela', key: 'total_sukarela', icon: '📊', bg: '#fef9c3', color: '#ca8a04', format: formatRupiah },
             { label: 'Total Simp. Pokok', key: 'total_pokok', icon: '🏦', bg: '#f3e8ff', color: '#9333ea', format: formatRupiah },
             { label: 'Total Penarikan', key: 'total_withdrawal', icon: '📤', bg: '#fee2e2', color: '#dc2626', format: formatRupiah },
-            { label: 'Balance Saving Used', key: 'remaining_saving_used', icon: '💸', bg: '#eef2ff', color: '#1e40af', format: formatRupiah },
+            { label: 'Saldo Simpanan Terpakai', key: 'remaining_saving_used', icon: '💸', bg: '#eef2ff', color: '#1e40af', format: formatRupiah },
           ].map(({ label, key, icon, bg, color, format }) => (
             <div className="analytics-card" key={key}>
               <span className="analytics-icon" style={{ background: bg, color }}>{icon}</span>
@@ -314,7 +314,7 @@ export default function SavingsDashboard() {
       <div className="pending-section">
         <div className="pending-header">
           <div>
-            <h3>Pending Approvals</h3>
+            <h3>Persetujuan Tertunda</h3>
             <p className="pending-subtitle">Pengajuan perubahan jumlah simpanan sukarela dari anggota</p>
           </div>
           {!loadingRequests && (
@@ -342,15 +342,15 @@ export default function SavingsDashboard() {
                   </div>
                 </div>
 
-                <p className="highlight">Changed Voluntary Saving Amount</p>
+                <p className="highlight">Perubahan Jumlah Simpanan Sukarela</p>
 
                 <div className="details">
                   <div>
-                    <p>Current Amount</p>
+                    <p>Jumlah Saat Ini</p>
                     <span>{formatRupiah(req.current_amount)}</span>
                   </div>
                   <div>
-                    <p>Requested Amount</p>
+                    <p>Jumlah Diajukan</p>
                     <span style={{ color: '#2D6BE4', fontWeight: 600 }}>
                       {formatRupiah(req.requested_amount)}
                     </span>
@@ -358,8 +358,8 @@ export default function SavingsDashboard() {
                 </div>
 
                 <div className="actions">
-                  <button className="btn reject" onClick={() => handleReject(req.id)}>Reject</button>
-                  <button className="btn approve" onClick={() => handleApprove(req.id)}>Approve</button>
+                  <button className="btn reject" onClick={() => handleReject(req.id)}>Tolak</button>
+                  <button className="btn approve" onClick={() => handleApprove(req.id)}>Setujui</button>
                 </div>
               </div>
             ))

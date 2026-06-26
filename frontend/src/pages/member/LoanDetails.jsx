@@ -60,44 +60,44 @@ const LoanDetails = () => {
       // Member Information
       doc.setFontSize(11);
       doc.setFont("helvetica", "bold");
-      doc.text("Member Information", 15, currentY);
+      doc.text("Informasi Anggota", 15, currentY);
       currentY += 6;
       
       doc.setFontSize(10);
       doc.setFont("helvetica", "normal");
-      doc.text(`Name: ${memberData?.full_name || '-'}`, 15, currentY);
+      doc.text(`Nama: ${memberData?.full_name || '-'}`, 15, currentY);
       currentY += 6;
-      doc.text(`Member ID: ${memberData?.id || memberId || '-'}`, 15, currentY);
+      doc.text(`ID Anggota: ${memberData?.id || memberId || '-'}`, 15, currentY);
       currentY += 6;
-      doc.text(`Member Since: ${formatDate(memberData?.join_date)}`, 15, currentY);
+      doc.text(`Anggota Sejak: ${formatDate(memberData?.join_date)}`, 15, currentY);
       currentY += 12;
       
       // Loan Details
       doc.setFontSize(11);
       doc.setFont("helvetica", "bold");
-      doc.text("Loan Details", 15, currentY);
+      doc.text("Detail Pinjaman", 15, currentY);
       currentY += 6;
       
       doc.setFontSize(10);
       doc.setFont("helvetica", "normal");
-      doc.text(`Total Borrowed: ${formatRupiah(loanData?.principal_amount)}`, 15, currentY);
+      doc.text(`Total Pinjaman: ${formatRupiah(loanData?.principal_amount)}`, 15, currentY);
       currentY += 6;
-      doc.text(`Remaining: ${formatRupiah(loanData?.remaining_balance)}`, 15, currentY);
+      doc.text(`Sisa: ${formatRupiah(loanData?.remaining_balance)}`, 15, currentY);
       currentY += 6;
-      doc.text(`Interest (Flat): ${parseFloat(loanData?.bunga || 0).toFixed(1).replace('.', ',')}%`, 15, currentY);
+      doc.text(`Bunga (Flat): ${parseFloat(loanData?.bunga || 0).toFixed(1).replace('.', ',')}%`, 15, currentY);
       currentY += 6;
-      doc.text(`Purpose: ${loanData?.purpose || '-'}`, 15, currentY);
+      doc.text(`Tujuan: ${loanData?.purpose || '-'}`, 15, currentY);
       currentY += 12;
       
       // Repayment Schedule
       doc.setFontSize(11);
       doc.setFont("helvetica", "bold");
-      doc.text("Repayment Schedule", 15, currentY);
+      doc.text("Jadwal Pembayaran", 15, currentY);
       currentY += 4;
       
       const formatNum = (num) => new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(num || 0);
       
-      const tableColumn = ["No", "Due Date", "Transaction Date", "Principal", "Interest", "Total Payment", "Status"];
+      const tableColumn = ["No", "Jatuh Tempo", "Tanggal Transaksi", "Pokok", "Bunga", "Total Pembayaran", "Status"];
       const tableRows = [];
       
       schedule.forEach(s => {
@@ -129,7 +129,7 @@ const LoanDetails = () => {
       doc.save(`Loan_Summary_${id}.pdf`);
     } catch (err) {
       console.error("Failed to generate PDF", err);
-      alert("Failed to generate PDF");
+      alert("Gagal membuat PDF");
     }
   };
 
@@ -240,28 +240,28 @@ const LoanDetails = () => {
       if (window.snap) {
         window.snap.pay(invoiceData.snap_token, {
           onSuccess: function(result) {
-            alert("Payment successful!");
+            alert("Pembayaran berhasil!");
             setShowPaymentInvoice(false);
             setIsInitiating(false);
             window.location.reload();
           },
           onPending: function(result) {
-            alert("Payment is pending. Please complete your payment.");
+            alert("Pembayaran tertunda. Harap selesaikan pembayaran Anda.");
             setShowPaymentInvoice(false);
             setIsInitiating(false);
             window.location.reload();
           },
           onError: function(result) {
-            alert("Payment failed!");
+            alert("Pembayaran gagal!");
             setIsInitiating(false);
           },
           onClose: function() {
-            alert("You closed the payment window without finishing payment.");
+            alert("Anda menutup halaman pembayaran sebelum selesai.");
             setIsInitiating(false);
           }
         });
       } else {
-        alert('Midtrans Snap SDK not loaded. Redirecting to payment page...');
+        alert('Midtrans Snap SDK belum dimuat. Mengalihkan ke halaman pembayaran...');
         const redirectUrl = `https://app.sandbox.midtrans.com/snap/v2/vtweb/${invoiceData.snap_token}`;
         window.open(redirectUrl, '_blank');
         setIsInitiating(false);
@@ -292,7 +292,7 @@ const LoanDetails = () => {
 
       if (!response.ok) {
         const errorData = await response.json();
-        alert(errorData.error || 'Failed to initiate payment.');
+        alert(errorData.error || 'Gagal memulai pembayaran.');
         setIsInitiating(false);
         return;
       }
@@ -302,28 +302,28 @@ const LoanDetails = () => {
         if (window.snap) {
           window.snap.pay(data.snap_token, {
             onSuccess: function(result) {
-              alert("Payment successful!");
+              alert("Pembayaran berhasil!");
               setShowPaymentInvoice(false);
               setIsInitiating(false);
               window.location.reload();
             },
             onPending: function(result) {
-              alert("Payment is pending. Please complete your payment.");
+              alert("Pembayaran tertunda. Harap selesaikan pembayaran Anda.");
               setShowPaymentInvoice(false);
               setIsInitiating(false);
               window.location.reload();
             },
             onError: function(result) {
-              alert("Payment failed!");
+              alert("Pembayaran gagal!");
               setIsInitiating(false);
             },
             onClose: function() {
-              alert("You closed the payment window without finishing payment.");
+              alert("Anda menutup halaman pembayaran sebelum selesai.");
               setIsInitiating(false);
             }
           });
         } else {
-          alert('Midtrans Snap SDK not loaded. Redirecting to payment page...');
+          alert('Midtrans Snap SDK belum dimuat. Mengalihkan ke halaman pembayaran...');
           window.open(data.redirect_url, '_blank');
           setIsInitiating(false);
         }
@@ -332,7 +332,7 @@ const LoanDetails = () => {
       }
     } catch (err) {
       console.error(err);
-      alert('Network error. Failed to initiate payment.');
+      alert('Kesalahan jaringan. Gagal memulai pembayaran.');
       setIsInitiating(false);
     }
   };
@@ -347,19 +347,19 @@ const LoanDetails = () => {
 
   const formatDate = (dateString) => {
     if (!dateString) return '-';
-    return new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+    return new Date(dateString).toLocaleDateString('id-ID', { month: 'short', day: '2-digit', year: 'numeric' });
   };
 
   const formatDateTime = (dateString) => {
     if (!dateString) return '-';
     const d = new Date(dateString);
-    const date = d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-    const time = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
-    return `${date} at ${time}`;
+    const date = d.toLocaleDateString('id-ID', { month: 'long', day: 'numeric', year: 'numeric' });
+    const time = d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false });
+    return `${date} pukul ${time}`;
   };
 
   if (loading) {
-    return <div className="ld-page"><div className="ld-header"><h2>Loading...</h2></div></div>;
+    return <div className="ld-page"><div className="ld-header"><h2>Memuat...</h2></div></div>;
   }
 
   const status = loanData ? loanData.determinedStatus : 'Active';
@@ -388,9 +388,9 @@ const LoanDetails = () => {
       <div className="ld-header">
         <div className="ld-header-left">
           <button className="ld-back-btn" onClick={() => navigate(-1)}>
-            <ArrowLeft size={16} /> Back
+            <ArrowLeft size={16} /> Kembali
           </button>
-          <h1>Loan Details</h1>
+          <h1>Detail Pinjaman</h1>
           <div className={`ld-status-pill ${getStatusColor(status)}`}>
             <span className="dot"></span> {status}
           </div>
@@ -400,17 +400,17 @@ const LoanDetails = () => {
       <div className="ld-sub-header">
         {status !== 'Rejected' && (
           <span className="ld-date">
-            {status === 'Completed' ? 
-              `Start on ${formatDate(loanData?.start_date || loanData?.admin_update)} - End on ${formatDate(loanData?.last_payment_date)}` : 
-              status === 'Pending' ? 
-              `Applied at ${formatDateTime(loanData?.applied_at)}` :
-              `Start on ${formatDate(loanData?.start_date || loanData?.admin_update)}`}
+            {status === 'Completed' ?
+              `Mulai ${formatDate(loanData?.start_date || loanData?.admin_update)} - Selesai ${formatDate(loanData?.last_payment_date)}` :
+              status === 'Pending' ?
+              `Diajukan pada ${formatDateTime(loanData?.applied_at)}` :
+              `Mulai ${formatDate(loanData?.start_date || loanData?.admin_update)}`}
           </span>
         )}
         {!isPendingOrRejected && (
           <div className="ld-actions">
             {/* <button className="ld-btn-outline"><FileText size={16} /> View Loan Agreement</button> */}
-            <button className="ld-btn-outline" onClick={handleDownloadSummary}><Printer size={16} /> Print Summary</button>
+            <button className="ld-btn-outline" onClick={handleDownloadSummary}><Printer size={16} /> Cetak Ringkasan</button>
           </div>
         )}
       </div>
@@ -419,56 +419,56 @@ const LoanDetails = () => {
         <div className="ld-rejection-note">
           <AlertTriangle size={20} className="r-icon" />
           <div className="r-text">
-            <h4>Application Rejected by Administrator</h4>
-            <p>Your requested amount exceeds the allowed limit based on your current salary and total cooperative savings. Please review your available limit in the application page and re-apply.</p>
+            <h4>Pengajuan Ditolak oleh Administrator</h4>
+            <p>Jumlah yang Anda ajukan melebihi batas yang diperbolehkan berdasarkan gaji dan total simpanan koperasi Anda saat ini. Silakan tinjau batas yang tersedia di halaman pengajuan dan ajukan kembali.</p>
           </div>
         </div>
       )}
 
       <div className="ld-details-card">
-        <h3>{isPendingOrRejected ? 'Application Information' : 'Loan Details'}</h3>
+        <h3>{isPendingOrRejected ? 'Informasi Pengajuan' : 'Detail Pinjaman'}</h3>
         
         {isPendingOrRejected ? (
           <div className="ld-grid ld-grid-2">
             <div className="ld-g-col">
-              <span className="lbl">TOTAL BORROWED</span>
+              <span className="lbl">TOTAL PINJAMAN</span>
               <span className="val">{formatRupiah(loanData?.amount_requested)}</span>
             </div>
             <div className="ld-g-col">
-              <span className="lbl">ESTIMATE INTEREST AMOUNT</span>
+              <span className="lbl">ESTIMASI JUMLAH BUNGA</span>
               <span className="val">{formatRupiah((loanData?.amount_requested || 0) * 0.005)}</span>
             </div>
             <div className="ld-g-col">
-              <span className="lbl">PURPOSE</span>
+              <span className="lbl">TUJUAN</span>
               <span className="val">{loanData?.purpose}</span>
             </div>
             <div className="ld-g-col">
-              <span className="lbl">ESTIMATE BUNGA</span>
+              <span className="lbl">ESTIMASI BUNGA</span>
               <span className="val">0,5%</span>
             </div>
             <div className="ld-g-col">
-              <span className="lbl">REPAYMENT REQUEST</span>
-              <span className="val">{loanData?.duration_months} Months Installment Request</span>
+              <span className="lbl">PERMINTAAN CICILAN</span>
+              <span className="val">{loanData?.duration_months} Bulan Permintaan Angsuran</span>
             </div>
             {loanData?.salary_statement_file && (
               <div className="ld-g-col">
-                <span className="lbl">SALARY STATEMENT</span>
+                <span className="lbl">SLIP GAJI</span>
                 <span className="val">
-                  <a 
-                    href={loanData.salary_statement_file} 
-                    target="_blank" 
+                  <a
+                    href={loanData.salary_statement_file}
+                    target="_blank"
                     rel="noopener noreferrer"
                     className="ld-document-link"
                     style={{ color: '#0284c7', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 500 }}
                   >
-                    <FileText size={16} /> View Document
+                    <FileText size={16} /> Lihat Dokumen
                   </a>
                 </span>
               </div>
             )}
             {status === 'Rejected' && (
               <div className="ld-g-col" style={{gridColumn: '1 / -1'}}>
-                <span className="lbl">REJECT REASON</span>
+                <span className="lbl">ALASAN PENOLAKAN</span>
                 <span className="val" style={{color: '#ef4444', fontWeight: 500}}>{loanData?.reject_reason || '-'}</span>
               </div>
             )}
@@ -476,19 +476,19 @@ const LoanDetails = () => {
         ) : (
           <div className={`ld-grid ${status === 'Completed' ? 'ld-grid-2' : ''}`}>
             <div className="ld-g-col">
-              <span className="lbl">TOTAL BORROWED</span>
+              <span className="lbl">TOTAL PINJAMAN</span>
               <span className="val">{formatRupiah(loanData?.principal_amount)}</span>
             </div>
             <div className="ld-g-col">
-              <span className="lbl">REMAINING</span>
+              <span className="lbl">SISA</span>
               <span className="val">{status === 'Completed' ? 'Rp 0' : formatRupiah(loanData?.remaining_balance)}</span>
             </div>
             
             {status === 'Active' && (
               <div className="ld-g-col ld-next-deduction">
-                <span className="lbl">NEXT DEDUCTION</span>
+                <span className="lbl">POTONGAN BERIKUTNYA</span>
                 <span className="val-large">{loanData?.next_installment_balance ? formatRupiah(loanData.next_installment_balance) : '-'}</span>
-                <span className="sub">Due - {loanData?.next_installment_due_date ? formatDate(loanData.next_installment_due_date) : ''}</span>
+                <span className="sub">Jatuh Tempo - {loanData?.next_installment_due_date ? formatDate(loanData.next_installment_due_date) : ''}</span>
                 {empStatus === 3 && (
                   <button 
                     className="btn-pay-now" 
@@ -516,14 +516,14 @@ const LoanDetails = () => {
                       }
                     }}
                   >
-                    PAY NOW
+                    BAYAR SEKARANG
                   </button>
                 )}
               </div>
             )}
 
             <div className="ld-g-col">
-              <span className="lbl">PURPOSE</span>
+              <span className="lbl">TUJUAN</span>
               <span className="val">{loanData?.purpose}</span>
             </div>
             <div className="ld-g-col">
@@ -532,16 +532,16 @@ const LoanDetails = () => {
             </div>
             {loanData?.salary_statement_file && (
               <div className="ld-g-col">
-                <span className="lbl">SALARY STATEMENT</span>
+                <span className="lbl">SLIP GAJI</span>
                 <span className="val">
-                  <a 
-                    href={loanData.salary_statement_file} 
-                    target="_blank" 
+                  <a
+                    href={loanData.salary_statement_file}
+                    target="_blank"
                     rel="noopener noreferrer"
                     className="ld-document-link"
                     style={{ color: '#0284c7', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 500 }}
                   >
-                    <FileText size={16} /> View Document
+                    <FileText size={16} /> Lihat Dokumen
                   </a>
                 </span>
               </div>
@@ -553,7 +553,7 @@ const LoanDetails = () => {
       {!isPendingOrRejected && (
         <div className="ld-progress-section">
           <div className="prog-header">
-            <h3>Repayment Progress</h3>
+            <h3>Progres Pembayaran</h3>
             <span className="pct">
               {loanData?.total_installment > 0 ? Math.round((loanData.paid_installment / loanData.total_installment) * 100) : 0}%
             </span>
@@ -562,30 +562,30 @@ const LoanDetails = () => {
             <div className="prog-fill" style={{width: `${loanData?.total_installment > 0 ? Math.round((loanData.paid_installment / loanData.total_installment) * 100) : 0}%`}}></div>
           </div>
           <div className="prog-footer">
-            {loanData?.paid_installment || 0} of {loanData?.total_installment || 0} Installments Paid
+            {loanData?.paid_installment || 0} dari {loanData?.total_installment || 0} Angsuran Terbayar
           </div>
         </div>
       )}
 
       {(status === 'Active' || status === 'Completed') && (
         <div className="ld-schedule">
-          <h3>Repayment Schedule <span style={{fontSize: 12, fontWeight: 'normal', color: '#94A3B8', marginLeft: 8}}>(Double click a paid row for receipt)</span></h3>
+          <h3>Jadwal Pembayaran <span style={{fontSize: 12, fontWeight: 'normal', color: '#94A3B8', marginLeft: 8}}>(Klik dua kali baris lunas untuk bukti)</span></h3>
           <div className="ld-table-wrap">
             <table className="ld-table">
               <thead>
                 <tr>
                   <th>NO.</th>
-                  <th>DUE DATE</th>
-                  <th>AMOUNT PRINCIPLE</th>
-                  <th>AMOUNT INTEREST</th>
-                  <th>TOTAL PAYMENT</th>
+                  <th>JATUH TEMPO</th>
+                  <th>JUMLAH POKOK</th>
+                  <th>JUMLAH BUNGA</th>
+                  <th>TOTAL PEMBAYARAN</th>
                   <th>STATUS</th>
                 </tr>
               </thead>
               <tbody>
                 {status === 'Pending' ? (
                   <tr>
-                    <td colSpan="6" className="ld-empty-row">Schedule will be generated upon approval.</td>
+                    <td colSpan="6" className="ld-empty-row">Jadwal akan dibuat setelah disetujui.</td>
                   </tr>
                 ) : schedule.length > 0 ? (
                   schedule.map(s => {
@@ -625,14 +625,14 @@ const LoanDetails = () => {
                         <span className={`ld-badge ${status === 'Completed' ? 'bdg-paid' : getBadgeClass(s.status_code)}`}>
                           {isPaid && <span className="dot" style={{backgroundColor: '#059669'}}></span>}
                           {(!isPaid && s.status_code === 'DUE_SOON') && <span className="dot" style={{backgroundColor: '#D97706'}}></span>}
-                          {status === 'Completed' ? 'Paid' : s.status_code}
+                          {status === 'Completed' ? 'Lunas' : s.status_code}
                         </span>
                       </td>
                     </tr>
                   )}
                 )) : (
                   <tr>
-                    <td colSpan="6" className="ld-empty-row">No schedule available.</td>
+                    <td colSpan="6" className="ld-empty-row">Jadwal belum tersedia.</td>
                   </tr>
                 )}
               </tbody>
@@ -651,36 +651,36 @@ const LoanDetails = () => {
             <div className="ld-receipt-icon">
               <CheckCircle size={24} />
             </div>
-            <h2>Transaction Receipt</h2>
+            <h2>Bukti Transaksi</h2>
             <div className="ld-receipt-status">{selectedReceipt.status_code === 'SUCCESS' || selectedReceipt.gateway_status === 'SUCCESS' || selectedReceipt.status_code === 'PAID' || selectedReceipt.fallback ? 'SUCCESS' : selectedReceipt.status_code || 'SUCCESS'}</div>
             
             <div className="ld-receipt-details">
               <div className="ld-r-row">
-                <span className="lbl">CATEGORY</span>
-                <span className="val badge-outline">Loan Installment #{selectedReceipt.installment_number}</span>
+                <span className="lbl">KATEGORI</span>
+                <span className="val badge-outline">Angsuran Pinjaman #{selectedReceipt.installment_number}</span>
               </div>
               <div className="ld-r-row">
-                <span className="lbl">DATE & TIME</span>
+                <span className="lbl">TANGGAL & WAKTU</span>
                 <span className="val right-align">
                   <strong>{selectedReceipt.payment_date ? formatDate(selectedReceipt.payment_date) : formatDate(selectedReceipt.due_date)}</strong><br/>
-                  <span className="sub">{selectedReceipt.payment_date ? new Date(selectedReceipt.payment_date).toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'}) : '-'}</span>
+                  <span className="sub">{selectedReceipt.payment_date ? new Date(selectedReceipt.payment_date).toLocaleTimeString('id-ID', {hour: '2-digit', minute: '2-digit'}) : '-'}</span>
                 </span>
               </div>
               <div className="ld-r-box">
-                <span className="lbl">TRANSACTION ID</span>
+                <span className="lbl">ID TRANSAKSI</span>
                 <div className="val id-box">
                   {selectedReceipt.id ? `TXN-${selectedReceipt.id}` : 'N/A'}
                   <Copy size={14} className="copy-icon" />
                 </div>
               </div>
               <div className="ld-r-row recipient">
-                <span className="lbl">PAYMENT METHOD</span>
+                <span className="lbl">METODE PEMBAYARAN</span>
                 <span className="val flex-align">
                   {selectedReceipt.payment_method || '-'}
                 </span>
               </div>
               <div className="ld-r-row recipient">
-                <span className="lbl">RECIPIENT</span>
+                <span className="lbl">PENERIMA</span>
                 <span className="val flex-align">
                   <span className="ks-logo-sm">KS</span> Koperasi Sanoh
                 </span>
@@ -689,17 +689,17 @@ const LoanDetails = () => {
 
             <div className="ld-receipt-total" style={{borderBottom: 'none', paddingBottom: '10px', display: 'flex', flexDirection: 'column', gap: '8px'}}>
               <div className="ld-r-row">
-                <span className="lbl" style={{fontWeight: 'normal', color: '#64748b'}}>Installment Amount</span>
+                <span className="lbl" style={{fontWeight: 'normal', color: '#64748b'}}>Jumlah Angsuran</span>
                 <span className="val" style={{fontWeight: 'normal', color: '#64748b'}}>{formatRupiah(selectedReceipt.amount_paid || selectedReceipt.amount_total)}</span>
               </div>
               {(selectedReceipt.admin_fee > 0) && (
                 <div className="ld-r-row">
-                  <span className="lbl" style={{fontWeight: 'normal', color: '#64748b'}}>Admin Fee</span>
+                  <span className="lbl" style={{fontWeight: 'normal', color: '#64748b'}}>Biaya Admin</span>
                   <span className="val" style={{fontWeight: 'normal', color: '#64748b'}}>{formatRupiah(selectedReceipt.admin_fee)}</span>
                 </div>
               )}
               <div className="ld-r-row" style={{borderTop: '1px dashed #cbd5e1', paddingTop: '12px', marginTop: '4px'}}>
-                <span className="lbl" style={{fontWeight: 'bold', fontSize: '14px'}}>TOTAL PAID</span>
+                <span className="lbl" style={{fontWeight: 'bold', fontSize: '14px'}}>TOTAL DIBAYAR</span>
                 <span className="val" style={{fontWeight: 'bold', fontSize: '18px'}}>{formatRupiah((selectedReceipt.amount_paid || selectedReceipt.amount_total) + (parseFloat(selectedReceipt.admin_fee) || 0))}</span>
               </div>
             </div>
@@ -719,14 +719,14 @@ const LoanDetails = () => {
             <div className="midtrans-header">
               <div className="m-icon"><CreditCard size={24} /></div>
               <div>
-                <h3>Payment Details</h3>
-                <p>Powered by Midtrans</p>
+                <h3>Detail Pembayaran</h3>
+                <p>Didukung oleh Midtrans</p>
               </div>
             </div>
 
             <div className="m-invoice-body">
               {invoiceLoading ? (
-                <div style={{padding: '20px', textAlign: 'center'}}>Loading invoice details...</div>
+                <div style={{padding: '20px', textAlign: 'center'}}>Memuat detail tagihan...</div>
               ) : invoiceData ? (
                 <>
                   {invoiceData.snap_token && (
@@ -745,20 +745,20 @@ const LoanDetails = () => {
                     }}>
                       <AlertTriangle size={16} style={{color: '#dd6b20', flexShrink: 0}} />
                       <span>
-                        <strong>Pending Transaction:</strong> You have an active payment session for this installment. Click <strong>Pay Now</strong> to resume.
+                        <strong>Transaksi Tertunda:</strong> Anda memiliki sesi pembayaran aktif untuk angsuran ini. Klik <strong>Bayar Sekarang</strong> untuk melanjutkan.
                       </span>
                     </div>
                   )}
                   <div className="m-inv-row">
-                    <span className="lbl">Installment No.</span>
+                    <span className="lbl">No. Angsuran</span>
                     <span className="val">#{invoiceData.installment_number}</span>
                   </div>
                   <div className="m-inv-row">
                     <span className="lbl">Item</span>
-                    <span className="val">Loan Installment Payment</span>
+                    <span className="val">Pembayaran Angsuran Pinjaman</span>
                   </div>
                   <div className="m-inv-row amount">
-                    <span className="lbl">Amount to Pay</span>
+                    <span className="lbl">Jumlah Bayar</span>
                     <span className="val">{formatRupiah(invoiceData.amount_paid)}</span>
                   </div>
                   
@@ -816,15 +816,15 @@ const LoanDetails = () => {
                   )}
                 </>
               ) : (
-                <div style={{padding: '20px', textAlign: 'center'}}>No pending invoice found.</div>
+                <div style={{padding: '20px', textAlign: 'center'}}>Tidak ada tagihan tertunda.</div>
               )}
             </div>
 
             {empStatus === 3 && (
               <div className="ld-modal-actions">
-                <button className="btn-modal-outline" disabled={isInitiating} onClick={() => setShowPaymentInvoice(false)}>Cancel</button>
+                <button className="btn-modal-outline" disabled={isInitiating} onClick={() => setShowPaymentInvoice(false)}>Batal</button>
                 <button className="btn-modal-blue" disabled={isInitiating} onClick={handleInitiatePayment}>
-                  {isInitiating ? 'Processing...' : ((invoiceData && invoiceData.snap_token) ? 'Lanjutkan Pembayaran' : 'Pay Now')}
+                  {isInitiating ? 'Memproses...' : ((invoiceData && invoiceData.snap_token) ? 'Lanjutkan Pembayaran' : 'Bayar Sekarang')}
                 </button>
               </div>
             )}

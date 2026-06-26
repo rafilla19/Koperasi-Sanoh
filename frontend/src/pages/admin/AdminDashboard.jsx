@@ -160,7 +160,7 @@ const AdminDashboard = () => {
     datasets: [
       {
         fill: true,
-        label: 'SHU (Net Profit)',
+        label: 'SHU (Laba Bersih)',
         data: netSalesChart.data,
         borderColor: '#4CAF50',
         backgroundColor: 'rgba(76, 175, 80, 0.1)',
@@ -258,7 +258,7 @@ const AdminDashboard = () => {
               </div>
                 <div className="ad-ac-info">
                   <h4>{request.member_name}</h4>
-                  <p>{(request.request_type || '').toLowerCase().includes('voluntary') ? 'Voluntary Saving Request Change' : request.request_type}</p>
+                  <p>{(request.request_type || '').toLowerCase().includes('voluntary') ? 'Perubahan Simpanan Sukarela' : request.request_type}</p>
                 </div>
                 <span className={`ad-ac-status status-${String(request.status || '').toLowerCase().replace(/\s+/g, '-')}`}>
                   {request.status}

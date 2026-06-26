@@ -1,0 +1,44 @@
+{
+  "version": "20260626_190939",
+  "model_file": "shu_admin_xgb_20260626_190939.pkl",
+  "saved_at": "2026-06-26T19:09:40.063208",
+  "feature_names": [
+    "month",
+    "month_sin",
+    "month_cos",
+    "year_ordinal",
+    "total_savings",
+    "simp_wajib",
+    "simp_sukarela"
+  ],
+  "model_info": {
+    "algorithm": "XGBRegressor",
+    "r_squared": 0.9996,
+    "mae": 297.0,
+    "rmse": 552.93,
+    "training_samples": 1530,
+    "cv_scores": [
+      0.6513,
+      -0.3757,
+      -0.1307,
+      -0.0794
+    ],
+    "cv_mean": 0.0164,
+    "feature_importance": {
+      "year_ordinal": 0.2792,
+      "month": 0.1876,
+      "month_sin": 0.1499,
+      "total_savings": 0.1359,
+      "simp_wajib": 0.1225,
+      "month_cos": 0.0866,
+      "simp_sukarela": 0.0384
+    }
+  },
+  "rev_expense_ratios": {
+    "revenue_to_profit": 3.0152,
+    "expense_to_profit": 2.0152,
+    "avg_revenue": 100426666.67,
+    "avg_expense": 67120000.0,
+    "avg_profit": 33306666.67
+  }
+}

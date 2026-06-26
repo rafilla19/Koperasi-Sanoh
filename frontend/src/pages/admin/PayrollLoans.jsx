@@ -38,11 +38,11 @@ const StatCard = ({ icon: Icon, label, value, sub, color, progress }) => (
 // --- Status Badge Component ---
 const StatusBadge = ({ statusId }) => {
   const config = {
-    29: { label: 'Paid', cls: 'paid' },
-    30: { label: 'Overdue', cls: 'overdue' },
-    28: { label: 'Unpaid', cls: 'unpaid' },
+    29: { label: 'Lunas', cls: 'paid' },
+    30: { label: 'Terlambat', cls: 'overdue' },
+    28: { label: 'Belum Bayar', cls: 'unpaid' },
   };
-  const c = config[statusId] || { label: 'Unknown', cls: 'unpaid' };
+  const c = config[statusId] || { label: 'Tidak Diketahui', cls: 'unpaid' };
   return <span className={`pl-badge pl-badge--${c.cls}`}>{c.label}</span>;
 };
 
@@ -55,20 +55,20 @@ const RollbackDialog = ({ isOpen, onClose, onConfirm, row, loading }) => {
         <div className="pl-dialog-icon" style={{ background: '#fff7ed' }}>
           <RotateCcw size={28} style={{ color: '#f59e0b' }} />
         </div>
-        <h3>Rollback Payment?</h3>
-        <p>You are about to revert the payment for <strong>{row.name}</strong> (Installment #{row.installment_number}) back to <strong>Unpaid</strong>.</p>
+        <h3>Batalkan Pembayaran?</h3>
+        <p>Anda akan membatalkan pembayaran untuk <strong>{row.name}</strong> (Angsuran #{row.installment_number}) kembali ke <strong>Belum Bayar</strong>.</p>
         <p className="pl-dialog-note" style={{ background: '#fff7ed', borderColor: '#fde68a', color: '#92400e' }}>
-          ⚠ This will delete the payroll payment record and revert the installment to <strong>Unpaid</strong>.
+          ⚠ Ini akan menghapus catatan pembayaran penggajian dan mengembalikan angsuran ke <strong>Belum Bayar</strong>.
         </p>
         <div className="pl-dialog-actions">
-          <button className="pl-dialog-btn-cancel" onClick={onClose} disabled={loading}>Cancel</button>
+          <button className="pl-dialog-btn-cancel" onClick={onClose} disabled={loading}>Batal</button>
           <button
             className="pl-dialog-btn-confirm"
             style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', boxShadow: '0 4px 16px rgba(245,158,11,0.3)' }}
             onClick={() => onConfirm(row)}
             disabled={loading}
           >
-            {loading ? <><Loader2 size={16} className="pl-spin" /> Processing...</> : <><RotateCcw size={16} /> Rollback</>}
+            {loading ? <><Loader2 size={16} className="pl-spin" /> Memproses...</> : <><RotateCcw size={16} /> Batalkan</>}
           </button>
         </div>
       </div>
@@ -82,13 +82,13 @@ const ConfirmDialog = ({ isOpen, onClose, onConfirm, count, period, loading }) =
     <div className="pl-dialog-overlay" onClick={onClose}>
       <div className="pl-dialog" onClick={e => e.stopPropagation()}>
         <div className="pl-dialog-icon"><CheckCircle size={32} /></div>
-        <h3>Confirm Payroll Payments</h3>
-        <p>You are about to confirm <strong>{count}</strong> payment deduction(s) for the <strong>{period}</strong> payroll cycle.</p>
-        <p className="pl-dialog-note">This action will mark the selected installments as <strong>Paid</strong> in the system. This cannot be undone.</p>
+        <h3>Konfirmasi Pembayaran Penggajian</h3>
+        <p>Anda akan mengkonfirmasi <strong>{count}</strong> potongan pembayaran untuk siklus penggajian <strong>{period}</strong>.</p>
+        <p className="pl-dialog-note">Tindakan ini akan menandai angsuran terpilih sebagai <strong>Lunas</strong> di sistem. Tindakan ini tidak dapat dibatalkan.</p>
         <div className="pl-dialog-actions">
-          <button className="pl-dialog-btn-cancel" onClick={onClose} disabled={loading}>Cancel</button>
+          <button className="pl-dialog-btn-cancel" onClick={onClose} disabled={loading}>Batal</button>
           <button className="pl-dialog-btn-confirm" onClick={onConfirm} disabled={loading}>
-            {loading ? <><Loader2 size={16} className="pl-spin" /> Processing...</> : <><CheckCircle size={16} /> Confirm Payments</>}
+            {loading ? <><Loader2 size={16} className="pl-spin" /> Memproses...</> : <><CheckCircle size={16} /> Konfirmasi Pembayaran</>}
           </button>
         </div>
       </div>
@@ -183,7 +183,7 @@ const PayrollLoans = () => {
 
   const formattedPeriod = useMemo(() => {
     const [year, month] = reportingMonth.split('-');
-    return new Date(year, parseInt(month) - 1).toLocaleString('en-US', { month: 'long', year: 'numeric' });
+    return new Date(year, parseInt(month) - 1).toLocaleString('id-ID', { month: 'long', year: 'numeric' });
   }, [reportingMonth]);
 
   // --- Filters ---
@@ -219,7 +219,7 @@ const PayrollLoans = () => {
       .map(item => item.inst_id);
 
     if (installmentIds.length === 0) {
-      showToast('No valid installment IDs found for selected records.', 'error');
+      showToast('Tidak ada ID angsuran yang valid untuk data terpilih.', 'error');
       setConfirming(false);
       return;
     }
@@ -231,21 +231,21 @@ const PayrollLoans = () => {
         body: JSON.stringify({ installment_ids: installmentIds, period: reportingMonth })
       });
       if (res.ok) {
-        showToast(`Successfully confirmed ${installmentIds.length} payment(s) for ${formattedPeriod}.`, 'success');
+        showToast(`Berhasil mengkonfirmasi ${installmentIds.length} pembayaran untuk ${formattedPeriod}.`, 'success');
         setShowConfirmDialog(false);
         await fetchPayrollLoans();
       } else if (res.status === 207) {
         // Partial success
         const data = await res.json();
-        showToast(`${data.message} — check console for details.`, 'error');
+        showToast(`${data.message} — periksa konsol untuk detail.`, 'error');
         console.warn('Partial failures:', data.failed);
         setShowConfirmDialog(false);
         await fetchPayrollLoans();
       } else {
         const err = await res.json();
-        showToast(err.error || 'Failed to confirm payments.', 'error');
+        showToast(err.error || 'Gagal mengkonfirmasi pembayaran.', 'error');
       }
-    } catch { showToast('Network error. Please try again.', 'error'); }
+    } catch { showToast('Kesalahan jaringan. Silakan coba lagi.', 'error'); }
     finally { setConfirming(false); }
   };
 
@@ -264,14 +264,14 @@ const PayrollLoans = () => {
       });
       const data = await res.json();
       if (res.ok) {
-        showToast(`Rollback successful for ${row.name} (Installment #${row.installment_number}).`, 'success');
+        showToast(`Pembatalan berhasil untuk ${row.name} (Angsuran #${row.installment_number}).`, 'success');
         setRollbackTarget(null);
         await fetchPayrollLoans();
       } else {
-        showToast(data.error || 'Rollback failed.', 'error');
+        showToast(data.error || 'Pembatalan gagal.', 'error');
       }
     } catch {
-      showToast('Network error during rollback.', 'error');
+      showToast('Kesalahan jaringan saat pembatalan.', 'error');
     } finally {
       setRollbacking(false);
     }
@@ -281,9 +281,9 @@ const PayrollLoans = () => {
     const rows = selectedIds.length > 0
       ? data.filter(i => selectedIds.includes(i.id))
       : filteredData;
-    if (rows.length === 0) { showToast('No data to export.', 'error'); return; }
-    const headers = ['Loan ID', 'Member', 'NIK', 'Department', 'Employee Status', 'Type', 'Installment No', 'Deduction', 'Remaining', 'Status'];
-    const statusLabel = (id) => id === 29 ? 'Paid' : id === 30 ? 'Overdue' : 'Unpaid';
+    if (rows.length === 0) { showToast('Tidak ada data untuk diekspor.', 'error'); return; }
+    const headers = ['ID Pinjaman', 'Anggota', 'NIK', 'Departemen', 'Status Karyawan', 'Jenis', 'No Angsuran', 'Potongan', 'Sisa', 'Status'];
+    const statusLabel = (id) => id === 29 ? 'Lunas' : id === 30 ? 'Terlambat' : 'Belum Bayar';
     const csv = "data:text/csv;charset=utf-8,"
       + headers.join(',') + '\n'
       + rows.map(r => `${r.id},"${r.name}","${r.nik}","${r.department}","${r.employeeStatus || '-'}","${r.type}",${r.installment_number},${r.cicilan},${r.sisa},"${statusLabel(r.status_id)}"`).join('\n');
@@ -293,14 +293,14 @@ const PayrollLoans = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    showToast(`Exported ${rows.length} records.`, 'success');
+    showToast(`Berhasil mengekspor ${rows.length} data.`, 'success');
   };
 
   const months = [
-    { val: '01', label: 'January' }, { val: '02', label: 'February' }, { val: '03', label: 'March' },
-    { val: '04', label: 'April' }, { val: '05', label: 'May' }, { val: '06', label: 'June' },
-    { val: '07', label: 'July' }, { val: '08', label: 'August' }, { val: '09', label: 'September' },
-    { val: '10', label: 'October' }, { val: '11', label: 'November' }, { val: '12', label: 'December' }
+    { val: '01', label: 'Januari' }, { val: '02', label: 'Februari' }, { val: '03', label: 'Maret' },
+    { val: '04', label: 'April' }, { val: '05', label: 'Mei' }, { val: '06', label: 'Juni' },
+    { val: '07', label: 'Juli' }, { val: '08', label: 'Agustus' }, { val: '09', label: 'September' },
+    { val: '10', label: 'Oktober' }, { val: '11', label: 'November' }, { val: '12', label: 'Desember' }
   ];
   const years = Array.from({ length: now.getFullYear() - 2020 + 3 }, (_, i) => String(2020 + i));
 
@@ -332,9 +332,9 @@ const PayrollLoans = () => {
       {/* ── Header ── */}
       <div className="pl-header">
         <div className="pl-header-left">
-          <div className="pl-header-badge">Payroll Cycle</div>
-          <h1 className="pl-header-title">Loan Payroll Deduction</h1>
-          <p className="pl-header-sub">Manage and confirm monthly loan repayment deductions from employee payroll.</p>
+          <div className="pl-header-badge">Siklus Penggajian</div>
+          <h1 className="pl-header-title">Potongan Pinjaman Penggajian</h1>
+          <p className="pl-header-sub">Kelola dan konfirmasi potongan cicilan pinjaman bulanan dari gaji karyawan.</p>
         </div>
         <div className="pl-header-right">
           {/* Period Picker */}
@@ -352,10 +352,10 @@ const PayrollLoans = () => {
           <div className="pl-header-actions">
             <button className="pl-btn pl-btn--ghost" onClick={fetchPayrollLoans} disabled={loading}>
               <RefreshCw size={15} className={loading ? 'pl-spin' : ''} />
-              Refresh
+              Muat Ulang
             </button>
             <button className="pl-btn pl-btn--secondary" onClick={handleExport}>
-              <Upload size={15} /> Export CSV
+              <Upload size={15} /> Ekspor CSV
             </button>
             <button
               className={`pl-btn pl-btn--primary ${selectedIds.length === 0 ? 'pl-btn--disabled' : ''}`}
@@ -363,7 +363,7 @@ const PayrollLoans = () => {
               disabled={selectedIds.length === 0}
             >
               <CheckCircle size={15} />
-              Confirm {selectedIds.length > 0 ? `(${selectedIds.length})` : 'Selected'}
+              Konfirmasi {selectedIds.length > 0 ? `(${selectedIds.length})` : 'Terpilih'}
             </button>
           </div>
         </div>
@@ -372,19 +372,19 @@ const PayrollLoans = () => {
       {/* ── Period Banner ── */}
       <div className="pl-period-banner">
         <span className="pl-period-text">
-          <Calendar size={16} /> Reporting Period: <strong>{formattedPeriod}</strong>
+          <Calendar size={16} /> Periode Pelaporan: <strong>{formattedPeriod}</strong>
         </span>
         <span className={`pl-cycle-badge ${allConfirmed ? 'ready' : outstandingItems > 0 ? 'pending' : 'partial'}`}>
-          {allConfirmed ? '✓ Cycle Ready to Close' : `${outstandingItems} Outstanding Remaining`}
+          {allConfirmed ? '✓ Siklus Siap Ditutup' : `${outstandingItems} Belum Diproses`}
         </span>
       </div>
 
       {/* ── Stat Cards ── */}
       <div className="pl-stats">
         <StatCard
-          icon={TrendingUp} color="blue" label="Confirmation Progress"
+          icon={TrendingUp} color="blue" label="Progres Konfirmasi"
           value={`${processedItems} / ${totalItems}`}
-          sub={`${progressPct}% of records processed`}
+          sub={`${progressPct}% data diproses`}
           progress={progressPct}
         />
         {/* <StatCard
@@ -393,14 +393,14 @@ const PayrollLoans = () => {
           sub={outstandingItems === 0 ? 'All deductions confirmed' : 'Pending confirmation'}
         /> */}
         <StatCard
-          icon={DollarSign} color="purple" label="Total Payroll Amount"
+          icon={DollarSign} color="purple" label="Total Potongan Gaji"
           value={formatRupiah(totalPayrollAmount)}
-          sub={`For ${formattedPeriod}`}
+          sub={`Untuk ${formattedPeriod}`}
         />
         <StatCard
-          icon={CheckCircle} color="green" label="Processed Amount"
+          icon={CheckCircle} color="green" label="Jumlah Diproses"
           value={formatRupiah(totalProcessedAmount)}
-          sub={`${processedItems} deductions confirmed`}
+          sub={`${processedItems} potongan dikonfirmasi`}
         />
       </div>
 
@@ -411,15 +411,15 @@ const PayrollLoans = () => {
         <div className="pl-table-header">
           <div className="pl-table-title">
             <FileText size={18} />
-            <span>Deduction Records</span>
-            <span className="pl-table-count">{filteredData.length} records</span>
+            <span>Data Potongan</span>
+            <span className="pl-table-count">{filteredData.length} data</span>
           </div>
           <div className="pl-table-controls">
             <div className="pl-search-box">
               <Search size={16} />
               <input
                 type="text"
-                placeholder="Search by name or NIK…"
+                placeholder="Cari berdasarkan nama atau NIK…"
                 value={searchQuery}
                 onChange={e => { setSearchQuery(e.target.value); setCurrentPage(1); }}
               />
@@ -429,14 +429,14 @@ const PayrollLoans = () => {
             </div>
             <select className="pl-select" value={filterDept}
               onChange={e => { setFilterDept(e.target.value); setCurrentPage(1); }}>
-              <option value="all">All Departments</option>
+              <option value="all">Semua Departemen</option>
               {departments.map(d => <option key={d.id} value={d.department_name}>{d.department_name}</option>)}
             </select>
             <div className="pl-status-tabs">
-              {['all', 'unpaid', 'paid'].map(s => (
-                <button key={s} className={`pl-status-tab ${filterStatus === s ? 'active-' + (s === 'paid' ? 'green' : s === 'unpaid' ? 'red' : 'blue') : ''} ${filterStatus === s ? 'pl-status-tab--active' : ''}`}
-                  onClick={() => { setFilterStatus(s); setCurrentPage(1); }}>
-                  {s.charAt(0).toUpperCase() + s.slice(1)}
+              {[{key:'all',label:'Semua'},{key:'unpaid',label:'Belum Bayar'},{key:'paid',label:'Lunas'}].map(({key,label}) => (
+                <button key={key} className={`pl-status-tab ${filterStatus === key ? 'active-' + (key === 'paid' ? 'green' : key === 'unpaid' ? 'red' : 'blue') : ''} ${filterStatus === key ? 'pl-status-tab--active' : ''}`}
+                  onClick={() => { setFilterStatus(key); setCurrentPage(1); }}>
+                  {label}
                 </button>
               ))}
             </div>
@@ -446,11 +446,11 @@ const PayrollLoans = () => {
         {/* Selection bar */}
         {selectedIds.length > 0 && (
           <div className="pl-selection-bar">
-            <span><CheckCircle size={16} /> {selectedIds.length} record(s) selected</span>
+            <span><CheckCircle size={16} /> {selectedIds.length} data terpilih</span>
             <div>
-              <button className="pl-sel-btn" onClick={() => setSelectedIds([])}>Clear</button>
+              <button className="pl-sel-btn" onClick={() => setSelectedIds([])}>Hapus</button>
               <button className="pl-sel-btn pl-sel-btn--confirm" onClick={() => setShowConfirmDialog(true)}>
-                Confirm Selected
+                Konfirmasi Terpilih
               </button>
             </div>
           </div>
@@ -460,7 +460,7 @@ const PayrollLoans = () => {
         {loading ? (
           <div className="pl-loading">
             <Loader2 size={32} className="pl-spin" />
-            <span>Loading payroll data for {formattedPeriod}…</span>
+            <span>Memuat data penggajian untuk {formattedPeriod}…</span>
           </div>
         ) : (
           <div className="pl-table-wrap">
@@ -472,16 +472,16 @@ const PayrollLoans = () => {
                       checked={filteredData.length > 0 && selectedIds.length === filteredData.length}
                       onChange={handleSelectAll} />
                   </th>
-                  <th>Inst. ID</th>
-                  <th>Member</th>
-                  <th>Department</th>
-                  <th>Loan Type</th>
-                  <th>Installment</th>
-                  <th>Deduction</th>
-                  <th>Remaining</th>
-                  <th>Progress</th>
+                  <th>ID Angsuran</th>
+                  <th>Anggota</th>
+                  <th>Departemen</th>
+                  <th>Jenis Pinjaman</th>
+                  <th>Angsuran</th>
+                  <th>Potongan</th>
+                  <th>Sisa</th>
+                  <th>Progres</th>
                   <th>Status</th>
-                  <th>Action</th>
+                  <th>Aksi</th>
                 </tr>
               </thead>
               <tbody>
@@ -510,7 +510,7 @@ const PayrollLoans = () => {
                     <td>{row.type}</td>
                     <td>
                       <span className="pl-inst-badge">#{row.installment_number}</span>
-                      <span className="pl-inst-of"> of {row.total_installment}</span>
+                      <span className="pl-inst-of"> dari {row.total_installment}</span>
                     </td>
                     <td><strong className="pl-amount">{formatRupiah(row.cicilan)}</strong></td>
                     <td><span className="pl-remaining">{formatRupiah(row.sisa)}</span></td>
@@ -528,10 +528,10 @@ const PayrollLoans = () => {
                       {(row.status_id === 29 || row.status_id === 30) ? (
                         <button
                           className="pl-rollback-btn"
-                          title="Rollback to Unpaid"
+                          title="Batalkan ke Belum Bayar"
                           onClick={() => handleRollback(row)}
                         >
-                          <RotateCcw size={14} /> Rollback
+                          <RotateCcw size={14} /> Batalkan
                         </button>
                       ) : (
                         <span className="pl-action-none">—</span>
@@ -543,7 +543,7 @@ const PayrollLoans = () => {
                     <td colSpan="10">
                       <div className="pl-empty">
                         <FileText size={40} />
-                        <p>No records found for the selected filters.</p>
+                        <p>Tidak ada data ditemukan untuk filter yang dipilih.</p>
                       </div>
                     </td>
                   </tr>
@@ -557,7 +557,7 @@ const PayrollLoans = () => {
         {!loading && totalPages > 1 && (
           <div className="pl-pagination">
             <span className="pl-page-info">
-              Page {currentPage} of {totalPages} · {filteredData.length} total records
+              Halaman {currentPage} dari {totalPages} · {filteredData.length} total data
             </span>
             <div className="pl-page-btns">
               <button className="pl-page-btn" disabled={currentPage === 1}

@@ -1,8 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { TrendingUp, TrendingDown, ArrowUpRight, ArrowRight, PiggyBank, Calendar, X, AlertCircle } from 'lucide-react';
+import { TrendingUp, TrendingDown, ArrowUpRight, ArrowRight, PiggyBank, Calendar, X, AlertCircle, Brain, Activity, Zap, BarChart3 } from 'lucide-react';
+import { Line } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Filler,
+  Legend,
+} from 'chart.js';
 import './SHUManagement.css';
 import { shuApi } from '../../api/shuApi';
+
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Filler, Legend);
 
 const MONTHS = [
   { value: '', label: 'Semua (Tahunan)' },
@@ -70,6 +84,10 @@ const SHUDashboard = () => {
   const [savingsStats, setSavingsStats] = useState({ mandatory: 0, voluntary: 0, total: 0 });
   const [refetchTrigger, setRefetchTrigger] = useState(0);
 
+  // Forecast state
+  const [forecastData, setForecastData] = useState(null);
+  const [forecastLoading, setForecastLoading] = useState(true);
+
   // Edit modal state
   const [showEditModal, setShowEditModal] = useState(false);
   const [modalPeriodType, setModalPeriodType] = useState('tahunan'); // 'bulanan' or 'tahunan'
@@ -126,6 +144,22 @@ const SHUDashboard = () => {
     };
     fetchData();
   }, [selectedMonth, selectedYear, refetchTrigger]);
+
+  useEffect(() => {
+    const fetchForecast = async () => {
+      setForecastLoading(true);
+      try {
+        const data = await shuApi.getShuForecast({ months: 6 });
+        setForecastData(data);
+      } catch (e) {
+        console.error('Gagal memuat forecast SHU', e);
+        setForecastData(null);
+      } finally {
+        setForecastLoading(false);
+      }
+    };
+    fetchForecast();
+  }, []);
 
   const netProfit = Number(shuResult?.net_profit || 0);
 
@@ -446,6 +480,188 @@ const SHUDashboard = () => {
             </span>
           </div>
         </div>
+      </div>
+
+      {/* ML Forecast Section */}
+      <div className="shu-section-block">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Brain size={18} color="#7c3aed" />
+              <h2 style={{ fontSize: 16, fontWeight: 700, color: '#111827', margin: 0 }}>Prediksi SHU - Machine Learning</h2>
+            </div>
+            <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>
+              Forecast 6 bulan ke depan menggunakan model XGBoost
+            </p>
+          </div>
+          {forecastData?.metrics && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              background: forecastData.metrics.confidence === 'high' ? '#ecfdf5' : forecastData.metrics.confidence === 'medium' ? '#fffbeb' : '#fef2f2',
+              color: forecastData.metrics.confidence === 'high' ? '#065f46' : forecastData.metrics.confidence === 'medium' ? '#92400e' : '#991b1b',
+              padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+            }}>
+              <Activity size={12} />
+              Confidence: {forecastData.metrics.confidence?.toUpperCase()} (R² = {forecastData.metrics.r_squared})
+            </div>
+          )}
+        </div>
+
+        {forecastLoading ? (
+          <div style={{ textAlign: 'center', padding: '40px 0', color: '#9ca3af', fontSize: 13 }}>
+            Memuat prediksi ML...
+          </div>
+        ) : forecastData?.error ? (
+          <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '14px 18px', fontSize: 13, color: '#92400e' }}>
+            {forecastData.error}
+          </div>
+        ) : forecastData ? (
+          <>
+            {/* Insight Cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${forecastData.insights?.length || 1}, 1fr)`, gap: 12, marginBottom: 16 }}>
+              {forecastData.insights?.map((insight, i) => (
+                <div key={i} style={{
+                  background: insight.sentiment === 'positive' ? '#f0fdf4' : insight.sentiment === 'negative' ? '#fef2f2' : '#f0f9ff',
+                  border: `1px solid ${insight.sentiment === 'positive' ? '#bbf7d0' : insight.sentiment === 'negative' ? '#fecaca' : '#bfdbfe'}`,
+                  borderRadius: 10, padding: '12px 16px',
+                  display: 'flex', alignItems: 'flex-start', gap: 10,
+                }}>
+                  <div style={{
+                    width: 28, height: 28, borderRadius: 8, flexShrink: 0,
+                    background: insight.sentiment === 'positive' ? '#dcfce7' : insight.sentiment === 'negative' ? '#fee2e2' : '#dbeafe',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    {insight.type === 'trend' ? (
+                      <TrendingUp size={14} color={insight.sentiment === 'positive' ? '#16a34a' : insight.sentiment === 'negative' ? '#dc2626' : '#2563eb'} />
+                    ) : (
+                      <Zap size={14} color="#2563eb" />
+                    )}
+                  </div>
+                  <div>
+                    <p style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', margin: '0 0 2px', textTransform: 'uppercase' }}>
+                      {insight.type === 'trend' ? 'Tren Prediksi' : 'Faktor Utama'}
+                    </p>
+                    <p style={{ fontSize: 13, fontWeight: 500, color: '#1f2937', margin: 0 }}>{insight.message}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Forecast Chart */}
+            <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', padding: '20px', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 16 }}>
+                <BarChart3 size={14} color="#6b7280" />
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Grafik SHU: Historis vs Prediksi</span>
+              </div>
+              <div style={{ height: 320 }}>
+                <Line
+                  data={{
+                    labels: [
+                      ...forecastData.historical.map(h => {
+                        const [y, m] = h.month.split('-');
+                        return new Date(y, m - 1).toLocaleDateString('id-ID', { month: 'short', year: '2-digit' });
+                      }),
+                      ...forecastData.forecast.map(f => {
+                        const [y, m] = f.month.split('-');
+                        return new Date(y, m - 1).toLocaleDateString('id-ID', { month: 'short', year: '2-digit' });
+                      }),
+                    ],
+                    datasets: [
+                      {
+                        label: 'SHU Aktual',
+                        data: [
+                          ...forecastData.historical.map(h => h.profit),
+                          ...Array(forecastData.forecast.length).fill(null),
+                        ],
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 3,
+                        borderWidth: 2,
+                      },
+                      {
+                        label: 'Prediksi SHU',
+                        data: [
+                          ...Array(forecastData.historical.length - 1).fill(null),
+                          forecastData.historical[forecastData.historical.length - 1]?.profit,
+                          ...forecastData.forecast.map(f => f.predicted_profit),
+                        ],
+                        borderColor: '#8b5cf6',
+                        backgroundColor: 'rgba(139, 92, 246, 0.08)',
+                        fill: true,
+                        borderDash: [6, 4],
+                        tension: 0.3,
+                        pointRadius: 3,
+                        borderWidth: 2,
+                      },
+                      {
+                        label: 'Revenue Prediksi',
+                        data: [
+                          ...Array(forecastData.historical.length - 1).fill(null),
+                          forecastData.historical[forecastData.historical.length - 1]?.revenue,
+                          ...forecastData.forecast.map(f => f.predicted_revenue),
+                        ],
+                        borderColor: '#10b981',
+                        borderDash: [4, 3],
+                        tension: 0.3,
+                        pointRadius: 2,
+                        borderWidth: 1.5,
+                        fill: false,
+                      },
+                      {
+                        label: 'Expense Prediksi',
+                        data: [
+                          ...Array(forecastData.historical.length - 1).fill(null),
+                          forecastData.historical[forecastData.historical.length - 1]?.expense,
+                          ...forecastData.forecast.map(f => f.predicted_expense),
+                        ],
+                        borderColor: '#ef4444',
+                        borderDash: [4, 3],
+                        tension: 0.3,
+                        pointRadius: 2,
+                        borderWidth: 1.5,
+                        fill: false,
+                      },
+                    ],
+                  }}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                      legend: { position: 'bottom', labels: { usePointStyle: true, padding: 16, font: { size: 11 } } },
+                      tooltip: {
+                        callbacks: {
+                          label: (ctx) => ctx.raw != null ? `${ctx.dataset.label}: Rp ${fmt(ctx.raw)}` : '',
+                        },
+                      },
+                    },
+                    scales: {
+                      y: {
+                        beginAtZero: true,
+                        ticks: {
+                          callback: (v) => `Rp ${(v / 1_000_000).toFixed(0)}jt`,
+                          font: { size: 10 },
+                        },
+                        grid: { color: '#f3f4f6' },
+                      },
+                      x: {
+                        ticks: { font: { size: 10 }, maxRotation: 45 },
+                        grid: { display: false },
+                      },
+                    },
+                  }}
+                />
+              </div>
+            </div>
+
+          </>
+        ) : (
+          <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10, padding: '20px', textAlign: 'center', color: '#6b7280', fontSize: 13 }}>
+            Model ML belum tersedia. Jalankan <code>python manage.py train_shu_admin_model</code> untuk melatih model.
+          </div>
+        )}
       </div>
 
       {/* Edit Allocation Modal */}

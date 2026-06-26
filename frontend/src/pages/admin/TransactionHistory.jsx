@@ -45,12 +45,11 @@ const TransactionHistory = () => {
 
   const handleExport = () => {
     if (transactions.length === 0) {
-      alert('No data to export');
+      alert('Tidak ada data untuk diekspor');
       return;
     }
 
-    // Define CSV headers
-    const headers = ['Date', 'Member Name', 'Transaction Type', 'Method', 'Reference Number', 'Amount', 'Status'];
+    const headers = ['Tanggal', 'Nama Anggota', 'Jenis Transaksi', 'Metode', 'Nomor Referensi', 'Jumlah', 'Status'];
 
     // Map transactions to CSV rows
     const rows = transactions.map(t => [
@@ -107,8 +106,8 @@ const TransactionHistory = () => {
       }
     }
     const d = new Date(normalized);
-    const dateStr = d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-    const timeStr = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+    const dateStr = d.toLocaleDateString('id-ID', { year: 'numeric', month: 'short', day: 'numeric' });
+    const timeStr = d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false });
     return `${dateStr} ${timeStr}`;
   };
 
@@ -132,24 +131,24 @@ const TransactionHistory = () => {
     <div className="th-container">
       <div className="th-header">
         <div>
-          <h1 className="th-title">Transaction History</h1>
-          <p className="th-subtitle">Monitor and filter all member transactions across savings, withdrawals, and loans.</p>
+          <h1 className="th-title">Riwayat Transaksi</h1>
+          <p className="th-subtitle">Pantau dan filter semua transaksi anggota meliputi simpanan, penarikan, dan pinjaman.</p>
         </div>
         <button className="th-export-btn" onClick={handleExport}>
-          <Download size={18} /> Export CSV
+          <Download size={18} /> Ekspor CSV
         </button>
       </div>
 
       <div className="th-filters-card">
         <div className="th-filters-grid">
           <div className="th-input-group">
-            <label>Search Member</label>
+            <label>Cari Anggota</label>
             <div className="th-search-box">
               <Search size={18} className="th-search-icon" />
               <input
                 type="text"
                 name="member_name"
-                placeholder="Enter name..."
+                placeholder="Masukkan nama..."
                 value={filters.member_name}
                 onChange={handleFilterChange}
               />
@@ -157,33 +156,33 @@ const TransactionHistory = () => {
           </div>
 
           <div className="th-input-group">
-            <label>Transaction Type</label>
+            <label>Jenis Transaksi</label>
             <select name="transaction_type" value={filters.transaction_type} onChange={handleFilterChange}>
-              <option value="">All Types</option>
-              <option value="deposit">Deposit</option>
-              <option value="INSTALLMENT PAYMENT">Loan Installment</option>
-              <option value="withdrawals">Withdrawals</option>
-              <option value="SHU DISTRIBUTION">SHU Distribution</option>
+              <option value="">Semua Jenis</option>
+              <option value="deposit">Setoran</option>
+              <option value="INSTALLMENT PAYMENT">Angsuran Pinjaman</option>
+              <option value="withdrawals">Penarikan</option>
+              <option value="SHU DISTRIBUTION">Distribusi SHU</option>
             </select>
           </div>
 
           <div className="th-input-group">
-            <label>Start Date</label>
+            <label>Tanggal Mulai</label>
             <input type="date" name="start_date" value={filters.start_date} onChange={handleFilterChange} />
           </div>
 
           <div className="th-input-group">
-            <label>End Date</label>
+            <label>Tanggal Akhir</label>
             <input type="date" name="end_date" value={filters.end_date} onChange={handleFilterChange} />
           </div>
 
           <div className="th-filter-actions">
-            <button className="th-btn-apply" onClick={fetchTransactions}>Apply Filter</button>
+            <button className="th-btn-apply" onClick={fetchTransactions}>Terapkan Filter</button>
             <button className="th-btn-reset" onClick={() => {
               const reset = { member_name: '', transaction_type: '', start_date: '', end_date: '' };
               setFilters(reset);
               setTimeout(() => fetchTransactions(), 0);
-            }}>Reset</button>
+            }}>Atur Ulang</button>
           </div>
         </div>
       </div>
@@ -192,20 +191,20 @@ const TransactionHistory = () => {
         <table className="th-table">
           <thead>
             <tr>
-              <th>Date</th>
-              <th>Member Name</th>
-              <th>Type</th>
-              <th>Method</th>
-              <th>Reference #</th>
-              <th>Amount</th>
+              <th>Tanggal</th>
+              <th>Nama Anggota</th>
+              <th>Jenis</th>
+              <th>Metode</th>
+              <th>No. Referensi</th>
+              <th>Jumlah</th>
               <th>Status</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan="7" className="th-empty">Loading transactions...</td></tr>
+              <tr><td colSpan="7" className="th-empty">Memuat transaksi...</td></tr>
             ) : currentItems.length === 0 ? (
-              <tr><td colSpan="7" className="th-empty">No transactions found matching the criteria.</td></tr>
+              <tr><td colSpan="7" className="th-empty">Tidak ada transaksi ditemukan sesuai kriteria.</td></tr>
             ) : (
               currentItems.map((row, idx) => (
                 <tr key={idx}>
@@ -262,7 +261,7 @@ const TransactionHistory = () => {
             disabled={currentPage === totalPages}
             onClick={() => paginate(currentPage + 1)}
           >
-            NEXT <ChevronRight size={16} />
+            SLNJT <ChevronRight size={16} />
           </button>
         </div>
       )}

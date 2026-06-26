@@ -52,13 +52,13 @@ const AdminPendingApprovals = () => {
   return (
     <div className="admin-pending-approvals">
       <div className="apa-header">
-        <h1>{activeTab === 'approvals' ? 'Pending Approvals' : 'Loan Payment Reminder'}</h1>
+        <h1>{activeTab === 'approvals' ? 'Menunggu Persetujuan' : 'Pengingat Pembayaran Pinjaman'}</h1>
         <div className="apa-breadcrumb">
-          <Link to="/dashboard/admin/ls-loans">Loan Dashboard</Link>
+          <Link to="/dashboard/admin/ls-loans">Dashboard Pinjaman</Link>
           {" > "}
           {activeTab === 'approvals'
-            ? 'Pending Approvals'
-            : 'Loan Payment Reminder'}
+            ? 'Menunggu Persetujuan'
+            : 'Pengingat Pembayaran Pinjaman'}
         </div>
       </div>
 
@@ -84,19 +84,19 @@ const AdminPendingApprovals = () => {
                 <div className="apa-card-id">{item.employee_id}</div>
               </div>
               <div className="apa-card-purpose">
-                <div className="apa-card-label">Purpose</div>
+                <div className="apa-card-label">Tujuan</div>
                 <div className="apa-card-value">{item.purpose}</div>
               </div>
               <div className="apa-card-term">
-                <div className="apa-card-label">Term</div>
+                <div className="apa-card-label">Jangka Waktu</div>
                 <div className="apa-card-value">{item.duration_months} Bulan</div>
               </div>
               <div className="apa-card-amount">
-                <div className="apa-card-label">Amount</div>
+                <div className="apa-card-label">Jumlah</div>
                 <div className="apa-card-value bold">{formatRupiah(item.amount_requested)}</div>
               </div>
               <div className="apa-card-action">
-                <button className="apa-btn-details" onClick={() => handleDetails(item.application_id)}>Details</button>
+                <button className="apa-btn-details" onClick={() => handleDetails(item.application_id)}>Detail</button>
               </div>
             </div>
           ))}

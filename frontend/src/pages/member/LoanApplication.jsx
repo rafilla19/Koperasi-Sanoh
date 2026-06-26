@@ -147,18 +147,18 @@ const LoanApplication = () => {
       if (!response.ok) {
         const errorText = await response.text();
         console.error(errorText);
-        throw new Error('Failed to submit application. Please check your data.');
+        throw new Error('Gagal mengirim pengajuan. Silakan periksa data Anda.');
       }
 
       const data = await response.json();
       console.log('Success:', data);
       
-      alert('Loan Application Submitted Successfully!');
+      alert('Pengajuan Pinjaman Berhasil Dikirim!');
       navigate('/dashboard/loans'); // Adjust if you have a different route for the loan dashboard
 
     } catch (error) {
       console.error(error);
-      alert('Error: ' + error.message);
+      alert('Kesalahan: ' + error.message);
     } finally {
       setSubmitting(false);
     }
@@ -169,28 +169,27 @@ const LoanApplication = () => {
     <div className="la-page">
       <div className="la-header">
         <button className="la-back-btn" onClick={() => navigate(-1)}>
-          <ArrowLeft size={16} /> Back
+          <ArrowLeft size={16} /> Kembali
         </button>
         <div className="la-header-content">
-          <h1>Loan Application</h1>
-          <p>Submit a new loan application</p>
+          <h1>Pengajuan Pinjaman</h1>
+          <p>Ajukan pinjaman baru</p>
         </div>
       </div>
 
       <div className="la-content-grid">
         <form className="la-form" onSubmit={handleContinue}>
           <div className="la-form-group">
-            <label>TYPE OF INSTALLMENT</label>
+            <label>JENIS ANGSURAN</label>
             <select
               required
               value={form.loan_type}
               onChange={(e) => {
                 const val = e.target.value;
-                // If installments (id '1') selected, default duration to 4 months.
                 setForm({ ...form, loan_type: val, duration_months: val === '1' ? '4' : '' });
               }}
             >
-              <option value="" disabled>Select type...</option>
+              <option value="" disabled>Pilih jenis...</option>
               {loanTypes.map((type) => (
                 <option key={type.id} value={type.id}>
                   {type.name}
@@ -200,7 +199,7 @@ const LoanApplication = () => {
           </div>
 
           <div className="la-form-group">
-            <label>TOTAL OF INSTALLMENT</label>
+            <label>JUMLAH PINJAMAN</label>
             <div className="la-input-with-prefix">
               <span className="la-prefix">Rp</span>
               <input
@@ -215,26 +214,26 @@ const LoanApplication = () => {
           </div>
 
           <div className="la-form-group">
-            <label>DURATION (MONTHS)</label>
+            <label>JANGKA WAKTU (BULAN)</label>
             <select
               required
               value={form.duration_months}
               onChange={(e) => setForm({ ...form, duration_months: e.target.value })}
             >
-              <option value="" disabled>Select duration...</option>
+              <option value="" disabled>Pilih jangka waktu...</option>
               {(() => {
                 // If loan type is installments (id === '1'), only allow 4 months.
                 // Otherwise (goods or other), allow 6, 12, 24 months as requested.
                 const durations = form.loan_type === '1' ? [4] : [6, 12, 24];
                 return durations.map((d) => (
-                  <option key={d} value={String(d)}>{d} Months</option>
+                  <option key={d} value={String(d)}>{d} Bulan</option>
                 ));
               })()}
             </select>
           </div>
 
           <div className="la-form-group">
-            <label>PURPOSE</label>
+            <label>TUJUAN</label>
             <input
               type="text"
               required
@@ -244,7 +243,7 @@ const LoanApplication = () => {
           </div>
 
           <div className="la-form-group">
-            <label>SALARY STATEMENT</label>
+            <label>SLIP GAJI</label>
             <div className="la-upload-box" style={{ position: 'relative' }}>
               <input
                 type="file"
@@ -255,58 +254,58 @@ const LoanApplication = () => {
               <span>
                 {form.salary_statement_file
                   ? form.salary_statement_file.name
-                  : 'Upload salary statement'}
+                  : 'Unggah slip gaji'}
               </span>
             </div>
           </div>
 
           <button type="submit" className="la-btn-continue" disabled={loadingAi || checkingLoan || !form.salary_statement_file}>
-            {loadingAi ? 'Processing...' : (checkingLoan ? 'Checking Profile...' : (!form.salary_statement_file ? 'Upload Salary Statement First' : 'Continue'))}
+            {loadingAi ? 'Memproses...' : (checkingLoan ? 'Memeriksa Profil...' : (!form.salary_statement_file ? 'Unggah Slip Gaji Terlebih Dahulu' : 'Lanjutkan'))}
           </button>
         </form>
 
         {showSimulation && (
           <div className="la-simulation-card fade-in">
             <div className="la-sim-header">
-              <h2>Angsuran Simulation</h2>
-              <p className="la-sim-sub">Estimated Monthly Payment</p>
+              <h2>Simulasi Angsuran</h2>
+              <p className="la-sim-sub">Estimasi Pembayaran Bulanan</p>
             </div>
             
             <div className="la-sim-main">
               <div className="la-sim-amount">
                 {formatRupiah(((form.amount_raw * (1 + (aiData?.suggested_interest_rate || 0.5) / 100 * parseInt(form.duration_months, 10))) / parseInt(form.duration_months, 10)))}
               </div>
-              <p className="la-sim-desc">Based on {form.duration_months} months @ {aiData?.suggested_interest_rate || '0.5'}% interest/month</p>
+              <p className="la-sim-desc">Berdasarkan {form.duration_months} bulan @ {aiData?.suggested_interest_rate || '0.5'}% bunga/bulan</p>
             </div>
 
             <div className="la-sim-details">
               <div className="la-sim-row">
-                <span>Principal</span>
+                <span>Pokok Pinjaman</span>
                 <span>{formatRupiah(form.amount_raw)}</span>
               </div>
               <div className="la-sim-row">
-                <span>Total Interest Prediction</span>
+                <span>Prediksi Total Bunga</span>
                 <span>{formatRupiah(form.amount_raw * (aiData?.suggested_interest_rate || 0.5) / 100 * parseInt(form.duration_months, 10))}</span>
               </div>
               <div className="la-sim-row total">
-                <span>Total Repayment</span>
+                <span>Total Pembayaran</span>
                 <span>{formatRupiah(form.amount_raw * (1 + (aiData?.suggested_interest_rate || 0.5) / 100 * parseInt(form.duration_months, 10)))}</span>
               </div>
             </div>
 
             {aiData && (
               <div className={`la-ai-badge ${aiData.eligibility.toLowerCase()}`}>
-                Potential Eligibility: <strong>{aiData.eligibility}</strong>
+                Potensi Kelayakan: <strong>{aiData.eligibility}</strong>
               </div>
             )}
 
             <p className="la-sim-disclaimer">
-              The interest rate and eligibility shown are AI recommendations based on your profile. Final approval is subject to admin review.
+              Suku bunga dan kelayakan yang ditampilkan adalah rekomendasi AI berdasarkan profil Anda. Persetujuan akhir bergantung pada tinjauan admin.
             </p>
 
             <label className="la-checkbox">
               <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
-              <span>I verify that the information above is correct and agree to the term and service.</span>
+              <span>Saya memverifikasi bahwa informasi di atas sudah benar dan menyetujui syarat dan ketentuan.</span>
             </label>
 
             <button
@@ -314,7 +313,7 @@ const LoanApplication = () => {
               disabled={!agreed || submitting}
               onClick={handleSubmit}
             >
-              {submitting ? 'Submitting Application...' : 'Submit'}
+              {submitting ? 'Mengirim Pengajuan...' : 'Kirim'}
             </button>
           </div>
         )}

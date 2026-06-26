@@ -54,7 +54,7 @@ const MyLoans = () => {
             const sortedLoans = [...activeLoans].sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
             if (sortedLoans[0].due_date) {
               const nextDate = new Date(sortedLoans[0].due_date);
-              const formattedDate = nextDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+              const formattedDate = nextDate.toLocaleDateString('id-ID', { month: 'short', day: 'numeric', year: 'numeric' });
               setNextDeduction(formattedDate);
             } else {
               setNextDeduction('-');
@@ -118,7 +118,7 @@ const MyLoans = () => {
             progress: 0,
             installmentsPaid: 0,
             totalInstallments: item.duration_months || 0,
-            appliedAt: new Date(item.applied_at).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
+            appliedAt: new Date(item.applied_at).toLocaleDateString('id-ID', { month: 'short', day: '2-digit', year: 'numeric' }),
             nextDeduction: '-',
           }));
           setLoansData(prev => ({ ...prev, pending: pendingLoansFormatted }));
@@ -132,8 +132,8 @@ const MyLoans = () => {
             type: item.type_name || 'Pinjaman',
             status: 'Rejected',
             totalBorrowed: formatRupiah(item.amount_requested),
-            appliedAt: new Date(item.applied_at).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
-            dateRejected: new Date(item.admin_update).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
+            appliedAt: new Date(item.applied_at).toLocaleDateString('id-ID', { month: 'short', day: '2-digit', year: 'numeric' }),
+            dateRejected: new Date(item.admin_update).toLocaleDateString('id-ID', { month: 'short', day: '2-digit', year: 'numeric' }),
             purpose: item.purpose,
             rejectReason: item.reject_reason || '-',
             progress: 0,
@@ -190,10 +190,10 @@ const MyLoans = () => {
   };
 
   const tabs = [
-    { id: 'active', label: 'Active Loans' },
-    { id: 'completed', label: 'Completed' },
-    { id: 'pending', label: 'Pending' },
-    { id: 'rejected', label: 'Rejected' },
+    { id: 'active', label: 'Pinjaman Aktif' },
+    { id: 'completed', label: 'Selesai' },
+    { id: 'pending', label: 'Menunggu' },
+    { id: 'rejected', label: 'Ditolak' },
   ];
 
   const getStatusColor = (status) => {
@@ -210,8 +210,8 @@ const MyLoans = () => {
     <div className="ml-page">
       <div className="ml-header-section">
         <div className="ml-header-text">
-          <h1>Loan Overview</h1>
-          <p>Overview active loans, repayment progress, and payroll deduction</p>
+          <h1>Ringkasan Pinjaman</h1>
+          <p>Ringkasan pinjaman aktif, progres pembayaran, dan potongan gaji</p>
         </div>
         <button
           className="btn-apply-loan"
@@ -224,13 +224,13 @@ const MyLoans = () => {
           } : {}}
         >
           <Plus size={16} strokeWidth={2.5} />
-          Apply for a New Loan
+          Ajukan Pinjaman Baru
         </button>
       </div>
 
       <div className="ml-overview-cards">
         <div className="ml-ov-card">
-          <div className="ml-ov-label">TOTAL OUTSTANDING BALANCE</div>
+          <div className="ml-ov-label">TOTAL SALDO TERTUNGGAK</div>
           <div className="ml-ov-value">{formatRupiah(totalOutstanding)}</div>
           {/* <div className="ml-ov-badge up">
             <ChevronRight size={12} strokeWidth={3} style={{ transform: 'rotate(-45deg)' }} />
@@ -238,11 +238,11 @@ const MyLoans = () => {
           </div> */}
         </div>
         <div className="ml-ov-card">
-          <div className="ml-ov-label">NEXT PAYROLL DEDUCTION</div>
+          <div className="ml-ov-label">POTONGAN GAJI BERIKUTNYA</div>
           <div className="ml-ov-value">{nextDeduction}</div>
           <div className="ml-ov-badge info">
             <span className="dot"></span>
-            Scheduled Automatically
+            Dijadwalkan Otomatis
           </div>
         </div>
       </div>      {showAutoDeductBanner && (
@@ -251,14 +251,14 @@ const MyLoans = () => {
             <Info size={16} strokeWidth={2} />
           </div>
           <div>
-            <h4>Automatic Payment Deduction</h4>
-            <p>Payments are automatically deducted by HRD on the 25th of each month</p>
+            <h4>Potongan Pembayaran Otomatis</h4>
+            <p>Pembayaran dipotong otomatis oleh HRD pada tanggal 25 setiap bulan</p>
           </div>
         </div>
       )}
 
       <div className="ml-tabs-section">
-        <h2>My Loans</h2>
+        <h2>Pinjaman Saya</h2>
         <div className="ml-tabs">
           {tabs.map(tab => (
             <button
@@ -289,14 +289,14 @@ const MyLoans = () => {
 
                 <div className="ml-lc-details">
                   <div className="ml-lc-col">
-                    <span className="lbl">TOTAL BORROWED</span>
+                    <span className="lbl">TOTAL PINJAMAN</span>
                     <span className="val">{loan.totalBorrowed}</span>
                   </div>
                   <div className="ml-lc-col">
                     <span className="lbl">
-                      {activeTab === 'pending' ? 'ESTIMATE INTEREST AMOUNT'
-                        : activeTab === 'rejected' ? 'DATE APPLY'
-                          : 'REMAINING'}
+                      {activeTab === 'pending' ? 'ESTIMASI JUMLAH BUNGA'
+                        : activeTab === 'rejected' ? 'TANGGAL PENGAJUAN'
+                          : 'SISA'}
                     </span>
                     <span className="val">
                       {activeTab === 'pending' ? loan.interestEstimate
@@ -305,13 +305,13 @@ const MyLoans = () => {
                     </span>
                   </div>
                   <div className="ml-lc-col">
-                    <span className="lbl">PURPOSE</span>
+                    <span className="lbl">TUJUAN</span>
                     <span className="val">{loan.purpose}</span>
                   </div>
                   <div className="ml-lc-col">
                     <span className="lbl">
-                      {activeTab === 'pending' ? 'ESTIMATE BUNGA'
-                        : activeTab === 'rejected' ? 'DATE REJECTED'
+                      {activeTab === 'pending' ? 'ESTIMASI BUNGA'
+                        : activeTab === 'rejected' ? 'TANGGAL DITOLAK'
                           : 'BUNGA (FLAT)'}
                     </span>
                     <span className="val">
@@ -322,7 +322,7 @@ const MyLoans = () => {
 
                 <div className="ml-lc-progress">
                   <div className="prog-header">
-                    <span>{activeTab === 'pending' || activeTab === 'rejected' ? 'Repayment Request' : 'Repayment Progress'}</span>
+                    <span>{activeTab === 'pending' || activeTab === 'rejected' ? 'Permintaan Cicilan' : 'Progres Pembayaran'}</span>
                     {(activeTab !== 'pending' && activeTab !== 'rejected') && <span className="pct">{loan.progress}%</span>}
                   </div>
                   {(activeTab !== 'pending' && activeTab !== 'rejected') && (
@@ -332,30 +332,30 @@ const MyLoans = () => {
                   )}
                   <div className="prog-footer">
                     {activeTab === 'pending' || activeTab === 'rejected'
-                      ? `${loan.totalInstallments} Months Installment Request`
-                      : `${loan.installmentsPaid} of ${loan.totalInstallments} Installments Paid`}
+                      ? `${loan.totalInstallments} Bulan Permintaan Angsuran`
+                      : `${loan.installmentsPaid} dari ${loan.totalInstallments} Angsuran Terbayar`}
                   </div>
                 </div>
 
                 <div className="ml-lc-footer">
                   {activeTab === 'pending' ? (
                     <div>
-                      <div className="lbl">APPLIED AT</div>
+                      <div className="lbl">TANGGAL PENGAJUAN</div>
                       <div className="val">{loan.appliedAt}</div>
                     </div>
                   ) : activeTab === 'rejected' ? (
                     <div>
-                      <div className="lbl">REASON REJECT</div>
+                      <div className="lbl">ALASAN PENOLAKAN</div>
                       <div className="val" style={{ color: '#ef4444', fontWeight: '500' }}>{loan.rejectReason}</div>
                     </div>
                   ) : (
                     <div>
-                      <div className="lbl">NEXT DEDUCTION</div>
+                      <div className="lbl">POTONGAN BERIKUTNYA</div>
                       <div className="val">{loan.nextDeduction}</div>
                     </div>
                   )}
                   <button className="btn-view-details" onClick={() => navigate(`/dashboard/loans/${loan.id.replace('#', '')}`)}>
-                    View Details
+                    Lihat Detail
                   </button>
                 </div>
               </div>
@@ -363,7 +363,7 @@ const MyLoans = () => {
           </div>
         ) : (
           <div className="ml-empty-state">
-            <p>No {activeTab} loans found.</p>
+            <p>Tidak ada pinjaman {activeTab === 'active' ? 'aktif' : activeTab === 'completed' ? 'selesai' : activeTab === 'pending' ? 'menunggu' : 'ditolak'} ditemukan.</p>
           </div>
         )}
       </div>

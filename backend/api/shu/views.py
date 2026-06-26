@@ -2321,3 +2321,22 @@ def save_component_allocations(request):
                     )
 
     return Response({'message': 'Alokasi SHU dan distribusi anggota berhasil diperbarui'})
+
+
+@api_view(['GET'])
+def admin_shu_forecast(request):
+    months = int(request.query_params.get('months', 6))
+    months = max(1, min(months, 12))
+
+    try:
+        from ml_service.shu_admin_trainer import predict_admin_shu
+        result = predict_admin_shu(months=months)
+        if result is None:
+            return Response({
+                'error': 'Model belum di-train atau data tidak cukup. Jalankan: python manage.py train_shu_admin_model'
+            }, status=404)
+        return Response(result)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).exception("SHU admin forecast failed")
+        return Response({'error': str(e)}, status=500)
