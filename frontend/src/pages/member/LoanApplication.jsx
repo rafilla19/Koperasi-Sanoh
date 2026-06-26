@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Wallet, UploadCloud } from 'lucide-react';
-import { apiUrl } from '../../services/api';
+import { ArrowLeft, Wallet, UploadCloud, X } from 'lucide-react';
+import { apiUrl, getAuthHeaders } from '../../services/api';
 import './LoanApplication.css';
 
 const LoanApplication = () => {
@@ -12,6 +12,13 @@ const LoanApplication = () => {
   const [hasActiveLoan, setHasActiveLoan] = useState(false);
   const [checkingLoan, setCheckingLoan] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+
+  const [bankComplete, setBankComplete] = useState(true);
+  const [showBankPopup, setShowBankPopup] = useState(false);
+  const [banksList, setBanksList] = useState([]);
+  const [bankFormData, setBankFormData] = useState({ bank_id: '', account_number: '', account_holder_name: '' });
+  const [bankFormError, setBankFormError] = useState('');
+  const [bankFormLoading, setBankFormLoading] = useState(false);
 
   // Form state
   const [form, setForm] = useState({
@@ -78,8 +85,30 @@ const LoanApplication = () => {
       }
     };
 
+    const checkBankAccount = async () => {
+      try {
+        const res = await fetch(apiUrl('/my-savings/bank-account-status/'), { headers: getAuthHeaders() });
+        const data = await res.json();
+        setBankComplete(!!data?.is_complete);
+        if (!data?.is_complete) {
+          setBankFormData({
+            bank_id: data?.bank_id || '',
+            account_number: data?.account_number || '',
+            account_holder_name: data?.account_holder_name || '',
+          });
+          setShowBankPopup(true);
+          const banksRes = await fetch(apiUrl('/banks/'), { headers: getAuthHeaders() });
+          const banksData = await banksRes.json();
+          setBanksList(Array.isArray(banksData) ? banksData : []);
+        }
+      } catch (e) {
+        console.error('Failed to check bank account:', e);
+      }
+    };
+
     checkActiveLoan();
     fetchLoanTypes();
+    checkBankAccount();
   }, []);
 
   const handleContinue = async (e) => {
@@ -164,6 +193,33 @@ const LoanApplication = () => {
     }
   };
 
+
+  const handleBankFormSubmit = async () => {
+    setBankFormError('');
+    if (!bankFormData.bank_id || !bankFormData.account_number.trim() || !bankFormData.account_holder_name.trim()) {
+      setBankFormError('Semua field wajib diisi');
+      return;
+    }
+    setBankFormLoading(true);
+    try {
+      const res = await fetch(apiUrl('/my-savings/bank-account-status/'), {
+        method: 'POST',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, getAuthHeaders()),
+        body: JSON.stringify(bankFormData),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setBankComplete(true);
+        setShowBankPopup(false);
+      } else {
+        setBankFormError(data?.error || 'Gagal menyimpan data bank');
+      }
+    } catch {
+      setBankFormError('Gagal menyimpan. Coba lagi.');
+    } finally {
+      setBankFormLoading(false);
+    }
+  };
 
   return (
     <div className="la-page">
@@ -259,8 +315,8 @@ const LoanApplication = () => {
             </div>
           </div>
 
-          <button type="submit" className="la-btn-continue" disabled={loadingAi || checkingLoan || !form.salary_statement_file}>
-            {loadingAi ? 'Memproses...' : (checkingLoan ? 'Memeriksa Profil...' : (!form.salary_statement_file ? 'Unggah Slip Gaji Terlebih Dahulu' : 'Lanjutkan'))}
+          <button type="submit" className="la-btn-continue" disabled={loadingAi || checkingLoan || !form.salary_statement_file || !bankComplete}>
+            {loadingAi ? 'Memproses...' : (checkingLoan ? 'Memeriksa Profil...' : (!bankComplete ? 'Lengkapi Data Bank Terlebih Dahulu' : (!form.salary_statement_file ? 'Unggah Slip Gaji Terlebih Dahulu' : 'Lanjutkan')))}
           </button>
         </form>
 
@@ -312,6 +368,57 @@ const LoanApplication = () => {
           </div>
         )}
       </div>
+
+      {showBankPopup && (
+        <div className="la-bank-overlay" onClick={() => {}}>
+          <div className="la-bank-popup" onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ margin: 0, fontSize: 16 }}>Lengkapi Data Rekening Bank</h3>
+            </div>
+            <p style={{ color: '#64748b', fontSize: 13, marginBottom: 16 }}>
+              Data rekening bank wajib diisi sebelum mengajukan pinjaman.
+            </p>
+            {bankFormError && <p style={{ color: '#dc2626', fontSize: 13, marginBottom: 10 }}>{bankFormError}</p>}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <select
+                value={bankFormData.bank_id}
+                onChange={(e) => setBankFormData({ ...bankFormData, bank_id: e.target.value })}
+                style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 14 }}
+              >
+                <option value="">Pilih Bank...</option>
+                {banksList.map((b) => (
+                  <option key={b.id} value={b.id}>{b.bank_name}</option>
+                ))}
+              </select>
+              <input
+                type="text"
+                placeholder="Nomor Rekening"
+                value={bankFormData.account_number}
+                onChange={(e) => setBankFormData({ ...bankFormData, account_number: e.target.value })}
+                style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 14 }}
+              />
+              <input
+                type="text"
+                placeholder="Nama Pemilik Rekening"
+                value={bankFormData.account_holder_name}
+                onChange={(e) => setBankFormData({ ...bankFormData, account_holder_name: e.target.value })}
+                style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 14 }}
+              />
+              <button
+                onClick={handleBankFormSubmit}
+                disabled={bankFormLoading}
+                style={{
+                  padding: '10px 16px', borderRadius: 8, border: 'none',
+                  background: '#1d4ed8', color: '#fff', fontWeight: 600, fontSize: 14, cursor: 'pointer',
+                  opacity: bankFormLoading ? 0.6 : 1,
+                }}
+              >
+                {bankFormLoading ? 'Menyimpan...' : 'Simpan & Lanjutkan'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

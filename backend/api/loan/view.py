@@ -72,11 +72,19 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         member = serializer.validated_data.get('member') or (self.request.user.member if hasattr(self.request.user, 'member') else None)
         if member:
+            from rest_framework.exceptions import ValidationError
             with connection.cursor() as cursor:
                 cursor.execute("SELECT COUNT(*) FROM close_account_requests WHERE member_id = %s AND status_id = 44 AND deleted_at IS NULL", [member.id])
                 if cursor.fetchone()[0] > 0:
-                    from rest_framework.exceptions import ValidationError
                     raise ValidationError({'error': 'Akun Anda sedang dalam proses penutupan. Pengajuan pinjaman tidak dapat dilakukan.'})
+
+                cursor.execute("""
+                    SELECT mba.bank_id, mba.account_number, mba.account_holder_name
+                    FROM member_bank_accounts mba WHERE mba.member_id = %s LIMIT 1
+                """, [member.id])
+                bank_row = cursor.fetchone()
+                if not bank_row or not all(bank_row):
+                    raise ValidationError({'error': 'Lengkapi data rekening bank Anda terlebih dahulu sebelum mengajukan pinjaman.', 'code': 'BANK_ACCOUNT_INCOMPLETE'})
 
         status = Status.objects.get(
             status_category__category_name='LOAN_APPLICATION',
