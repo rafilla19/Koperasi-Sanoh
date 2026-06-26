@@ -4,6 +4,7 @@ import { LayoutDashboard, Wallet, CreditCard, FileText, UserCircle, LogOut, Menu
 import logoImg from '../assets/logo.png';
 import './DashboardLayout.css';
 import { fetchWASettings } from '../services/waApi';
+import { apiUrl } from '../services/api';
 
 const DashboardLayout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -18,6 +19,7 @@ const DashboardLayout = () => {
   const [showWAMenu, setShowWAMenu] = useState(false);
   const [waQuestions, setWaQuestions] = useState([]);
   const [waPhone, setWaPhone] = useState('');
+  const [hasPendingCloseAccount, setHasPendingCloseAccount] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -28,8 +30,30 @@ const DashboardLayout = () => {
   useEffect(() => {
     if (!user) {
       navigate('/login');
+      return;
     }
-  }, [user, navigate]);
+    const checkActive = async () => {
+      try {
+        const res = await fetch(apiUrl('/auth/check_active/'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: user.email }),
+        });
+        const data = await res.json();
+        if (!data.is_active) {
+          localStorage.removeItem('user');
+          navigate('/login');
+          return;
+        }
+        if (data.has_pending_close_account !== undefined) {
+          setHasPendingCloseAccount(data.has_pending_close_account);
+        }
+      } catch (e) {
+        // ignore network errors
+      }
+    };
+    checkActive();
+  }, [user, navigate, location.pathname]);
 
   useEffect(() => {
     let cancelled = false;
@@ -339,7 +363,7 @@ const DashboardLayout = () => {
         </header>
 
         <main className="dl-content">
-          <Outlet />
+          <Outlet context={{ hasPendingCloseAccount }} />
         </main>
       </div>
 

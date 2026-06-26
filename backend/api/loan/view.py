@@ -70,6 +70,14 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
         return LoanApplication.objects.all()
 
     def perform_create(self, serializer):
+        member = serializer.validated_data.get('member') or (self.request.user.member if hasattr(self.request.user, 'member') else None)
+        if member:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT COUNT(*) FROM close_account_requests WHERE member_id = %s AND status_id = 44 AND deleted_at IS NULL", [member.id])
+                if cursor.fetchone()[0] > 0:
+                    from rest_framework.exceptions import ValidationError
+                    raise ValidationError({'error': 'Akun Anda sedang dalam proses penutupan. Pengajuan pinjaman tidak dapat dilakukan.'})
+
         status = Status.objects.get(
             status_category__category_name='LOAN_APPLICATION',
             status_code='SUBMITTED'
@@ -1004,6 +1012,14 @@ class LoanViewSet(viewsets.ModelViewSet):
             "Authorization": f"Basic {auth_base64}"
         }
         
+        # Block if member has pending close account request
+        if not is_user_admin(request.user):
+            member_id = request.query_params.get('member_id', 1)
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT COUNT(*) FROM close_account_requests WHERE member_id = %s AND status_id = 44 AND deleted_at IS NULL", [member_id])
+                if cursor.fetchone()[0] > 0:
+                    return Response({'error': 'Akun Anda sedang dalam proses penutupan. Pembayaran tidak dapat dilakukan.'}, status=400)
+
         # 1. Get the earliest unpaid installment for this loan
         query_installment = """
         SELECT li.id, li.amount_total, li.installment_number
@@ -1703,9 +1719,10 @@ class LoanViewSet(viewsets.ModelViewSet):
             AND DATE_TRUNC('month', li.due_date) = DATE_TRUNC('month', TO_DATE(%s || '-25', 'YYYY-MM-DD'))
             LIMIT 1
         ) current_month_inst ON TRUE
-                WHERE 
-                    l.status_id in (25,26) 
+                WHERE
+                    l.status_id in (25,26)
             AND u.is_active = true
+            AND NOT EXISTS (SELECT 1 FROM close_account_requests car WHERE car.member_id = m.id AND car.status_id = 44 AND car.deleted_at IS NULL)
         """
         with connection.cursor() as cursor:
             cursor.execute(query, [period_str])
@@ -1785,10 +1802,11 @@ class LoanViewSet(viewsets.ModelViewSet):
             AND EXTRACT(MONTH FROM li.due_date) = %s
             LIMIT 1
         ) current_month_inst ON TRUE
-        WHERE 
-            l.status_id IN (25, 26) 
-            AND u.is_active = true 
+        WHERE
+            l.status_id IN (25, 26)
+            AND u.is_active = true
             AND m.employee_status_id IN (1,2)
+            AND NOT EXISTS (SELECT 1 FROM close_account_requests car WHERE car.member_id = m.id AND car.status_id = 44 AND car.deleted_at IS NULL)
             AND current_month_inst.inst_id IS NOT NULL
         """
         with connection.cursor() as cursor:
@@ -1840,13 +1858,16 @@ class LoanViewSet(viewsets.ModelViewSet):
             COALESCE(SUM(CASE WHEN msb.status_id = 38 THEN msb.amount_due ELSE 0 END), 0) AS total_outstanding,
             COALESCE(SUM(msb.amount_due), 0) AS total_amount
         FROM monthly_saving_bills msb
-        INNER JOIN members m ON m.id = msb.member_id 
-        INNER JOIN departments d ON d.id = m.department_id 
-        INNER JOIN saving_types st ON st.id = msb.saving_type_id 
+        INNER JOIN members m ON m.id = msb.member_id
+        INNER JOIN departments d ON d.id = m.department_id
+        INNER JOIN saving_types st ON st.id = msb.saving_type_id
+        INNER JOIN users u ON u.id = m.user_id
         LEFT JOIN employee_statuses es ON es.id = m.employee_status_id
-        WHERE EXTRACT(YEAR FROM msb.bill_period_start) = %s 
+        WHERE EXTRACT(YEAR FROM msb.bill_period_start) = %s
           AND EXTRACT(MONTH FROM msb.bill_period_start) = %s
-        GROUP BY 
+          AND u.is_active = true
+          AND NOT EXISTS (SELECT 1 FROM close_account_requests car WHERE car.member_id = m.id AND car.status_id = 44 AND car.deleted_at IS NULL)
+        GROUP BY
             m.id,
             m.full_name,
             m.nik_employee,
@@ -2525,10 +2546,11 @@ class LoanViewSet(viewsets.ModelViewSet):
         Get list of active members for dropdown selection.
         """
         query = """
-        SELECT m.id, m.full_name, m.nik_employee 
+        SELECT m.id, m.full_name, m.nik_employee
         FROM members m
         INNER JOIN users u ON m.user_id = u.id
         WHERE u.is_active = true
+          AND NOT EXISTS (SELECT 1 FROM close_account_requests car WHERE car.member_id = m.id AND car.status_id = 44 AND car.deleted_at IS NULL)
         ORDER BY m.full_name ASC
         """
         with connection.cursor() as cursor:
@@ -2736,7 +2758,13 @@ class LoanViewSet(viewsets.ModelViewSet):
         member_id = request.data.get('member_id')
         notes = request.data.get('notes', '')
         admin_id = request.user.id if request.user.is_authenticated else 1 # Fallback for dev
-        
+
+        if member_id:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT COUNT(*) FROM close_account_requests WHERE member_id = %s AND status_id = 44 AND deleted_at IS NULL", [member_id])
+                if cursor.fetchone()[0] > 0:
+                    return Response({'error': 'Anggota ini sedang dalam proses penutupan akun. Pembayaran tidak dapat diproses.'}, status=400)
+
         # Parse payments JSON string
         import json
         try:
@@ -3115,6 +3143,13 @@ class LoanViewSet(viewsets.ModelViewSet):
                 columns = [col[0] for col in cursor.description]
                 row = cursor.fetchone()
                 result = dict(zip(columns, row)) if row else {}
+
+                cursor.execute(
+                    "SELECT COUNT(*) FROM close_account_requests WHERE member_id = %s AND status_id = 44 AND deleted_at IS NULL",
+                    [member_id],
+                )
+                result['has_pending_close_account'] = cursor.fetchone()[0] > 0
+
                 return Response(result)
         except Exception as e:
             return Response({'error': str(e)}, status=400)
@@ -3145,10 +3180,15 @@ class LoanViewSet(viewsets.ModelViewSet):
         else:
             member_id = request.user.member.id
 
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) FROM close_account_requests WHERE member_id = %s AND status_id = 44 AND deleted_at IS NULL", [member_id])
+            if cursor.fetchone()[0] > 0:
+                return Response({'error': 'Akun Anda sedang dalam proses penutupan. Pembayaran tidak dapat dilakukan.'}, status=400)
+
         saving_ids = request.data.get('saving_ids', [])
         loan_ids = request.data.get('loan_ids', [])
         payment_type = request.data.get('payment_type')
-        
+
         if not saving_ids and not loan_ids:
             return Response({'error': 'No bills selected.'}, status=400)
 

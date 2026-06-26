@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useOutletContext } from 'react-router-dom';
 import { apiUrl, API_URL } from '../../services/api';
 
 const BANKS_URL = API_URL.replace(/\/v1$/, '') + '/banks/';
@@ -96,6 +96,7 @@ const formatRp = (value) => {
 
 const MySaving = () => {
   const navigate = useNavigate();
+  const { hasPendingCloseAccount } = useOutletContext() || {};
   const [activeTab, setActiveTab] = useState('saving');
   const [showWithdrawForm, setShowWithdrawForm] = useState(false);
 
@@ -876,8 +877,9 @@ const MySaving = () => {
                 <button
                   className="btn-banner"
                   onClick={handleWithdrawClick}
-                  disabled={checkingBankAccount}
-                  style={{ display: showWithdrawForm ? 'none' : 'inline-flex' }}
+                  disabled={checkingBankAccount || hasPendingCloseAccount}
+                  style={{ display: showWithdrawForm ? 'none' : 'inline-flex', opacity: hasPendingCloseAccount ? 0.5 : 1 }}
+                  title={hasPendingCloseAccount ? 'Akun dalam proses penutupan' : ''}
                 >
                   {checkingBankAccount ? 'Memeriksa...' : 'Tarik Dana'}
                 </button>

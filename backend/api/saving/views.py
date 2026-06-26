@@ -277,6 +277,13 @@ def my_withdrawals(request):
         return Response(serializer.errors, status=400)
 
     member_id = _get_member_id_from_request(request)
+
+    from django.db import connection as db_conn
+    with db_conn.cursor() as cursor:
+        cursor.execute("SELECT COUNT(*) FROM close_account_requests WHERE member_id = %s AND status_id = 44 AND deleted_at IS NULL", [member_id])
+        if cursor.fetchone()[0] > 0:
+            return Response({'error': 'Akun Anda sedang dalam proses penutupan. Penarikan tidak dapat dilakukan.'}, status=400)
+
     bank_status = _get_member_bank_account_status(member_id)
     if not bank_status['is_complete']:
         return Response(

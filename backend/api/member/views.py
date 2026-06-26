@@ -170,7 +170,7 @@ def _member_profile_query(member_id):
             COALESCE(vsr.status_id, 0) AS voluntary_request_status_id,
             COALESCE(vsr.status, '') AS voluntary_request_status,
             vsr.created_at AS voluntary_request_created_at,
-            0 AS pending_closure_count
+            (SELECT COUNT(*) FROM close_account_requests WHERE member_id = m.id AND status_id = 44 AND deleted_at IS NULL) AS pending_closure_count
         FROM members m
         LEFT JOIN departments d ON d.id = m.department_id
         LEFT JOIN employee_statuses es ON es.id = m.employee_status_id
@@ -650,6 +650,11 @@ class MemberViewSet(viewsets.ViewSet):
         data = serializer.validated_data
         member_id = data['member_id']
         requested_amount = data['requested_amount']
+
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) FROM close_account_requests WHERE member_id = %s AND status_id = 44 AND deleted_at IS NULL", [member_id])
+            if cursor.fetchone()[0] > 0:
+                return Response({'error': 'Akun Anda sedang dalam proses penutupan. Perubahan simpanan tidak dapat dilakukan.'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             with connection.cursor() as cursor:

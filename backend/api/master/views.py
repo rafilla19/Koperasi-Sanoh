@@ -247,6 +247,34 @@ class AuthViewSet(viewsets.ViewSet):
             return Response({'error': str(e)}, status=500)
 
     @action(detail=False, methods=['post'])
+    def check_active(self, request):
+        email = (request.data.get('email') or '').strip().lower()
+        if not email:
+            return Response({'is_active': False, 'has_pending_close_account': False})
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT u.is_active, m.id FROM users u LEFT JOIN members m ON m.user_id = u.id WHERE LOWER(u.email) = LOWER(%s) LIMIT 1",
+                    [email],
+                )
+                row = cursor.fetchone()
+                if not row:
+                    return Response({'is_active': False, 'has_pending_close_account': False})
+
+                is_active = bool(row[0])
+                member_id = row[1]
+                has_pending = False
+                if member_id:
+                    cursor.execute(
+                        "SELECT COUNT(*) FROM close_account_requests WHERE member_id = %s AND status_id = 44 AND deleted_at IS NULL",
+                        [member_id],
+                    )
+                    has_pending = cursor.fetchone()[0] > 0
+                return Response({'is_active': is_active, 'has_pending_close_account': has_pending})
+        except Exception:
+            return Response({'is_active': False, 'has_pending_close_account': False})
+
+    @action(detail=False, methods=['post'])
     def forgot_password(self, request):
         email = (request.data.get('email') or '').strip().lower()
         if not email:

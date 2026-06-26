@@ -926,15 +926,18 @@ const DashboardHome = () => {
             <div className="icon-wrapper red-gradient">
               <CreditCard size={20} />
             </div>
-            {summary?.employee_status_id === 3 && summary?.grand_total_outstanding > 0 && (
-              <button 
-                className="pay-now-badge-btn" 
+            {summary?.employee_status_id === 3 && summary?.grand_total_outstanding > 0 && !summary?.has_pending_close_account && (
+              <button
+                className="pay-now-badge-btn"
                 onClick={() => setShowPaymentModal(true)}
               >
                 Bayar Sekarang
               </button>
             )}
-            {summary?.employee_status_id !== 3 && (
+            {summary?.has_pending_close_account && (
+              <span className="badge-soft-gray" style={{ fontSize: 10, background: '#fef2f2', color: '#dc2626' }}>Proses Penutupan</span>
+            )}
+            {summary?.employee_status_id !== 3 && !summary?.has_pending_close_account && (
               <span className="badge-soft-gray">Akan Datang</span>
             )}
           </div>

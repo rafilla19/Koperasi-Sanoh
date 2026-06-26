@@ -177,7 +177,7 @@ const MyLoans = () => {
         const profileResponse = await fetch(apiUrl(`/member/members/profile_detail/?member_id=${memberId}`));
         if (profileResponse.ok) {
           const profileData = await profileResponse.json();
-          setHasPendingClosure(profileData.has_pending_closure || false);
+          setHasPendingClosure((profileData.pending_closure_count || 0) > 0);
         }
       } catch (error) {
         console.error('Failed to fetch data:', error);
