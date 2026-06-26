@@ -291,7 +291,7 @@ const AdminLoansDashboard = () => {
           onClick={() => currentPage < totalPages && handlePageChange(currentPage + 1)}
           style={{ opacity: currentPage >= totalPages ? 0.5 : 1, pointerEvents: currentPage >= totalPages ? 'none' : 'auto' }}
         >
-          SLNJT &gt;
+          Next &gt;
         </button>
       </div>
     );

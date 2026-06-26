@@ -1240,7 +1240,7 @@ const DashboardHome = () => {
                 onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                 disabled={currentPage === 1}
               >
-                Sblm
+                Prev
               </button>
               {Array.from({ length: Math.ceil(transactions.length / itemsPerPage) }, (_, i) => (
                 <button
@@ -1256,7 +1256,7 @@ const DashboardHome = () => {
                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, Math.ceil(transactions.length / itemsPerPage)))}
                 disabled={currentPage === Math.ceil(transactions.length / itemsPerPage)}
               >
-                Slnjt
+                Next
               </button>
             </div>
           </div>

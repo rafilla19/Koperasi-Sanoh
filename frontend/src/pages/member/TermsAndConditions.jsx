@@ -37,14 +37,14 @@ const TermsAndConditions = () => {
       {/* HEADER */}
       <div className="tc-header">
         <div className="tc-header-left">
-          <h1>Terms and Conditions</h1>
-          <p>Everything you need to know about your koperasi membership</p>
+          <h1>Syarat dan Ketentuan</h1>
+          <p>Semua yang perlu Anda ketahui tentang keanggotaan koperasi Anda</p>
         </div>
         {documents.length > 0 && (
           <div className="tc-header-actions">
             <button className="btn-download" onClick={() => handleDownload(documents[0])}>
               <DownloadCloud size={17} />
-              Download TnC
+              Download
             </button>
           </div>
         )}

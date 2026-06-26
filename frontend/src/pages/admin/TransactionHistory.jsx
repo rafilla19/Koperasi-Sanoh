@@ -261,7 +261,7 @@ const TransactionHistory = () => {
             disabled={currentPage === totalPages}
             onClick={() => paginate(currentPage + 1)}
           >
-            SLNJT <ChevronRight size={16} />
+            Next <ChevronRight size={16} />
           </button>
         </div>
       )}

@@ -775,14 +775,14 @@ const MySaving = () => {
                             onClick={() => setBillsPage(p => Math.max(1, p - 1))}
                             disabled={billsPage === 1}
                           >
-                            Sblm
+                            Prev
                           </button>
                           <button
                             className="sv-page-btn"
                             onClick={() => setBillsPage(p => Math.min(billsTotalPages, p + 1))}
                             disabled={billsPage === billsTotalPages}
                           >
-                            Slnjt
+                            Next
                           </button>
                         </div>
                       </div>

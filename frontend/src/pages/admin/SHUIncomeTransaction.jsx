@@ -403,7 +403,7 @@ const SHUIncomeTransaction = () => {
               onClick={() => setSummary(mode)}
               className={`shu-pill-button ${summary === mode ? 'active' : ''}`}
             >
-              {mode === 'month' ? 'Per Bulan' : 'Tahunan'}
+              {mode === 'month' ? 'Bulanan' : 'Tahunan'}
             </button>
           ))}
         </div>
@@ -544,7 +544,7 @@ const SHUIncomeTransaction = () => {
                   return (
                     <tr key={row.member_id} style={{
                       borderBottom: '1px solid #e5e7eb',
-                      background: isStatusDone ? '#f0fdf4' : isDistributed ? '#fefce8' : isSelected ? '#f5f3ff' : (idx % 2 === 0 ? '#fff' : '#f9fafb'),
+                      background: isStatusDone ? '#f3f4f6' : isDistributed ? '#fefce8' : isSelected ? '#f5f3ff' : (idx % 2 === 0 ? '#fff' : '#f9fafb'),
                     }}>
                       {/* Checkbox cell */}
                       <td style={{ padding: '10px', textAlign: 'center' }}>
@@ -552,8 +552,8 @@ const SHUIncomeTransaction = () => {
                           <span style={{
                             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                             width: 22, height: 22, borderRadius: '50%',
-                            background: isStatusDone ? '#dcfce7' : '#fef9c3',
-                            color: isStatusDone ? '#16a34a' : '#ca8a04',
+                            background: isStatusDone ? '#e5e7eb' : '#fef9c3',
+                            color: isStatusDone ? '#6b7280' : '#ca8a04',
                           }}>
                             <Check size={13} />
                           </span>
@@ -609,7 +609,7 @@ const SHUIncomeTransaction = () => {
                       {/* Status */}
                       <td style={{ padding: '12px 12px', fontSize: 13 }}>
                         {isStatusDone ? (
-                          <span style={{ display: 'inline-block', padding: '3px 9px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: '#dcfce7', color: '#16a34a' }}>
+                          <span style={{ display: 'inline-block', padding: '3px 9px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: '#e5e7eb', color: '#6b7280' }}>
                             Selesai
                           </span>
                         ) : isDistributed ? (
@@ -672,7 +672,7 @@ const SHUIncomeTransaction = () => {
                   return (
                     <tr key={row.member_id} style={{
                       borderBottom: '1px solid #e5e7eb',
-                      background: isSaved ? '#f0fdf4' : (idx % 2 === 0 ? '#fff' : '#f9fafb'),
+                      background: idx % 2 === 0 ? '#fff' : '#f9fafb',
                     }}>
                       <td style={{ padding: 12, fontSize: 13, color: '#374151' }}>{(currentPage - 1) * rowsPerPage + idx + 1}</td>
                       <td style={{ padding: 12, fontSize: 13, color: '#0f172a', fontWeight: 500 }}>{row.full_name}</td>
@@ -683,9 +683,6 @@ const SHUIncomeTransaction = () => {
                       <td style={{ padding: 12, fontSize: 13, color: '#374151', fontWeight: 600 }}>Rp {formatCurrency(savedDist ? savedDist.total_savings : row.total_saving_amount)}</td>
                       <td style={{ padding: 12, fontSize: 13, color: displayShu !== null ? '#7c3aed' : '#9ca3af', fontWeight: displayShu !== null ? 600 : 400, fontStyle: displayShu !== null ? 'normal' : 'italic' }}>
                         {displayShu !== null ? `Rp ${formatCurrency(displayShu)}` : '—'}
-                        {isSaved && (
-                          <span style={{ marginLeft: 6, fontSize: 10, background: '#dcfce7', color: '#15803d', borderRadius: 4, padding: '1px 5px', fontWeight: 700 }}>DB</span>
-                        )}
                       </td>
                       <td style={{ padding: '10px 12px' }}>
                         {isSaved ? (

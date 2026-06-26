@@ -159,29 +159,29 @@ const DashboardLayout = () => {
               <NavLink to="/dashboard" end className={({ isActive }) => `dl-sb-item ${isActive ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)} title="Dashboard">
                 <div className="dl-sb-dot"></div>
                 <LayoutDashboard size={17} strokeWidth={2} />
-                <span className="dl-sb-item-text">Dashboard</span>
+                <span className="dl-sb-item-text">DASHBOARD</span>
               </NavLink>
-              <NavLink to="/dashboard/saving" className={({ isActive }) => `dl-sb-item ${isActive ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)} title="Simpanan Saya">
+              <NavLink to="/dashboard/saving" className={({ isActive }) => `dl-sb-item ${isActive ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)} title="Simpanan">
                 <div className="dl-sb-dot"></div>
                 <Wallet size={17} strokeWidth={2} />
-                <span className="dl-sb-item-text">Simpanan Saya</span>
+                <span className="dl-sb-item-text">SIMPANAN</span>
               </NavLink>
-              <NavLink to="/dashboard/loans" className={({ isActive }) => `dl-sb-item ${isActive ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)} title="Pinjaman Saya">
+              <NavLink to="/dashboard/loans" className={({ isActive }) => `dl-sb-item ${isActive ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)} title="Pinjaman">
                 <div className="dl-sb-dot"></div>
                 <CreditCard size={17} strokeWidth={2} />
-                <span className="dl-sb-item-text">Pinjaman Saya</span>
+                <span className="dl-sb-item-text">PINJAMAN</span>
               </NavLink>
               <NavLink to="/dashboard/terms" className={({ isActive }) => `dl-sb-item ${isActive ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)} title="Syarat & Ketentuan">
                 <div className="dl-sb-dot"></div>
                 <FileText size={17} strokeWidth={2} />
-                <span className="dl-sb-item-text">Syarat & Ketentuan</span>
+                <span className="dl-sb-item-text">SYARAT & KETENTUAN</span>
               </NavLink>
 
               <div className="dl-sb-lbl" style={{ marginTop: 16 }}>AKUN</div>
               <NavLink to="/dashboard/profile" className={({ isActive }) => `dl-sb-item ${isActive ? 'active' : ''}`} onClick={() => setIsSidebarOpen(false)} title="Profil Saya">
                 <div className="dl-sb-dot"></div>
                 <UserCircle size={17} strokeWidth={2} />
-                <span className="dl-sb-item-text">Profil Saya</span>
+                <span className="dl-sb-item-text">PROFIL</span>
               </NavLink>
             </>
           )}
