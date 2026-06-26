@@ -56,56 +56,56 @@ const PaymentSuccess = () => {
             <div className="payment-success-hero-copy">
               <span className="payment-success-pill">
                 <BadgeCheck size={14} />
-                Payment Verified
+                Pembayaran Terverifikasi
               </span>
-              <h2>Account Activated</h2>
+              <h2>Akun Diaktifkan</h2>
               <p>
-                Your principal savings payment has been received and your membership is now active.
+                Pembayaran simpanan pokok Anda telah diterima dan keanggotaan Anda sekarang aktif.
               </p>
             </div>
           </div>
 
           <div className="payment-success-message">
-            Welcome to the cooperative. You can now access your dashboard to manage your savings and account activity.
+            Selamat bergabung di koperasi. Anda sekarang dapat mengakses dashboard untuk mengelola simpanan dan aktivitas akun Anda.
           </div>
 
           <div className="payment-success-summary">
             <div className="payment-success-summary-header">
               <div>
-                <span className="payment-success-label">Payment Summary</span>
-                <h3>Principal Savings Confirmation</h3>
+                <span className="payment-success-label">Ringkasan Pembayaran</span>
+                <h3>Konfirmasi Simpanan Pokok</h3>
               </div>
-              <span className="payment-success-status">Verified & Processed</span>
+              <span className="payment-success-status">Terverifikasi & Diproses</span>
             </div>
 
             <div className="payment-success-rows">
               <div className="payment-success-row">
-                <span>Amount Paid</span>
-                <strong>{!loading ? formatCurrency(principalAmount) : 'Loading...'}</strong>
+                <span>Jumlah Dibayar</span>
+                <strong>{!loading ? formatCurrency(principalAmount) : 'Memuat...'}</strong>
               </div>
               <div className="payment-success-row">
-                <span>Payment Type</span>
-                <strong>Mandatory Principal Savings</strong>
+                <span>Jenis Pembayaran</span>
+                <strong>Simpanan Pokok Wajib</strong>
               </div>
               <div className="payment-success-row">
                 <span>Status</span>
-                <strong className="payment-success-status-text">Completed Successfully</strong>
+                <strong className="payment-success-status-text">Berhasil Diselesaikan</strong>
               </div>
             </div>
           </div>
 
           <div className="payment-success-agreement">
-            <h4>Membership Agreement</h4>
+            <h4>Perjanjian Keanggotaan</h4>
             <p>
-              By registering as a member of the cooperative, you agree to maintain the mandatory principal savings contribution of{' '}
-              <span>{!loading ? formatCurrency(principalAmount) : 'IDR 100,000'}</span>
-              {' '}during active membership.
+              Dengan mendaftar sebagai anggota koperasi, Anda setuju untuk mempertahankan simpanan pokok wajib sebesar{' '}
+              <span>{!loading ? formatCurrency(principalAmount) : 'Rp 100.000'}</span>
+              {' '}selama masa keanggotaan aktif.
             </p>
           </div>
 
           <div className="payment-success-actions">
             <button className="payment-success-btn" onClick={handleDashboard}>
-              Go to Login
+              Ke Halaman Login
               <ArrowRight size={16} />
             </button>
           </div>

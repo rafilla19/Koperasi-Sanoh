@@ -536,7 +536,7 @@ const ManualPayment = () => {
         {/* ── Actions ── */}
         <div className="mp-actions">
           <button className="mp-btn mp-btn-process" onClick={handleProcessPayment} disabled={loading}>
-            {loading ? <><Loader size={16} className="spinner" /> Proses Pembayaran...</> : 'Process Payment'}
+            {loading ? <><Loader size={16} className="spinner" /> Proses Pembayaran...</> : 'Proses Pembayaran'}
           </button>
           <button className="mp-btn" onClick={handleClear}>Hapus</button>
         </div>

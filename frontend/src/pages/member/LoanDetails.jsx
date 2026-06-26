@@ -96,7 +96,7 @@ const LoanDetails = () => {
       doc.setFontSize(14);
       doc.setFont("helvetica", "bold");
       doc.setTextColor(27, 54, 93);
-      doc.text("LOAN DETAILS", pageWidth / 2, currentY, { align: 'center' });
+      doc.text("DETAIL PINJAMAN", pageWidth / 2, currentY, { align: 'center' });
       currentY += 4;
       doc.setFontSize(8);
       doc.setFont("helvetica", "normal");
@@ -198,7 +198,7 @@ const LoanDetails = () => {
 
       const formatNum = (num) => new Intl.NumberFormat('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(num || 0);
 
-      const tableColumn = ["No", "Due Date", "Transaction Date", "Principal (Rp)", "Interest (Rp)", "Total (Rp)", "Status"];
+      const tableColumn = ["No", "Jatuh Tempo", "Tgl Transaksi", "Pokok (Rp)", "Bunga (Rp)", "Total (Rp)", "Status"];
       const tableRows = [];
 
       schedule.forEach(s => {
@@ -263,8 +263,8 @@ const LoanDetails = () => {
       doc.setFontSize(7);
       doc.setFont("helvetica", "italic");
       doc.setTextColor(150, 150, 150);
-      doc.text("This document is generated automatically by the Koperasi Sanoh Cooperative System.", pageWidth / 2, finalY + 5, { align: 'center' });
-      doc.text("This is a valid document and does not require a signature.", pageWidth / 2, finalY + 9, { align: 'center' });
+      doc.text("Dokumen ini dihasilkan secara otomatis oleh Sistem Koperasi Sanoh Sinergi Bersama.", pageWidth / 2, finalY + 5, { align: 'center' });
+      doc.text("Dokumen ini sah dan tidak memerlukan tanda tangan.", pageWidth / 2, finalY + 9, { align: 'center' });
 
       doc.save(`Loan_Summary_${id}.pdf`);
     } catch (err) {
@@ -553,7 +553,7 @@ const LoanDetails = () => {
           <div className="ld-actions">
             {/* <button className="ld-btn-outline"><FileText size={16} /> View Loan Agreement</button> */}
             <button className="ld-btn-outline" onClick={handleDownloadSummary} disabled={isDownloading}>
-              {isDownloading ? <><Loader size={16} className="spinner" /> Memuat...</> : <><Printer size={16} /> Print Ringkasan</>}
+              {isDownloading ? <><Loader size={16} className="spinner" /> Memuat...</> : <><Printer size={16} /> Cetak Ringkasan</>}
             </button>
           </div>
         )}

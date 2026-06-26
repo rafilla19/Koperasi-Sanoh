@@ -27,12 +27,12 @@ const ForgotPassword = () => {
 
       const data = await response.json();
       if (response.ok) {
-        setMessage(data.message || 'If the email exists, a reset link has been sent.');
+        setMessage(data.message || 'Jika email terdaftar, tautan reset telah dikirim.');
       } else {
-        setError(data.error || 'Failed to send reset link.');
+        setError(data.error || 'Gagal mengirim tautan reset.');
       }
     } catch (err) {
-      setError('Connection error. Please try again later.');
+      setError('Kesalahan koneksi. Silakan coba lagi nanti.');
     } finally {
       setIsLoading(false);
     }
@@ -41,9 +41,9 @@ const ForgotPassword = () => {
   return (
     <div className="auth-page">
       <div className="auth-header">
-        <h1 className="auth-title">Forgot Password?</h1>
+        <h1 className="auth-title">Lupa Password?</h1>
         <p className="auth-subtitle">
-          Enter your email address and we will send you a link to reset your password.
+          Masukkan alamat email Anda dan kami akan mengirimkan tautan untuk mengatur ulang password.
         </p>
       </div>
 
@@ -58,7 +58,7 @@ const ForgotPassword = () => {
               type="email" 
               id="email" 
               className="form-input" 
-              placeholder="Enter your registered email" 
+              placeholder="Masukkan email terdaftar Anda" 
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -67,18 +67,18 @@ const ForgotPassword = () => {
         </div>
 
         <button type="submit" className="btn-primary" style={{ marginTop: '0.5rem' }} disabled={isLoading}>
-          {isLoading ? 'Sending...' : 'Send Reset Link'}
+          {isLoading ? 'Mengirim...' : 'Kirim Tautan Reset'}
         </button>
       </form>
 
       <div style={{ textAlign: 'center', marginTop: '2rem' }}>
         <Link to="/login" className="auth-link" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-          <ArrowLeft size={16} /> Back to Login
+          <ArrowLeft size={16} /> Kembali ke Login
         </Link>
       </div>
 
       <div className="auth-footer" style={{ marginTop: '3rem' }}>
-        Not a member yet? <Link to="/register">Register Account</Link>
+        Belum menjadi anggota? <Link to="/register">Daftar Akun</Link>
       </div>
     </div>
   );

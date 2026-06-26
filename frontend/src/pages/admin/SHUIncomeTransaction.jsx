@@ -866,7 +866,7 @@ const SHUIncomeTransaction = () => {
                   cursor: actionSaving || (!actionFile && actionNotes === (actionModal.notes || '')) ? 'not-allowed' : 'pointer',
                 }}
               >
-                {actionSaving ? 'Menyimpan...' : 'Submit'}
+                {actionSaving ? 'Menyimpan...' : 'Simpan'}
               </button>
             </div>
           </div>

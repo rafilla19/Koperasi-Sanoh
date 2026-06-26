@@ -318,7 +318,7 @@ const RegisterStep2 = () => {
               cursor: isFormValid() ? 'pointer' : 'not-allowed'
             }}
           >
-            Continue →
+            Lanjutkan →
           </button>
         </div>
       </form>

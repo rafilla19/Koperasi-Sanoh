@@ -78,11 +78,11 @@ export default function VoluntarySavings() {
           <h3>{loading ? '...' : activeMemberCount}</h3>
         </div>
         <div className="card-box">
-          <p>Transaction Pending</p>
+          <p>Transaksi Tertunda</p>
           <h3 className="red">{loading ? '...' : pendingCount}</h3>
         </div>
         <div className="card-box">
-          <p>Total Amount Pending</p>
+          <p>Total Jumlah Tertunda</p>
           <h3>{loading ? '...' : formatRupiah(pendingTotal)}</h3>
         </div>
       </div>
@@ -101,8 +101,8 @@ export default function VoluntarySavings() {
           onChange={(e) => setDateFilter(e.target.value)}
         />
 
-        <button className="btn-clear" onClick={handleClear}>Clear</button>
-        <button className="btn-search" onClick={handleSearch}>Search</button>
+        <button className="btn-clear" onClick={handleClear}>Hapus</button>
+        <button className="btn-search" onClick={handleSearch}>Cari</button>
 
         <button
           disabled={loading || transactions.length === 0}

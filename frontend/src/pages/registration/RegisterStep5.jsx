@@ -144,21 +144,21 @@ const RegisterStep5 = () => {
         </div>
 
         <div className="password-criteria grid-2-col mt-2 mb-2">
-          <div className={`criteria-item ${hasMinLength ? 'met' : ''}`}><span className="check-box">{hasMinLength ? '☑' : '☐'}</span> At least 8 characters</div>
-          <div className={`criteria-item ${hasUpperCase ? 'met' : ''}`}><span className="check-box">{hasUpperCase ? '☑' : '☐'}</span> One uppercase letter</div>
-          <div className={`criteria-item ${hasNumber ? 'met' : ''}`}><span className="check-box">{hasNumber ? '☑' : '☐'}</span> One number</div>
-          <div className={`criteria-item ${hasSymbol ? 'met' : ''}`}><span className="check-box">{hasSymbol ? '☑' : '☐'}</span> One special symbol</div>
+          <div className={`criteria-item ${hasMinLength ? 'met' : ''}`}><span className="check-box">{hasMinLength ? '☑' : '☐'}</span> Minimal 8 karakter</div>
+          <div className={`criteria-item ${hasUpperCase ? 'met' : ''}`}><span className="check-box">{hasUpperCase ? '☑' : '☐'}</span> Satu huruf kapital</div>
+          <div className={`criteria-item ${hasNumber ? 'met' : ''}`}><span className="check-box">{hasNumber ? '☑' : '☐'}</span> Satu angka</div>
+          <div className={`criteria-item ${hasSymbol ? 'met' : ''}`}><span className="check-box">{hasSymbol ? '☑' : '☐'}</span> Satu simbol khusus</div>
         </div>
 
         <div className="reg-form-group relative mt-2">
-          <label className="reg-form-label">Confirm Password</label>
+          <label className="reg-form-label">Konfirmasi Password</label>
           <div className="password-input-wrapper relative flex items-center">
              <span className="input-icon-left" style={{ position: 'absolute', left: '12px', zIndex: 1, top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center' }}><ShieldCheck size={18} /></span>
              <input
                type={showConfirm ? "text" : "password"}
                className="reg-form-input pl-10 pr-10"
                style={{ paddingLeft: '35px', paddingRight: '40px', width: '100%', boxSizing: 'border-box' }}
-               placeholder="Re-enter your password"
+               placeholder="Masukkan ulang password Anda"
                value={confirmPassword}
                onChange={(e) => setConfirmPassword(e.target.value)}
                required
@@ -171,7 +171,7 @@ const RegisterStep5 = () => {
 
         <div className="reg-actions full-width mt-6">
           <button type="submit" className="btn-primary-full" disabled={submitting || !allCriteriaMet}>
-            {submitting ? <><Loader size={16} className="spinner" /> Processing...</> : 'Finalize Account Setup →'}
+            {submitting ? <><Loader size={16} className="spinner" /> Memproses...</> : 'Selesaikan Pembuatan Akun →'}
           </button>
         </div>
       </form>

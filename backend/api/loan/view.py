@@ -82,19 +82,19 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
             amount = instance.amount_requested
             duration_text = f"{instance.duration_months} months"
             
-            subject = f"New Loan Request - {member_name}"
+            subject = f"Pengajuan Pinjaman Baru - {member_name}"
             html_message = _build_email_html(
-                'New Loan Request',
-                f'{member_name} has submitted a new loan request for your review.',
+                'Pengajuan Pinjaman Baru',
+                f'{member_name} telah mengajukan pinjaman baru untuk ditinjau.',
                 details=[
-                    ('Member Name', member_name),
-                    ('Amount', f'Rp {amount:,.0f}'),
-                    ('Purpose', instance.purpose or '-'),
-                    ('Duration', duration_text),
-                    ('Status', 'Submitted'),
+                    ('Nama Anggota', member_name),
+                    ('Jumlah', f'Rp {amount:,.0f}'),
+                    ('Tujuan', instance.purpose or '-'),
+                    ('Jangka Waktu', duration_text),
+                    ('Status', 'Diajukan'),
                 ],
-                highlight=('Action Needed', 'Please review this loan application'),
-                footer_note='This is an automated notification from Koperasi Sanoh System.',
+                highlight=('Tindakan Diperlukan', 'Silakan tinjau pengajuan pinjaman ini'),
+                footer_note='Ini adalah notifikasi otomatis dari Sistem Koperasi Sanoh.',
             )
             
             # Notify Admin using System Email but set Reply-To to Member
@@ -120,17 +120,17 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
             try:
                 member_email = instance.member.user.email if hasattr(instance.member, 'user') else None
                 if member_email:
-                    member_subject = "Loan Application Received - Koperasi Sanoh"
+                    member_subject = "Pengajuan Pinjaman Diterima - Koperasi Sanoh"
                     member_html = _build_email_html(
-                        'Loan Application Received',
-                        f'Dear {instance.member.full_name}, your loan application has been submitted and is currently being reviewed by our administration team.',
+                        'Pengajuan Pinjaman Diterima',
+                        f'Halo {instance.member.full_name}, pengajuan pinjaman Anda telah dikirim dan sedang ditinjau oleh tim administrasi kami.',
                         details=[
-                            ('Amount', f'Rp {amount:,.0f}'),
-                            ('Duration', duration_text),
-                            ('Status', 'Pending Review'),
+                            ('Jumlah', f'Rp {amount:,.0f}'),
+                            ('Jangka Waktu', duration_text),
+                            ('Status', 'Menunggu Tinjauan'),
                         ],
-                        highlight=('Submission Status', 'Application received successfully'),
-                        footer_note='We will notify you via email once a decision has been made.',
+                        highlight=('Status Pengajuan', 'Pengajuan berhasil diterima'),
+                        footer_note='Kami akan mengirim notifikasi melalui email setelah keputusan dibuat.',
                     )
                     send_mail(
                         member_subject,
@@ -336,19 +336,19 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
                     member_email = application.member.user.email
                     member_name = application.member.full_name
                     
-                    subject = "Loan Application Approved"
+                    subject = "Pengajuan Pinjaman Disetujui"
                     html_message = _build_email_html(
-                        'Loan Approved!',
-                        f'Dear {member_name}, your loan application has been approved.',
+                        'Pinjaman Disetujui!',
+                        f'Halo {member_name}, pengajuan pinjaman Anda telah disetujui.',
                         details=[
-                            ('Amount', f'Rp {updated_amount:,.0f}'),
-                            ('Duration', f'{repayment_term} months'),
-                            ('Interest Rate', f'{interest_rate_percent}% / month'),
-                            ('Total Repayment', f'Rp {total_amount:,.0f}'),
-                            ('Proof of Transfer', 'Attached in this email' if saved_path else 'Not attached'),
+                            ('Jumlah', f'Rp {updated_amount:,.0f}'),
+                            ('Jangka Waktu', f'{repayment_term} bulan'),
+                            ('Suku Bunga', f'{interest_rate_percent}% / bulan'),
+                            ('Total Pembayaran', f'Rp {total_amount:,.0f}'),
+                            ('Bukti Transfer', 'Terlampir dalam email ini' if saved_path else 'Tidak terlampir'),
                         ],
-                        highlight=('Status', 'Approved'),
-                        footer_note='You can now view your repayment schedule in the dashboard.'
+                        highlight=('Status', 'Disetujui'),
+                        footer_note='Anda sekarang dapat melihat jadwal pembayaran di dashboard.'
                     )
                     msg = EmailMultiAlternatives(
                         subject,
@@ -414,15 +414,15 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
                 member_email = application.member.user.email
                 member_name = application.member.full_name
 
-                subject = "Loan Application Update"
+                subject = "Pembaruan Pengajuan Pinjaman"
                 html_message = _build_email_html(
-                    'Loan Application Update',
-                    f'Dear {member_name}, we have reviewed your loan application and it has been rejected.',
+                    'Pembaruan Pengajuan Pinjaman',
+                    f'Halo {member_name}, kami telah meninjau pengajuan pinjaman Anda dan pengajuan tersebut ditolak.',
                     details=[
-                        ('Reason', reject_reason),
+                        ('Alasan', reject_reason),
                     ],
-                    highlight=('Status', 'Rejected'),
-                    footer_note='If you have any questions, please contact the cooperative administration.'
+                    highlight=('Status', 'Ditolak'),
+                    footer_note='Jika Anda memiliki pertanyaan, silakan hubungi pengurus koperasi.'
                 )
                 msg = EmailMultiAlternatives(
                     subject,
@@ -640,20 +640,20 @@ def sync_member_pending_payments(member_id):
 
                                 admin_email = getattr(settings, 'ADMIN_EMAIL', None) or getattr(settings, 'DEFAULT_FROM_EMAIL', None)
                                 if admin_email:
-                                    subject = f'Principal Saving Paid - {member_name or member_id}'
+                                    subject = f'Simpanan Pokok Dibayar - {member_name or member_id}'
                                     try:
                                         from api.utils.email import send_styled_email
                                         send_styled_email(
                                             subject=subject,
                                             recipient=admin_email,
-                                            intro=f"Hello Admin, {member_name or 'A member'} has completed the principal saving payment.",
+                                            intro=f"Halo Admin, {member_name or 'Seorang anggota'} telah menyelesaikan pembayaran simpanan pokok.",
                                             details=[
-                                                ('Member', member_name or '-'),
+                                                ('Anggota', member_name or '-'),
                                                 ('Email', member_email or '-'),
-                                                ('Principal Amount', f"Rp {principal_amount:,.0f}"),
-                                                ('Admin Fee', f"Rp {admin_fee:,.0f}"),
+                                                ('Jumlah Simpanan Pokok', f"Rp {principal_amount:,.0f}"),
+                                                ('Biaya Admin', f"Rp {admin_fee:,.0f}"),
                                             ],
-                                            footer_note="Registration status has been updated to active."
+                                            footer_note="Status registrasi telah diperbarui menjadi aktif."
                                         )
                                     except Exception:
                                         pass

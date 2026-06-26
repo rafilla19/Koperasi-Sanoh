@@ -8,20 +8,20 @@ const RegistrationLayout = () => {
   
   // Basic logic to determine step based on path
   let currentStep = 1;
-  let stepName = "Identity New Member";
+  let stepName = "Identitas Anggota Baru";
   
   if (location.pathname.includes('step-2')) {
     currentStep = 2;
-    stepName = "Additional Information";
+    stepName = "Informasi Tambahan";
   } else if (location.pathname.includes('step-3')) {
     currentStep = 3;
-    stepName = "Terms & Conditions";
+    stepName = "Syarat & Ketentuan";
   } else if (location.pathname.includes('step-4')) {
     currentStep = 4;
-    stepName = "Email Verification";
+    stepName = "Verifikasi Email";
   } else if (location.pathname.includes('step-5')) {
     currentStep = 5;
-    stepName = "Create Password";
+    stepName = "Buat Password";
   }
 
   const isPostRegistration = location.pathname.includes('under-review') || 

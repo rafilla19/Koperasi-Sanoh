@@ -58,11 +58,11 @@ const RegisterStep3 = () => {
         sessionStorage.setItem('verifyEmail', step2Data.email);
         navigate('/register/step-4');
       } else {
-        alert(data.error || 'Failed to send verification email');
+        alert(data.error || 'Gagal mengirim email verifikasi');
       }
     } catch (error) {
       console.error('Verification error:', error);
-      alert('Connection error. Please check your internet.');
+      alert('Kesalahan koneksi. Silakan periksa koneksi internet Anda.');
     } finally {
       setIsSending(false);
     }
@@ -171,7 +171,7 @@ const RegisterStep3 = () => {
               </>
             ) : (
               <>
-                Agree & Continue
+                Setuju & Lanjutkan
                 <ChevronRight size={18} />
               </>
             )}

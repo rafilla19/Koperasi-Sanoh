@@ -72,19 +72,19 @@ const AdminActiveLoanDetail = () => {
     return d.toLocaleDateString('id-ID', { month: 'long', day: 'numeric', year: 'numeric' }) + ' ' + d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
   };
 
-  if (loading) return <div className="aald-page"><h2>Loading...</h2></div>;
-  if (!loanData) return <div className="aald-page"><h2>Loan not found</h2></div>;
+  if (loading) return <div className="aald-page"><h2>Memuat...</h2></div>;
+  if (!loanData) return <div className="aald-page"><h2>Pinjaman tidak ditemukan</h2></div>;
 
   return (
     <div className="aald-page">
       <div className="aald-header">
         <div className="aald-header-left">
           <button className="aald-back-btn" onClick={() => navigate(-1)}>
-            <ArrowLeft size={16} /> Back
+            <ArrowLeft size={16} /> Kembali
           </button>
-          <h1>Active Loan Management</h1>
+          <h1>Manajemen Pinjaman Aktif</h1>
           <div className="aald-status-pill active">
-            <span className="dot"></span> Active
+            <span className="dot"></span> Aktif
           </div>
         </div>
         {/* <div className="aald-header-actions">
@@ -96,8 +96,8 @@ const AdminActiveLoanDetail = () => {
         {/* Member Profile Info */}
         <div className="aald-card profile-card">
           <div className="card-header">
-            <h3>Borrower Information</h3>
-            <button className="view-profile" onClick={() => navigate(`/dashboard/admin/members/${loanData.member_id}`)}>View Full Profile</button>
+            <h3>Informasi Peminjam</h3>
+            <button className="view-profile" onClick={() => navigate(`/dashboard/admin/members/${loanData.member_id}`)}>Lihat Profil Lengkap</button>
           </div>
           <div className="profile-content">
             <div className="profile-avatar">
@@ -107,10 +107,10 @@ const AdminActiveLoanDetail = () => {
               <div className="name">{loanData.full_name}</div>
               <div className="meta">
                 <span>NIK: {loanData.nik_employee}</span>
-                <span>Dept: {loanData.department_name}</span>
+                <span>Dept.: {loanData.department_name}</span>
               </div>
               <div className="meta">
-                <span>Member ID: {loanData.member_id}</span>
+                <span>ID Anggota: {loanData.member_id}</span>
               </div>
             </div>
           </div>
@@ -120,19 +120,19 @@ const AdminActiveLoanDetail = () => {
         <div className="aald-card stats-card">
           <div className="stats-grid">
             <div className="stat-item">
-              <div className="label">Total Principal</div>
+              <div className="label">Total Pokok</div>
               <div className="value">{formatRupiah(loanData.principal_amount)}</div>
             </div>
             <div className="stat-item">
-              <div className="label">Remaining Balance</div>
+              <div className="label">Sisa Saldo</div>
               <div className="value highlight">{formatRupiah(loanData.remaining_balance)}</div>
             </div>
             <div className="stat-item">
-              <div className="label">Total Paid</div>
+              <div className="label">Total Terbayar</div>
               <div className="value">{formatRupiah(loanData.amount - loanData.remaining_balance)}</div>
             </div>
             <div className="stat-item">
-              <div className="label">Interest Rate</div>
+              <div className="label">Suku Bunga</div>
               <div className="value">{(loanData.interest_amount / loanData.principal_amount * 100).toFixed(1)}% Total</div>
             </div>
           </div>
@@ -144,32 +144,32 @@ const AdminActiveLoanDetail = () => {
           {/* Progress Section */}
           <div className="aald-card progress-card">
             <div className="prog-header">
-              <h3>Repayment Progress</h3>
+              <h3>Progres Pembayaran</h3>
               <span className="pct">{Math.round(loanData.progress_percent)}%</span>
             </div>
             <div className="prog-bar">
               <div className="prog-fill" style={{ width: `${loanData.progress_percent}%` }}></div>
             </div>
             <div className="prog-footer">
-              <span>{loanData.paid_installment} of {loanData.total_installment} Installments Paid</span>
-              <span>Next Due: {formatDate(loanData.current_month_due_date)}</span>
+              <span>{loanData.paid_installment} dari {loanData.total_installment} Angsuran Terbayar</span>
+              <span>Jatuh Tempo: {formatDate(loanData.current_month_due_date)}</span>
             </div>
           </div>
 
           {/* Schedule Table */}
           <div className="aald-card table-card">
-            <h3>Repayment Schedule</h3>
+            <h3>Jadwal Pembayaran</h3>
             <div className="table-wrap">
               <table className="aald-table">
                 <thead>
                   <tr>
                     <th>NO.</th>
-                    <th>DUE DATE</th>
-                    <th>PRINCIPAL</th>
-                    <th>INTEREST</th>
+                    <th>JATUH TEMPO</th>
+                    <th>POKOK</th>
+                    <th>BUNGA</th>
                     <th>TOTAL</th>
                     <th>STATUS</th>
-                    <th>PROOF</th>
+                    <th>BUKTI</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -206,29 +206,29 @@ const AdminActiveLoanDetail = () => {
         <div className="aald-sidebar">
           {/* Loan Info */}
           <div className="aald-card info-card">
-            <h3>Loan Details</h3>
+            <h3>Detail Pinjaman</h3>
             <div className="info-list">
               <div className="info-item">
-                <label>Loan Type</label>
+                <label>Jenis Pinjaman</label>
                 <span>{loanData.type_name}</span>
               </div>
               <div className="info-item">
-                <label>Purpose</label>
+                <label>Tujuan</label>
                 <span>{loanData.purpose}</span>
               </div>
               <div className="info-item">
-                <label>Start Date</label>
+                <label>Tanggal Mulai</label>
                 <span>{formatDate(loanData.start_date)}</span>
               </div>
               <div className="info-item">
-                <label>Maturity Date</label>
+                <label>Tanggal Jatuh Tempo</label>
                 <span>{formatDate(loanData.due_date)}</span>
               </div>
               <div className="info-item" style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #eee' }}>
-                <label>Documents</label>
+                <label>Dokumen</label>
                 {loanData.salary_statement_file ? (
                   <button
-                    onClick={() => setPreviewDoc({ url: resolveFileUrl(loanData.salary_statement_file), name: 'Salary Statement' })}
+                    onClick={() => setPreviewDoc({ url: resolveFileUrl(loanData.salary_statement_file), name: 'Slip Gaji' })}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -244,10 +244,10 @@ const AdminActiveLoanDetail = () => {
                     }}
                   >
                     <Eye size={16} />
-                    Salary Statement
+                    Slip Gaji
                   </button>
                 ) : (
-                  <span style={{ color: '#94a3b8', fontSize: '13px', fontStyle: 'italic' }}>No statement uploaded</span>
+                  <span style={{ color: '#94a3b8', fontSize: '13px', fontStyle: 'italic' }}>Belum ada slip gaji</span>
                 )}
               </div>
             </div>

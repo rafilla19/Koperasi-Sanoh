@@ -618,15 +618,15 @@ const AdminLoansDashboard = () => {
               <option value="Close">Tutup</option>
             </select>
           </div>
-          <button className="ald-print-btn" onClick={handleExportExcel} title="Export to Excel (CSV)" disabled={isExporting}>
+          <button className="ald-print-btn" onClick={handleExportExcel} title="Ekspor ke Excel (CSV)" disabled={isExporting}>
             {isExporting ? <Loader size={16} className="spinner" /> : <Printer size={16} />}
           </button>
           <div style={{ display: 'flex', gap: '8px' }}>
-            <button className="ald-send-reminder-btn" onClick={handleSendReminder} title="Kirim reminder overdue & upcoming ke member terpilih" disabled={isSendingReminder}>
-              {isSendingReminder ? <><Loader size={14} className="spinner" /> Sending...</> : 'Send Reminder'}
+            <button className="ald-send-reminder-btn" onClick={handleSendReminder} title="Kirim pengingat ke anggota terpilih" disabled={isSendingReminder}>
+              {isSendingReminder ? <><Loader size={14} className="spinner" /> Mengirim...</> : 'Kirim Pengingat'}
             </button>
-            <button className="ald-send-reminder-btn" onClick={handleAutoSendAll} title="Kirim otomatis ke semua member yang overdue" style={{ background: '#f59e0b' }} disabled={isAutoSending}>
-              {isAutoSending ? <><Loader size={14} className="spinner" /> Sending...</> : 'Auto-Send Overdue'}
+            <button className="ald-send-reminder-btn" onClick={handleAutoSendAll} title="Kirim otomatis ke semua anggota yang menunggak" style={{ background: '#f59e0b' }} disabled={isAutoSending}>
+              {isAutoSending ? <><Loader size={14} className="spinner" /> Mengirim...</> : 'Kirim Otomatis'}
             </button>
           </div>
         </div>

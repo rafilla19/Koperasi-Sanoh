@@ -16,7 +16,7 @@ const ViewDetailsButton = ({ loanId, navigate }) => {
         navigate(`/dashboard/loans/${loanId}`);
       }}
     >
-      {loading ? <><Loader size={14} className="spinner" /> Loading...</> : 'View Details'}
+      {loading ? <><Loader size={14} className="spinner" /> Memuat...</> : 'Lihat Detail'}
     </button>
   );
 };

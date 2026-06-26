@@ -420,37 +420,37 @@ const DashboardHome = () => {
       doc.setFont("helvetica", "normal");
       doc.setTextColor(60, 60, 60);
       const reportDate = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
-      doc.text(`Report Date : ${reportDate}`, pageWidth - margin, currentY, { align: 'right' });
+      doc.text(`Tanggal Laporan : ${reportDate}`, pageWidth - margin, currentY, { align: 'right' });
       currentY += 10;
 
       // === TITLE ===
       doc.setFontSize(16);
       doc.setFont("helvetica", "bold");
       doc.setTextColor(0, 0, 0);
-      doc.text("Financial Report", pageWidth / 2, currentY, { align: 'center' });
+      doc.text("Laporan Keuangan", pageWidth / 2, currentY, { align: 'center' });
       currentY += 12;
 
       // === MEMBER NAME ===
       doc.setFontSize(10);
       doc.setFont("helvetica", "normal");
       doc.setTextColor(0, 0, 0);
-      doc.text(`Member Name : ${summary?.full_name || user?.full_name || '-'}`, margin, currentY);
+      doc.text(`Nama Anggota : ${summary?.full_name || user?.full_name || '-'}`, margin, currentY);
       currentY += 10;
 
       // === SAVING OVERVIEW ===
       doc.setFontSize(11);
       doc.setFont("helvetica", "bold");
       doc.setTextColor(0, 0, 0);
-      doc.text("SAVING OVERVIEW", margin, currentY);
+      doc.text("RINGKASAN SIMPANAN", margin, currentY);
       currentY += 4;
 
       autoTable(doc, {
         startY: currentY,
-        head: [['Account Type', 'Current Balance']],
+        head: [['Jenis Simpanan', 'Saldo Saat Ini']],
         body: [
-          ['Principal', formatRupiah(summary?.principle_balance)],
-          ['Mandatory', formatRupiah(summary?.mandatory_balance)],
-          ['Voluntary', formatRupiah(summary?.voluntary_balance)],
+          ['Pokok', formatRupiah(summary?.principle_balance)],
+          ['Wajib', formatRupiah(summary?.mandatory_balance)],
+          ['Sukarela', formatRupiah(summary?.voluntary_balance)],
           ['Total', formatRupiah(summary?.total_saving_balance)],
         ],
         theme: 'grid',
@@ -490,7 +490,7 @@ const DashboardHome = () => {
         currentY += 6;
 
         const shuSummaryRows = [
-          ['Total SHU Accumulated', formatRupiah(shuAnalytics.total_shu)],
+          ['Total SHU Terakumulasi', formatRupiah(shuAnalytics.total_shu)],
           [`SHU Tahun ${shuAnalytics.current_year?.year || new Date().getFullYear()}`, formatRupiah(shuAnalytics.current_year?.total_shu || 0)],
         ];
 
@@ -600,16 +600,16 @@ const DashboardHome = () => {
 
       doc.setFillColor(59, 130, 246);
       doc.rect(margin, currentY - 4, 3, 8, 'F');
-      doc.text("LOAN STATUS", margin + 6, currentY + 1);
+      doc.text("STATUS PINJAMAN", margin + 6, currentY + 1);
       currentY += 6;
 
       autoTable(doc, {
         startY: currentY,
         body: [
-          ['Loan Active', formatRupiah(summary?.principal_amount)],
-          ['Remaining Balance', formatRupiah(summary?.total_loan_remaining)],
-          ['Installment Paid', `${summary?.paid_installments || 0} / ${summary?.total_installments || 0}`],
-          ['Total Outstanding', formatRupiah(summary?.grand_total_outstanding)],
+          ['Pinjaman Aktif', formatRupiah(summary?.principal_amount)],
+          ['Sisa Saldo', formatRupiah(summary?.total_loan_remaining)],
+          ['Angsuran Terbayar', `${summary?.paid_installments || 0} / ${summary?.total_installments || 0}`],
+          ['Total Tertunggak', formatRupiah(summary?.grand_total_outstanding)],
         ],
         theme: 'grid',
         bodyStyles: {
@@ -632,7 +632,7 @@ const DashboardHome = () => {
       doc.setFontSize(11);
       doc.setFont("helvetica", "bold");
       doc.setTextColor(0, 0, 0);
-      doc.text("RECENT TRANSACTION", margin, currentY);
+      doc.text("TRANSAKSI TERBARU", margin, currentY);
       currentY += 4;
 
       const txRows = transactions.slice(0, 15).map(tx => [
@@ -648,7 +648,7 @@ const DashboardHome = () => {
 
       autoTable(doc, {
         startY: currentY,
-        head: [['Date', 'Type', 'Amount', 'Status']],
+        head: [['Tanggal', 'Jenis', 'Jumlah', 'Status']],
         body: txRows,
         theme: 'grid',
         headStyles: {
@@ -683,7 +683,7 @@ const DashboardHome = () => {
       doc.save(`Financial_Report_${summary?.full_name || 'Member'}_${new Date().toISOString().split('T')[0]}.pdf`);
     } catch (error) {
       console.error('Failed to generate PDF report:', error);
-      alert('Failed to generate report.');
+      alert('Gagal membuat laporan.');
     } finally {
       setIsGeneratingReport(false);
     }
@@ -856,7 +856,7 @@ const DashboardHome = () => {
           <p>Berikut ringkasan keuangan Anda untuk periode ini.</p>
         </div>
         <button className="dh-report-btn hidden-mobile" onClick={handleDownloadReport} disabled={isGeneratingReport}>
-          {isGeneratingReport ? <><Loader size={14} className="spinner" /> Generating...</> : <><Download size={14} /> Report Overview</>}
+          {isGeneratingReport ? <><Loader size={14} className="spinner" /> Membuat Laporan...</> : <><Download size={14} /> Unduh Laporan</>}
         </button>
       </div>
 

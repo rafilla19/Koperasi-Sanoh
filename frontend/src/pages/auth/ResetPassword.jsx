@@ -29,7 +29,7 @@ const ResetPassword = () => {
     setMessage('');
 
     if (!token) {
-      setError('Reset token is missing or invalid.');
+      setError('Token reset tidak ditemukan atau tidak valid.');
       return;
     }
 
@@ -55,13 +55,13 @@ const ResetPassword = () => {
 
       const data = await response.json();
       if (response.ok) {
-        setMessage(data.message || 'Password updated successfully. Redirecting to login...');
+        setMessage(data.message || 'Password berhasil diperbarui. Mengalihkan ke halaman login...');
         setTimeout(() => navigate('/login'), 1800);
       } else {
-        setError(data.error || 'Failed to reset password.');
+        setError(data.error || 'Gagal mengatur ulang password.');
       }
     } catch (err) {
-      setError('Connection error. Please try again later.');
+      setError('Kesalahan koneksi. Silakan coba lagi nanti.');
     } finally {
       setIsLoading(false);
     }
@@ -70,9 +70,9 @@ const ResetPassword = () => {
   return (
     <div className="auth-page">
       <div className="auth-header">
-        <h1 className="auth-title">Reset Password</h1>
+        <h1 className="auth-title">Atur Ulang Password</h1>
         <p className="auth-subtitle">
-          Create a new password for your account.
+          Buat password baru untuk akun Anda.
         </p>
       </div>
 
@@ -81,7 +81,7 @@ const ResetPassword = () => {
         {error && <div className="auth-error-msg" style={{ color: '#b91c1c', background: '#fef2f2', border: '1px solid #fecaca', marginBottom: '1rem', textAlign: 'center', fontSize: '0.9rem', padding: '0.75rem 1rem', borderRadius: '0.75rem' }}>{error}</div>}
 
         <div className="form-group">
-          <label className="form-label" htmlFor="password">New Password</label>
+          <label className="form-label" htmlFor="password">Password Baru</label>
           <div className="input-container">
             <Lock className="input-icon" size={20} />
             <input
@@ -90,7 +90,7 @@ const ResetPassword = () => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="form-input"
-              placeholder="Enter new password"
+              placeholder="Masukkan password baru"
               required
             />
             <button
@@ -106,21 +106,21 @@ const ResetPassword = () => {
 
         <div className="pw-criteria-grid">
           <div className={`pw-criteria-item ${hasMinLength ? 'pw-met' : ''}`}>
-            <span className="pw-check">{hasMinLength ? '☑' : '☐'}</span> At least 8 characters
+            <span className="pw-check">{hasMinLength ? '☑' : '☐'}</span> Minimal 8 karakter
           </div>
           <div className={`pw-criteria-item ${hasUpperCase ? 'pw-met' : ''}`}>
-            <span className="pw-check">{hasUpperCase ? '☑' : '☐'}</span> One uppercase letter
+            <span className="pw-check">{hasUpperCase ? '☑' : '☐'}</span> Satu huruf kapital
           </div>
           <div className={`pw-criteria-item ${hasNumber ? 'pw-met' : ''}`}>
-            <span className="pw-check">{hasNumber ? '☑' : '☐'}</span> One number
+            <span className="pw-check">{hasNumber ? '☑' : '☐'}</span> Satu angka
           </div>
           <div className={`pw-criteria-item ${hasSymbol ? 'pw-met' : ''}`}>
-            <span className="pw-check">{hasSymbol ? '☑' : '☐'}</span> One special symbol
+            <span className="pw-check">{hasSymbol ? '☑' : '☐'}</span> Satu simbol khusus
           </div>
         </div>
 
         <div className="form-group">
-          <label className="form-label" htmlFor="confirmPassword">Confirm Password</label>
+          <label className="form-label" htmlFor="confirmPassword">Konfirmasi Password</label>
           <div className="input-container">
             <Lock className="input-icon" size={20} />
             <input
@@ -129,7 +129,7 @@ const ResetPassword = () => {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               className="form-input"
-              placeholder="Repeat new password"
+              placeholder="Ulangi password baru"
               required
             />
             <button
@@ -144,18 +144,18 @@ const ResetPassword = () => {
         </div>
 
         <button type="submit" className="btn-primary" style={{ marginTop: '0.5rem' }} disabled={isLoading || !allCriteriaMet}>
-          {isLoading ? <><Loader size={16} className="spinner" /> Updating...</> : <><CheckCircle2 size={18} /> Update Password</>}
+          {isLoading ? <><Loader size={16} className="spinner" /> Memperbarui...</> : <><CheckCircle2 size={18} /> Perbarui Password</>}
         </button>
       </form>
 
       <div style={{ textAlign: 'center', marginTop: '2rem' }}>
         <Link to="/login" className="auth-link" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-          <ArrowLeft size={16} /> Back to Login
+          <ArrowLeft size={16} /> Kembali ke Login
         </Link>
       </div>
 
       <div className="auth-footer" style={{ marginTop: '3rem' }}>
-        Not a member yet? <Link to="/register">Register Account</Link>
+        Belum menjadi anggota? <Link to="/register">Daftar Akun</Link>
       </div>
     </div>
   );

@@ -249,7 +249,7 @@ const AdminLoanDetail = () => {
                 <p><strong>NIK:</strong> {detail.nik_employee}</p>
                 <p><strong>Departemen:</strong> {detail.department_name}</p>
                 <p><strong>Email:</strong> {detail.email}</p>
-                <p><strong>Phone:</strong> {detail.phone_number}</p>
+                <p><strong>Telepon:</strong> {detail.phone_number}</p>
               </div>
             </div>
             <button className="aldet-m-btn-outline" onClick={handleProfileClick}>

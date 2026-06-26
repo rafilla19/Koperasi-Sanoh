@@ -299,7 +299,7 @@ const MySaving = () => {
                 </label>
               </div>
 
-              <button className="btn btn-navy" style={{width: '100%', padding: '14px', borderRadius: 10}}>Submit</button>
+              <button className="btn btn-navy" style={{width: '100%', padding: '14px', borderRadius: 10}}>Kirim</button>
             </div>
           )}
 

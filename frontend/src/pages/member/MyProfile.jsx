@@ -132,13 +132,13 @@ const MyProfile = () => {
       if (response.ok) {
         setProfile(prev => ({ ...prev, hasPendingClosure: true }));
         setShowClosureModal(false);
-        alert("Account closure request submitted successfully! Your account status is now pending review.");
+        alert("Permintaan penutupan akun berhasil dikirim! Status akun Anda sedang menunggu tinjauan.");
       } else {
-        alert(resData.error || "Failed to submit closure request.");
+        alert(resData.error || "Gagal mengirim permintaan penutupan.");
       }
     } catch (error) {
       console.error('Error processing closure:', error);
-      alert('Network error. Failed to submit request.');
+      alert('Kesalahan jaringan. Gagal mengirim permintaan.');
     } finally {
       setIsProcessingClosure(false);
     }
@@ -146,7 +146,7 @@ const MyProfile = () => {
 
   const handleVerifyAccount = async () => {
     if (!profile.destBank || !profile.accNo) {
-      alert("Please select a bank and enter the account number first.");
+      alert("Silakan pilih bank dan masukkan nomor rekening terlebih dahulu.");
       return;
     }
     
@@ -168,14 +168,14 @@ const MyProfile = () => {
       if (response.ok && resData.status === 'valid') {
         setProfile(prev => ({ ...prev, accName: resData.account_name }));
         setIsValidated(true);
-        alert(`Account successfully verified!\nOwner Name: ${resData.account_name}`);
+        alert(`Rekening berhasil diverifikasi!\nNama Pemilik: ${resData.account_name}`);
       } else {
-        alert(resData.error || "Failed to verify bank account. Please check the account number and try again.");
+        alert(resData.error || "Gagal memverifikasi rekening bank. Silakan periksa nomor rekening dan coba lagi.");
         setIsValidated(false);
       }
     } catch (error) {
       console.error('Error validating bank account:', error);
-      alert('Network error. Failed to verify bank account.');
+      alert('Kesalahan jaringan. Gagal memverifikasi rekening bank.');
       setIsValidated(false);
     } finally {
       setIsValidating(false);
@@ -185,7 +185,7 @@ const MyProfile = () => {
   const handleSaveProfile = async () => {
     if (isSaving) return;
     if (!profile.phone || !profile.email || !profile.destBank || !profile.accName || !profile.accNo) {
-      alert("All profile fields must be filled before saving.");
+      alert("Semua kolom profil harus diisi sebelum menyimpan.");
       return;
     }
 
@@ -212,14 +212,14 @@ const MyProfile = () => {
       if (response.ok) {
         await fetchProfile();
         setIsEditing(false);
-        alert("Profile saved successfully!");
+        alert("Profil berhasil disimpan!");
       } else {
         const errorData = await response.json();
-        alert(`Failed to save profile: ${errorData.error || 'Unknown error'}`);
+        alert(`Gagal menyimpan profil: ${errorData.error || 'Kesalahan tidak diketahui'}`);
       }
     } catch (error) {
       console.error('Error saving profile:', error);
-      alert('Error connecting to the server. Please try again.');
+      alert('Gagal terhubung ke server. Silakan coba lagi.');
     } finally {
       setIsSaving(false);
     }
@@ -228,7 +228,7 @@ const MyProfile = () => {
   const handleSubmitVoluntaryRequest = async () => {
     if (isRequestingVoluntary) return;
     if (!profile.volRequestSaving) {
-      alert("Please enter a voluntary saving amount first.");
+      alert("Silakan masukkan jumlah simpanan sukarela terlebih dahulu.");
       return;
     }
 
@@ -249,13 +249,13 @@ const MyProfile = () => {
       const resData = await response.json();
       if (response.ok) {
         await fetchProfile();
-        alert("Voluntary saving change request submitted successfully and is pending admin approval!");
+        alert("Permintaan perubahan simpanan sukarela berhasil dikirim dan menunggu persetujuan admin!");
       } else {
-        alert(resData.error || "Failed to submit request.");
+        alert(resData.error || "Gagal mengirim permintaan.");
       }
     } catch (error) {
       console.error('Error submitting voluntary request:', error);
-      alert('Network error. Failed to submit request.');
+      alert('Kesalahan jaringan. Gagal mengirim permintaan.');
     } finally {
       setIsRequestingVoluntary(false);
     }
@@ -265,8 +265,8 @@ const MyProfile = () => {
     <div className="prof-page">
       {/* HEADER */}
       <div className="prof-header">
-        <h1>My Profile</h1>
-        <p>Manage your personal information and account settings</p>
+        <h1>Profil Saya</h1>
+        <p>Kelola informasi pribadi dan pengaturan akun Anda</p>
       </div>
 
       {/* BANNER */}
@@ -276,18 +276,18 @@ const MyProfile = () => {
             <div className="pb-logo-icon">🤝</div>
             <span>KOPERASI SANOH SINERGI BERSAMA</span>
           </div>
-          <div className="pb-badge">ACTIVE</div>
+          <div className="pb-badge">AKTIF</div>
         </div>
         <div className="pb-content">
-          <span className="pb-label">MEMBER NAME</span>
+          <span className="pb-label">NAMA ANGGOTA</span>
           <h2 className="pb-name">{profile.fullName || '...'}</h2>
           <div className="pb-meta-grid">
             <div>
-              <span className="pb-label">NIK Employee</span>
+              <span className="pb-label">NIK Karyawan</span>
               <div className="pb-meta-val">{profile.nik || '...'}</div>
             </div>
             <div>
-              <span className="pb-label">MEMBER SINCE</span>
+              <span className="pb-label">ANGGOTA SEJAK</span>
               <div className="pb-meta-val">
                 {profile.joinDate ? new Date(profile.joinDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '...'}
               </div>
@@ -302,11 +302,11 @@ const MyProfile = () => {
           {/* Column 1 */}
           <div className="pf-col">
             <div className="inp-group">
-              <label className="inp-label">FULL NAME</label>
+              <label className="inp-label">NAMA LENGKAP</label>
               <input type="text" className="prof-input" value={profile.fullName} disabled />
             </div>
             <div className="inp-group">
-              <label className="inp-label">PHONE NUMBER</label>
+              <label className="inp-label">NOMOR TELEPON</label>
               <input type="text" className="prof-input" value={profile.phone} onChange={e => setProfile({...profile, phone: e.target.value})} disabled={!isEditing} placeholder="+62 812 xxxx xxxx" />
             </div>
             <div className="inp-group">
@@ -314,7 +314,7 @@ const MyProfile = () => {
               <input type="email" className="prof-input" value={profile.email} onChange={e => setProfile({...profile, email: e.target.value})} disabled={!isEditing} placeholder="riska@email.com" />
             </div>
             <div className="inp-group">
-              <label className="inp-label">ADDRESS</label>
+              <label className="inp-label">ALAMAT</label>
               <textarea className="prof-input" disabled value={profile.address || '...'} />
             </div>
           </div>
@@ -322,32 +322,32 @@ const MyProfile = () => {
           {/* Column 2 */}
           <div className="pf-col">
             <div className="inp-group">
-              <label className="inp-label">DESTINATION BANK ACCOUNT</label>
+              <label className="inp-label">REKENING BANK TUJUAN</label>
               <select 
                 className="prof-input" 
                 value={profile.destBank} 
                 onChange={e => { setProfile({...profile, destBank: e.target.value, accName: ''}); setIsValidated(false); }} 
                 disabled={!isEditing}
               >
-                <option value="">Select Bank</option>
+                <option value="">Pilih Bank</option>
                 {banks.map(b => (
                   <option key={b.id} value={b.bank_name}>{b.bank_name}</option>
                 ))}
               </select>
             </div>
             <div className="inp-group">
-              <label className="inp-label">ACCOUNT NAME</label>
-              <input 
-                type="text" 
-                className="prof-input" 
-                placeholder="Account holder name" 
+              <label className="inp-label">NAMA PEMILIK REKENING</label>
+              <input
+                type="text"
+                className="prof-input"
+                placeholder="Nama pemilik rekening" 
                 value={profile.accName} 
                 onChange={e => setProfile({...profile, accName: e.target.value})}
                 disabled={!isEditing} 
               />
             </div>
             <div className="inp-group">
-              <label className="inp-label">ACCOUNT NUMBER</label>
+              <label className="inp-label">NOMOR REKENING</label>
               <div style={{ display: 'flex', gap: '8px' }}>
                 <input 
                   type="text" 
@@ -388,7 +388,7 @@ const MyProfile = () => {
             <div className="inp-group" style={{ marginTop: '24px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <label className="inp-label">
-                  VOLUNTARY SAVING OBLIGATION
+                  KEWAJIBAN SIMPANAN SUKARELA
                 </label>
                 {pendingVoluntaryAmount > 0 && (
                   <span style={{
@@ -399,12 +399,12 @@ const MyProfile = () => {
                     borderRadius: '4px',
                     fontWeight: '600'
                   }}>
-                    Pending Approval: Rp {parseFloat(pendingVoluntaryAmount).toLocaleString('id-ID')}
+                    Menunggu Persetujuan: Rp {parseFloat(pendingVoluntaryAmount).toLocaleString('id-ID')}
                   </span>
                 )}
               </div>
-              <span className="inp-desc">Current active amount: Rp {parseFloat(profile.volSaving || 0).toLocaleString('id-ID')}</span>
-              <span className="inp-desc">Editable only on the 22nd–23rd of each month (book closing period)</span>
+              <span className="inp-desc">Jumlah aktif saat ini: Rp {parseFloat(profile.volSaving || 0).toLocaleString('id-ID')}</span>
+              <span className="inp-desc">Hanya dapat diubah pada tanggal 22–23 setiap bulan (periode tutup buku)</span>
               
               {isEditing && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', marginTop: '4px' }}>
@@ -472,14 +472,14 @@ const MyProfile = () => {
                       gap: '6px'
                     }}
                   >
-                    {isRequestingVoluntary ? <><Loader size={12} className="spinner" /> Submitting...</> : 'Request Change'}
+                    {isRequestingVoluntary ? <><Loader size={12} className="spinner" /> Mengirim...</> : 'Ajukan Perubahan'}
                   </button>
                 )}
               </div>
 
               {isEditing && !(new Date().getDate() === 22 || new Date().getDate() === 23 || demoBypass) && (
                 <span style={{ fontSize: '11px', color: '#ef4444', marginTop: '4px', display: 'block' }}>
-                  Modification locked. Access period is restricted to dates 22-23 of each month.
+                  Perubahan dikunci. Periode akses dibatasi pada tanggal 22-23 setiap bulan.
                 </span>
               )}
             </div>
@@ -488,10 +488,10 @@ const MyProfile = () => {
 
         <div className="pf-actions">
           <button className="btn btn-outline" onClick={() => setIsEditing(!isEditing)}>
-            <Edit2 size={16} /> {isEditing ? 'Cancel Edit' : 'Edit Profile'}
+            <Edit2 size={16} /> {isEditing ? 'Batal Edit' : 'Edit Profil'}
           </button>
           <button className="btn btn-navy" onClick={handleSaveProfile} disabled={!isEditing || isSaving} style={{ opacity: (isEditing && !isSaving) ? 1 : 0.6, cursor: (isEditing && !isSaving) ? 'pointer' : 'not-allowed' }}>
-            {isSaving ? <><Loader size={14} className="spinner" /> Saving...</> : 'Save'}
+            {isSaving ? <><Loader size={14} className="spinner" /> Menyimpan...</> : 'Simpan'}
           </button>
         </div>
       </div>
@@ -504,18 +504,18 @@ const MyProfile = () => {
               <ShieldAlert size={22} />
             </div>
             <div className="closure-text">
-              <h3>Account Closure</h3>
-              <p>Closing your account will permanently terminate all access and cooperative services. All member rights and outstanding obligations will be settled in accordance with applicable cooperative regulations.</p>
+              <h3>Penutupan Akun</h3>
+              <p>Menutup akun akan menghentikan semua akses dan layanan koperasi secara permanen. Semua hak anggota dan kewajiban yang belum diselesaikan akan diproses sesuai dengan peraturan koperasi yang berlaku.</p>
             </div>
           </div>
           {profile.hasPendingClosure ? (
             <button className="btn-close-account" style={{ background: '#e11d48', color: 'white', borderColor: '#e11d48', cursor: 'pointer' }} onClick={() => setShowClosureModal(true)}>
-              Closure Pending Approval
+              Menunggu Persetujuan
               <ChevronRight size={16} />
             </button>
           ) : (
             <button className="btn-close-account" onClick={() => setShowClosureModal(true)}>
-              Close Account
+              Tutup Akun
               <ChevronRight size={16} />
             </button>
           )}
@@ -530,8 +530,8 @@ const MyProfile = () => {
             {/* Modal Header */}
             <div className="cm-header">
               <div>
-                <h2>Account Closure Summary</h2>
-                <p>Review eligibility, settlement, and closure impact before submitting.</p>
+                <h2>Ringkasan Penutupan Akun</h2>
+                <p>Tinjau kelayakan, penyelesaian, dan dampak penutupan sebelum mengirim.</p>
               </div>
               <button className="cm-close" onClick={() => setShowClosureModal(false)} aria-label="Close modal">
                 <X size={16} />
@@ -545,18 +545,18 @@ const MyProfile = () => {
 
                 {/* Eligibility */}
                 <div className="cm-card">
-                  <h4>Eligibility Check</h4>
+                  <h4>Pengecekan Kelayakan</h4>
                   <div className="eligibility-list">
                     <div className="eli-item">
                       <div className={`eli-icon ${profile.loanBal > 0 ? 'red' : 'green'}`}>
                         {profile.loanBal > 0 ? <XCircle size={14} strokeWidth={3} /> : <CheckCircle size={14} strokeWidth={3} />}
                       </div>
                       <div className="eli-text">
-                        <strong>Loan Balance</strong>
+                        <strong>Saldo Pinjaman</strong>
                         {profile.loanBal > 0 ? (
-                          <span>Outstanding Rp {parseFloat(profile.loanBal).toLocaleString('id-ID')}.</span>
+                          <span>Tertunggak Rp {parseFloat(profile.loanBal).toLocaleString('id-ID')}.</span>
                         ) : (
-                          <span>Clear.</span>
+                          <span>Lunas.</span>
                         )}
                       </div>
                     </div>
@@ -565,11 +565,11 @@ const MyProfile = () => {
                         {hasOutstandingMonthlySavingDue ? <XCircle size={14} strokeWidth={3} /> : <CheckCircle size={14} strokeWidth={3} />}
                       </div>
                       <div className="eli-text">
-                        <strong>Monthly Saving Bill</strong>
+                        <strong>Tagihan Simpanan Bulanan</strong>
                         {hasOutstandingMonthlySavingDue ? (
-                          <span>Outstanding Rp {parseFloat(profile.outstandingMonthlySavingDue).toLocaleString('id-ID')}.</span>
+                          <span>Tertunggak Rp {parseFloat(profile.outstandingMonthlySavingDue).toLocaleString('id-ID')}.</span>
                         ) : (
-                          <span>Clear.</span>
+                          <span>Lunas.</span>
                         )}
                       </div>
                     </div>
@@ -578,26 +578,26 @@ const MyProfile = () => {
                         {profile.loanBal > 0 ? <XCircle size={14} strokeWidth={3} /> : <CheckCircle size={14} strokeWidth={3} />}
                       </div>
                       <div className="eli-text">
-                        <strong>Loan Installments</strong>
+                        <strong>Angsuran Pinjaman</strong>
                         {profile.loanBal > 0 ? (
                           <span>
                             <span
                               className="eli-link"
                               onClick={() => { setShowClosureModal(false); navigate('/dashboard/loans'); }}
                             >
-                              Review active installments
+                              Tinjau angsuran aktif
                             </span>
                           </span>
                         ) : (
-                          <span>Clear.</span>
+                          <span>Lunas.</span>
                         )}
                       </div>
                     </div>
                     <div className="eli-item">
                       <div className="eli-icon green"><CheckCircle size={14} strokeWidth={3} /></div>
                       <div className="eli-text">
-                        <strong>Pending Transactions</strong>
-                        <span>None.</span>
+                        <strong>Transaksi Tertunda</strong>
+                        <span>Tidak ada.</span>
                       </div>
                     </div>
                   </div>
@@ -605,23 +605,23 @@ const MyProfile = () => {
 
                 {/* Balance Summary */}
                 <div className="cm-card">
-                  <h4>Balance Summary</h4>
+                  <h4>Ringkasan Saldo</h4>
                   <div className="bal-list">
                     <div className="bal-item">
-                      <span>Mandatory Saving</span>
+                      <span>Simpanan Wajib</span>
                       <strong>Rp {parseFloat(profile.mandatoryBal).toLocaleString('id-ID')}</strong>
                     </div>
                     <div className="bal-item">
-                      <span>Voluntary Saving</span>
+                      <span>Simpanan Sukarela</span>
                       <strong>Rp {parseFloat(profile.voluntaryBal).toLocaleString('id-ID')}</strong>
                     </div>
                     <div className="bal-item">
-                      <span>Accrued SHU</span>
+                      <span>SHU Terakumulasi</span>
                       <strong>Rp {parseFloat(profile.accruedShu).toLocaleString('id-ID')}</strong>
                     </div>
                   </div>
                   <div className="bal-total">
-                    <span>Total Amount To Be Received</span>
+                    <span>Total Yang Akan Diterima</span>
                     <span>Rp {netBalance.toLocaleString('id-ID')}</span>
                   </div>
                 </div>
@@ -630,12 +630,12 @@ const MyProfile = () => {
               {/* Reason Textarea */}
               <div className="inp-group">
                 <label className="inp-label" style={{ color: '#94A3B8' }}>
-                  Reason for Closure
+                  Alasan Penutupan
                 </label>
                 <textarea
                   className="prof-input"
                   style={{ minHeight: '120px' }}
-                  placeholder="Briefly explain your reason..."
+                  placeholder="Jelaskan alasan Anda secara singkat..."
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
                 />
@@ -644,14 +644,14 @@ const MyProfile = () => {
               {(netBalance < 0 || hasOutstandingMonthlySavingDue) && (
                 <div style={{ display: 'flex', gap: '10px', alignItems: 'center', backgroundColor: '#fff1f2', border: '1px solid #fecaca', padding: '12px 16px', borderRadius: '8px', color: '#be123c', fontSize: '13px', fontWeight: '500', marginBottom: '15px' }}>
                   <AlertTriangle size={18} strokeWidth={2.5} style={{ flexShrink: 0 }} />
-                  <span>Closure is blocked until loans and monthly saving bills are settled.</span>
+                  <span>Penutupan diblokir sampai pinjaman dan tagihan simpanan bulanan dilunasi.</span>
                 </div>
               )}
 
               {profile.hasPendingClosure && (
                 <div style={{ display: 'flex', gap: '10px', alignItems: 'center', backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', padding: '12px 16px', borderRadius: '8px', color: '#1d4ed8', fontSize: '13px', fontWeight: '500', marginBottom: '15px' }}>
                   <ShieldAlert size={18} strokeWidth={2.5} style={{ flexShrink: 0 }} />
-                  <span>Your account closure request has been submitted and is currently pending review by the administrator.</span>
+                  <span>Permintaan penutupan akun Anda telah dikirim dan sedang menunggu tinjauan dari administrator.</span>
                 </div>
               )}
 
@@ -666,7 +666,7 @@ const MyProfile = () => {
                     disabled={profile.hasPendingClosure}
                   />
                   <label htmlFor="agree-closure">
-                    I have read the consequence and agree to the account closure terms and conditions.
+                    Saya telah membaca konsekuensi dan menyetujui syarat dan ketentuan penutupan akun.
                   </label>
                 </div>
                 <div className="cm-agree-right">
@@ -675,7 +675,7 @@ const MyProfile = () => {
                     style={{ background: '#F8FAFC', border: '1px solid #0A1628', color: '#0A1628' }}
                     onClick={() => setShowClosureModal(false)}
                   >
-                    Cancel
+                    Batal
                   </button>
                   {profile.hasPendingClosure ? (
                     <button
@@ -683,7 +683,7 @@ const MyProfile = () => {
                       style={{ background: '#cbd5e1', color: '#64748b', cursor: 'not-allowed', fontWeight: 'bold' }}
                       disabled
                     >
-                      Pending Approval
+                      Menunggu Persetujuan
                     </button>
                   ) : (
                     <button
@@ -692,7 +692,7 @@ const MyProfile = () => {
                       disabled={!canProcess || isProcessingClosure}
                       onClick={handleProcessClosure}
                     >
-                      {isProcessingClosure ? <><Loader size={14} className="spinner" /> Processing...</> : 'Process'}
+                      {isProcessingClosure ? <><Loader size={14} className="spinner" /> Memproses...</> : 'Proses'}
                     </button>
                   )}
                 </div>

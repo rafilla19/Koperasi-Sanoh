@@ -88,7 +88,7 @@ const RegisterStep1 = () => {
         </div>
 
         <div className="reg-actions">
-          <button type="submit" className="btn-primary-sm">Confirm & Continue →</button>
+          <button type="submit" className="btn-primary-sm">Konfirmasi & Lanjutkan →</button>
         </div>
       </form>
     </div>

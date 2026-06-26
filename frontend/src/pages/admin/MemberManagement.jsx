@@ -121,7 +121,7 @@ const MemberManagement = () => {
   return (
     <div className="mm-container">
       <div className="mm-header-section">
-        <h1 className="mm-header-title">Member Management</h1>
+        <h1 className="mm-header-title">Manajemen Anggota</h1>
         <p className="mm-header-subtitle">Kelola dan pantau informasi keanggotaan koperasi secara real-time</p>
       </div>
 
@@ -152,7 +152,7 @@ const MemberManagement = () => {
             <Building2 size={20} />
           </div>
           <div className="mm-stat-info">
-            <span className="mm-stat-label">Departments</span>
+            <span className="mm-stat-label">Departemen</span>
             <strong className="mm-stat-value">{totalDepartments}</strong>
           </div>
         </div>
@@ -175,7 +175,7 @@ const MemberManagement = () => {
             <Search size={18} />
             <input
               type="text"
-              placeholder="Search by name, email, or NIK..."
+              placeholder="Cari berdasarkan nama, email, atau NIK..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -186,7 +186,7 @@ const MemberManagement = () => {
               value={departmentFilter}
               onChange={(e) => setDepartmentFilter(e.target.value)}
             >
-              <option value="all">All Departments</option>
+              <option value="all">Semua Departemen</option>
               {departments.map(dept => (
                 <option key={dept.id} value={dept.department_name}>
                   {dept.department_name}
@@ -199,9 +199,9 @@ const MemberManagement = () => {
               onChange={(e) => setActiveFilter(e.target.value)}
               style={{ marginLeft: 12 }}
             >
-              <option value="all">All Status</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
+              <option value="all">Semua Status</option>
+              <option value="active">Aktif</option>
+              <option value="inactive">Tidak Aktif</option>
             </select>
           </div>
         </div>
@@ -256,7 +256,7 @@ const MemberManagement = () => {
                       <td className="total font-semibold">{formatRupiah(member.total_saving)}</td>
                       <td style={{ textAlign: 'center' }}>
                         <span className={`mm-status-badge ${member.user_is_active ? 'mm-status-active' : 'mm-status-inactive'}`}>
-                          {member.user_is_active ? 'Active' : 'Inactive'}
+                          {member.user_is_active ? 'Aktif' : 'Tidak Aktif'}
                         </span>
                       </td>
                       <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>

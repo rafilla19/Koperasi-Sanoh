@@ -37,7 +37,7 @@ const Login = () => {
         setError(data.error || 'Login failed. Please check your credentials.');
       }
     } catch (err) {
-      setError('Connection error. Please try again later.');
+      setError('Kesalahan koneksi. Silakan coba lagi nanti.');
     } finally {
       setIsLoading(false);
     }
@@ -46,8 +46,8 @@ const Login = () => {
   return (
     <div className="auth-page">
       <div className="auth-header">
-        <h1 className="auth-title">Welcome Back!</h1>
-        <p className="auth-subtitle">Securely manage your saving and loans dashboard</p>
+        <h1 className="auth-title">Selamat Datang!</h1>
+        <p className="auth-subtitle">Kelola simpanan dan pinjaman Anda dengan aman</p>
       </div>
 
       <form className="auth-form" onSubmit={handleLogin}>
@@ -93,18 +93,18 @@ const Login = () => {
         </div>
 
         <div className="auth-actions">
-          <Link to="/forgot-password" className="auth-link">Forget Password?</Link>
+          <Link to="/forgot-password" className="auth-link">Lupa Password?</Link>
         </div>
 
         <button type="submit" className="btn-primary" disabled={isLoading}>
-          {isLoading ? 'Signing in...' : 'Sign in'}
+          {isLoading ? 'Masuk...' : 'Masuk'}
         </button>
       </form>
 
-      <div className="auth-divider">OR</div>
+      <div className="auth-divider">ATAU</div>
 
       <div className="auth-footer">
-        Not a member yet? <Link to="/register">Register Account</Link>
+        Belum menjadi anggota? <Link to="/register">Daftar Akun</Link>
       </div>
     </div>
   );

@@ -84,12 +84,12 @@ const UnderReview = () => {
       <div className="text-center mb-6">
         <FileSearch size={64} className="mx-auto text-gray-400 mb-4" />
         <h2 className="reg-page-title mb-2">
-          {isApproved ? "Registration Approved" : "Registration Under Review"}
+          {isApproved ? "Pendaftaran Disetujui" : "Pendaftaran Sedang Ditinjau"}
         </h2>
         <p className="reg-page-subtitle">
-          {isApproved 
-            ? "Your identity has been verified. Please proceed to payment."
-            : "Thank you for joining. We have received your documents.\nOur team is currently verifying your identity."}
+          {isApproved
+            ? "Identitas Anda telah diverifikasi. Silakan lanjutkan ke pembayaran."
+            : "Terima kasih telah mendaftar. Kami telah menerima dokumen Anda.\nTim kami sedang memverifikasi identitas Anda."}
         </p>
       </div>
 
@@ -97,8 +97,8 @@ const UnderReview = () => {
         <div className="timeline-item completed">
           <div className="timeline-icon"><CheckCircle2 size={20} color="var(--color-secondary)" /></div>
           <div className="timeline-content">
-            <h4 className="timeline-title">Sign Up Completed</h4>
-            <p className="timeline-desc">Account details submitted successfully</p>
+            <h4 className="timeline-title">Pendaftaran Selesai</h4>
+            <p className="timeline-desc">Detail akun berhasil dikirim</p>
           </div>
         </div>
         
@@ -107,8 +107,8 @@ const UnderReview = () => {
             {isApproved ? <CheckCircle2 size={20} color="var(--color-secondary)" /> : <ClipboardCheck size={20} color="var(--color-primary)" />}
           </div>
           <div className="timeline-content">
-            <h4 className={`timeline-title ${!isApproved ? 'title-active' : ''}`}>Verification in Progress</h4>
-            <p className="timeline-desc">Checking documents and identity</p>
+            <h4 className={`timeline-title ${!isApproved ? 'title-active' : ''}`}>Verifikasi Sedang Berlangsung</h4>
+            <p className="timeline-desc">Memeriksa dokumen dan identitas</p>
           </div>
         </div>
 
@@ -117,21 +117,21 @@ const UnderReview = () => {
             <UserPlus size={20} color={isApproved ? "var(--color-primary)" : "var(--color-text-muted)"} />
           </div>
           <div className="timeline-content">
-            <h4 className={`timeline-title ${isApproved ? 'title-active' : 'title-pending'}`}>Activate Membership</h4>
-            <p className="timeline-desc">Payment of the mandatory principal savings is<br/>{!loading && formatCurrency(principalAmount)} required to activate your account.</p>
+            <h4 className={`timeline-title ${isApproved ? 'title-active' : 'title-pending'}`}>Aktivasi Keanggotaan</h4>
+            <p className="timeline-desc">Pembayaran simpanan pokok wajib sebesar<br/>{!loading && formatCurrency(principalAmount)} diperlukan untuk mengaktifkan akun Anda.</p>
           </div>
         </div>
       </div>
 
       <div className="info-box-footer mt-6 flex justify-between bg-gray-50 p-4 rounded-md">
         <div>
-          <span className="info-label text-xs font-bold text-gray-500 block mb-1 uppercase tracking-wider">Estimate Wait Time</span>
+          <span className="info-label text-xs font-bold text-gray-500 block mb-1 uppercase tracking-wider">Estimasi Waktu Tunggu</span>
           <div className="flex items-center text-sm text-gray-600">
-            <Clock size={16} className="mr-2" /> 1-2 Business Days
+            <Clock size={16} className="mr-2" /> 1-2 Hari Kerja
           </div>
         </div>
         <div>
-          <span className="info-label text-xs font-bold text-gray-500 block mb-1 uppercase tracking-wider">Support Contact</span>
+          <span className="info-label text-xs font-bold text-gray-500 block mb-1 uppercase tracking-wider">Kontak Dukungan</span>
           <div className="flex items-center text-sm text-gray-600">
             <Mail size={16} className="mr-2" /> {supportContact}
           </div>
@@ -144,7 +144,7 @@ const UnderReview = () => {
            onClick={handleContinuePayment}
            disabled={!isApproved}
         >
-          Continue for payment &rarr;
+          Lanjutkan ke pembayaran &rarr;
         </button>
       </div>
     </div>

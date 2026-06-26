@@ -565,7 +565,7 @@ const SHUOutcomeTransaction = () => {
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 32 }}>
                   <button type="submit" disabled={submitting}
                     style={{ padding: '10px 48px', borderRadius: 10, background: '#3b82f6', color: '#fff', border: 'none', fontSize: 13, fontWeight: 600, cursor: submitting ? 'not-allowed' : 'pointer' }}>
-                    {submitting ? 'Menyimpan...' : 'Submit'}
+                    {submitting ? 'Menyimpan...' : 'Simpan'}
                   </button>
                 </div>
               </form>
@@ -771,7 +771,7 @@ const SHUOutcomeTransaction = () => {
                     onClick={() => setShowUploadModal(false)}
                     style={{ padding: '10px 16px', borderRadius: 10, border: '1px solid #d1d5db', background: '#f3f4f6', fontSize: 13, cursor: 'pointer' }}
                   >
-                    {uploadResult?.inserted > 0 ? 'Tutup' : 'Cancel'}
+                    {uploadResult?.inserted > 0 ? 'Tutup' : 'Batal'}
                   </button>
                   <button
                     onClick={handleUploadSubmit}

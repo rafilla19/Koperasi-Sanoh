@@ -52,14 +52,14 @@ const GlobalPopup = () => {
     window.appAlert = (options) => enqueue({
       ...normalizeOptions(options),
       mode: 'alert',
-      confirmText: normalizeOptions(options).confirmText || 'OK',
+      confirmText: normalizeOptions(options).confirmText || 'Oke',
     });
 
     window.appConfirm = (options) => enqueue({
-      ...normalizeOptions(options, 'Confirmation'),
+      ...normalizeOptions(options, 'Konfirmasi'),
       mode: 'confirm',
-      confirmText: normalizeOptions(options, 'Confirmation').confirmText || 'Continue',
-      cancelText: normalizeOptions(options, 'Confirmation').cancelText || 'Cancel',
+      confirmText: normalizeOptions(options, 'Konfirmasi').confirmText || 'Lanjutkan',
+      cancelText: normalizeOptions(options, 'Konfirmasi').cancelText || 'Batal',
     });
 
     window.alert = (message) => {
@@ -102,7 +102,7 @@ const GlobalPopup = () => {
               <span>{popup.variant === 'danger' ? '!' : popup.variant === 'success' ? '✓' : 'i'}</span>
             </div>
             <div className="gp-modal-body">
-              <p className="gp-modal-kicker">{isConfirm ? 'Action confirmation' : 'System message'}</p>
+              <p className="gp-modal-kicker">{isConfirm ? 'Konfirmasi tindakan' : 'Pesan sistem'}</p>
               <h3 id="gp-title" className="gp-modal-title">{popup.title}</h3>
               <p className="gp-modal-message">{popup.message}</p>
             </div>

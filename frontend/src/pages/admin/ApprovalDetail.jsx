@@ -104,7 +104,7 @@ const ApprovalDetail = () => {
     if (!file) return;
     const MAX_SIZE = 10 * 1024 * 1024; // 10MB
     if (file.size > MAX_SIZE) {
-      alert('File size exceeds 10MB limit');
+      alert('Ukuran file melebihi batas 10MB');
       return;
     }
     setSelectedFile(file);
@@ -171,11 +171,11 @@ const ApprovalDetail = () => {
         setTimeout(() => navigate(-1), 2000);
       } else {
         const error = await res.json();
-        alert(`Approval failed: ${error.error || error.message}`);
+        alert(`Persetujuan gagal: ${error.error || error.message}`);
       }
     } catch (error) {
       console.error('Approval failed:', error);
-      alert('Approval error');
+      alert('Kesalahan saat menyetujui');
     } finally {
       setActionLoading(false);
     }
@@ -222,11 +222,11 @@ const ApprovalDetail = () => {
         setTimeout(() => navigate(-1), 2000);
       } else {
         const error = await res.json();
-        alert(`Rejection failed: ${error.error || error.message}`);
+        alert(`Penolakan gagal: ${error.error || error.message}`);
       }
     } catch (error) {
       console.error('Rejection failed:', error);
-      alert('Rejection error');
+      alert('Kesalahan saat menolak');
     } finally {
       setActionLoading(false);
     }
@@ -236,7 +236,7 @@ const ApprovalDetail = () => {
     return (
       <div style={{ textAlign: 'center', padding: '3rem' }}>
         <Loader2 className="spinner" size={32} />
-        <p>Loading approval details...</p>
+        <p>Memuat detail persetujuan...</p>
       </div>
     );
   }
@@ -244,8 +244,8 @@ const ApprovalDetail = () => {
   if (!data) {
     return (
       <div style={{ textAlign: 'center', padding: '3rem' }}>
-        <p>No data found</p>
-        <button onClick={() => navigate(-1)} style={{ marginTop: '1rem' }}>Back</button>
+        <p>Data tidak ditemukan</p>
+        <button onClick={() => navigate(-1)} style={{ marginTop: '1rem' }}>Kembali</button>
       </div>
     );
   }
@@ -265,12 +265,12 @@ const ApprovalDetail = () => {
           {approvalStatus === 'approved' ? (
             <>
               <CheckCircle size={20} />
-              <span>Approval berhasil diproses!</span>
+              <span>Persetujuan berhasil diproses!</span>
             </>
           ) : (
             <>
               <XCircle size={20} />
-              <span>Rejection berhasil diproses!</span>
+              <span>Penolakan berhasil diproses!</span>
             </>
           )}
         </div>
@@ -590,13 +590,13 @@ const ApprovalDetail = () => {
                         {uploadLoading ? (
                           <>
                             <Loader2 size={24} className="spinner" />
-                            <p>Uploading...</p>
+                            <p>Mengunggah...</p>
                           </>
                         ) : (
                           <>
                             <Upload size={24} />
-                            <p>Upload Transfer File</p>
-                            <span>Click to upload or drag file (Max 10MB)</span>
+                            <p>Unggah Bukti Transfer</p>
+                            <span>Klik untuk mengunggah (Maks 10MB)</span>
                           </>
                         )}
                       </div>
