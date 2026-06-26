@@ -378,16 +378,16 @@ def my_paid_bills(request):
 
 @api_view(['GET'])
 def my_payment_schedule(request):
-    """PAID (status_id=39) and UPCOMING (status_id=32) bills for current member."""
+    """PAID (status_id=39) and UNPAID (status_id=38) bills for current member."""
     member_id = _get_member_id_from_request(request)
     bills = MonthlySavingBills.objects.filter(
         member_id=member_id,
         deleted_at__isnull=True,
-        status_id__in=[39, 32],
+        status_id__in=[39, 38],
     ).select_related('saving_type', 'status').order_by('-bill_period_start')
 
     paid = [b for b in bills if b.status_id == 39]
-    upcoming = [b for b in bills if b.status_id == 32]
+    upcoming = [b for b in bills if b.status_id == 38]
 
     return Response({
         'paid': MonthlySavingBillSerializer(paid, many=True).data,

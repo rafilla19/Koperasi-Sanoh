@@ -3079,7 +3079,7 @@ class LoanViewSet(viewsets.ModelViewSet):
                 ) as unpaid_bills_list
             FROM monthly_saving_bills 
             WHERE member_id = %s AND status_id = 38 
-              AND saving_type_id IN (1, 2) -- Mandatory and Voluntary only
+              AND saving_type_id IN (1, 2, 3)
               AND date_trunc('month', due_date) <= date_trunc('month', current_date)
         )
         SELECT 
