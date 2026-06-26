@@ -67,7 +67,7 @@ export default function WithdrawalRequests() {
   return (
     <div className="card">
       <div className="savings-header">
-        <h2>Withdrawal Requests</h2>
+        <h2>Permintaan Penarikan</h2>
         <SavingsTabNav />
       </div>
 
@@ -76,10 +76,10 @@ export default function WithdrawalRequests() {
         {/* Status filter */}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {[
-            { key: 'pending',  label: 'Pending' },
-            { key: 'approved', label: 'Approved' },
-            { key: 'paid',     label: 'Paid' },
-            { key: 'rejected', label: 'Rejected' },
+            { key: 'pending',  label: 'Menunggu' },
+            { key: 'approved', label: 'Disetujui' },
+            { key: 'paid',     label: 'Dibayar' },
+            { key: 'rejected', label: 'Ditolak' },
           ].map(({ key, label }) => (
             <button
               key={key}
@@ -122,7 +122,7 @@ export default function WithdrawalRequests() {
               onClick={() => { setFilterDate(''); setCurrentPage(1); }}
               style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#f9fafb', fontSize: 12, cursor: 'pointer', color: '#6b7280' }}
             >
-              Reset
+              Atur Ulang
             </button>
           )}
         </div>
@@ -153,7 +153,7 @@ export default function WithdrawalRequests() {
               display: 'flex', alignItems: 'center', gap: 6,
             }}
           >
-            ⬇ Export Excel
+            ⬇ Ekspor Excel
           </button>
         </div>
       </div>
@@ -179,17 +179,17 @@ export default function WithdrawalRequests() {
               </div>
 
               <div className="info">
-                <p className="label">Notes</p>
+                <p className="label">Catatan</p>
                 <p>{item.notes || 'Tidak ada catatan'}</p>
               </div>
 
               <div className="info">
-                <p className="label">Request Date</p>
+                <p className="label">Tanggal Pengajuan</p>
                 <p>{item.request_date ? new Date(item.request_date).toLocaleDateString('id-ID') : '-'}</p>
               </div>
 
               <div className="info">
-                <p className="label">Amount Requested</p>
+                <p className="label">Jumlah Diajukan</p>
                 <p style={{ fontWeight: 600 }}>{formatRupiah(item.amount)}</p>
               </div>
 
@@ -209,7 +209,7 @@ export default function WithdrawalRequests() {
                 className="btn-detail"
                 onClick={() => navigate(`/dashboard/admin/withdrawal-requests/${item.id}`)}
               >
-                Details →
+                Detail →
               </button>
             </div>
           ))
@@ -233,11 +233,11 @@ export default function WithdrawalRequests() {
             <span>{(currentPage - 1) * rowsPerPage + 1}–{Math.min(currentPage * rowsPerPage, filteredWithdrawals.length)} dari {filteredWithdrawals.length}</span>
             <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
               style={{ padding: '4px 12px', borderRadius: 6, border: '1px solid #d1d5db', background: currentPage === 1 ? '#f3f4f6' : '#fff', cursor: currentPage === 1 ? 'not-allowed' : 'pointer' }}>
-              Prev
+              Sblm
             </button>
             <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
               style={{ padding: '4px 12px', borderRadius: 6, border: '1px solid #d1d5db', background: currentPage === totalPages ? '#f3f4f6' : '#fff', cursor: currentPage === totalPages ? 'not-allowed' : 'pointer' }}>
-              Next
+              Slnjt
             </button>
           </div>
         </div>

@@ -331,7 +331,7 @@ const MySaving = () => {
   const handleWithdrawSubmit = async () => {
     setWdError('');
     if (!wdAmount || Number(wdAmount) < 50000) {
-      setWdError('Minimum withdrawal is Rp 50.000');
+      setWdError('Minimum penarikan adalah Rp 50.000');
       return;
     }
     if (!wdAgreed) {
@@ -417,7 +417,7 @@ const MySaving = () => {
     labels: chartLabelsState,
     datasets: [
       {
-        label: 'Voluntary Deposits',
+        label: 'Setoran Sukarela',
         data: chartDeposits,
         borderColor: '#2D6BE4',
         backgroundColor: 'rgba(45, 107, 228, 0.1)',
@@ -427,7 +427,7 @@ const MySaving = () => {
         pointRadius: 0,
       },
       {
-        label: 'Withdrawals',
+        label: 'Penarikan',
         data: chartWithdrawals,
         borderColor: '#E11D48',
         backgroundColor: 'rgba(225, 29, 72, 0.05)',
@@ -482,16 +482,16 @@ const MySaving = () => {
     <div className="sv-page">
       <section className="sv-hero">
         <div>
-          <span className="sv-hero-kicker">Member Savings</span>
-          <h1 className="sv-hero-title">Saving</h1>
+          <span className="sv-hero-kicker">Simpanan Anggota</span>
+          <h1 className="sv-hero-title">Simpanan</h1>
           <p className="sv-hero-subtitle">
-            Monitor balances, voluntary requests, and payment schedules in one clean dashboard.
+            Pantau saldo, permintaan sukarela, dan jadwal pembayaran dalam satu dashboard.
           </p>
         </div>
         <div className="sv-hero-profile">
-          <span className="sv-stat-label">Last Withdrawal</span>
+          <span className="sv-stat-label">Penarikan Terakhir</span>
           <strong className="sv-stat-value">{latestWithdrawal ? `Rp ${formatRp(latestWithdrawal.amount)}` : '—'}</strong>
-          <span className="sv-stat-note">{latestWithdrawal?.status_name || latestWithdrawal?.status_code || 'No withdrawal yet'}</span>
+          <span className="sv-stat-note">{latestWithdrawal?.status_name || latestWithdrawal?.status_code || 'Belum ada penarikan'}</span>
         </div>
       </section>
 
@@ -501,18 +501,18 @@ const MySaving = () => {
           className={`sv-tab ${activeTab === 'saving' ? 'active' : ''}`}
           onClick={() => handleTabChange('saving')}
         >
-          Saving
+          Simpanan
         </button>
         <button
           className={`sv-tab ${activeTab === 'withdraws' ? 'active' : ''}`}
           onClick={() => handleTabChange('withdraws')}
         >
-          Withdraws
+          Penarikan
         </button>
       </div>
 
       <h2 className="sv-section-title">
-        {activeTab === 'saving' ? 'Saving Details' : 'Withdraws Voluntary Saving'}
+        {activeTab === 'saving' ? 'Detail Simpanan' : 'Penarikan Simpanan Sukarela'}
       </h2>
 
       {/* ─── SAVING VIEW ─── */}
@@ -588,7 +588,7 @@ const MySaving = () => {
                   title={isVoluntaryChangeAllowed ? 'Ajukan perubahan' : 'Permintaan perubahan hanya bisa dilakukan tanggal 22-23'}
                   style={{ opacity: isVoluntaryChangeAllowed ? 1 : 0.5, cursor: isVoluntaryChangeAllowed ? 'pointer' : 'not-allowed' }}
                 >
-                  {showVoluntaryForm ? 'Batal' : '+ Request Perubahan'}
+                  {showVoluntaryForm ? 'Batal' : '+ Ajukan Perubahan'}
                 </button>
               </div>
             </div>
@@ -610,7 +610,7 @@ const MySaving = () => {
             <div className="sv-vr-form-inline">
               <div className="sv-vr-form-header">
                 <div>
-                  <h3 className="sv-vr-form-title">Request Perubahan Simpanan Sukarela</h3>
+                  <h3 className="sv-vr-form-title">Ajukan Perubahan Simpanan Sukarela</h3>
                   <p className="sv-vr-form-subtitle">
                     Nominal saat ini:{' '}
                     <strong>Rp {formatRp(obligations.voluntary_amount)},00</strong>
@@ -649,7 +649,7 @@ const MySaving = () => {
                   onClick={handleVoluntarySubmit}
                   disabled={vrLoading}
                 >
-                  {vrLoading ? 'Submitting...' : 'Submit Request'}
+                  {vrLoading ? 'Mengirim...' : 'Kirim Pengajuan'}
                 </button>
               </div>
             </div>
@@ -658,10 +658,10 @@ const MySaving = () => {
           {/* Voluntary Change Requests */}
           <div className="sv-card" style={{ marginTop: 20 }}>
             <div className="sv-card-header">
-              <h3 className="sv-card-title">Voluntary Change Requests</h3>
+              <h3 className="sv-card-title">Permintaan Perubahan Sukarela</h3>
             </div>
             {loadingVR ? (
-              <p style={{ color: '#94a3b8', fontSize: 13, padding: '16px 0' }}>Loading...</p>
+              <p style={{ color: '#94a3b8', fontSize: 13, padding: '16px 0' }}>Memuat...</p>
             ) : voluntaryRequests.length === 0 ? (
               <p style={{ color: '#94a3b8', fontSize: 13, padding: '16px 0' }}>
                 Belum ada permintaan perubahan simpanan sukarela
@@ -674,7 +674,7 @@ const MySaving = () => {
                       <div>
                         <strong>Rp {formatRp(req.requested_amount)},00</strong>
                         <p style={{ margin: '8px 0 0', color: '#64748B', fontSize: 13 }}>
-                          Requested at {req.created_at ? new Date(req.created_at).toLocaleDateString('id-ID', {
+                          Diajukan pada {req.created_at ? new Date(req.created_at).toLocaleDateString('id-ID', {
                             day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
                           }) : '-'}
                         </p>
@@ -705,7 +705,7 @@ const MySaving = () => {
                         fontSize: 13, fontWeight: 600, textDecoration: 'underline',
                       }}
                     >
-                      {expandVR ? 'View Less' : `View More (${voluntaryRequests.length - 2} more)`}
+                      {expandVR ? 'Tampilkan Lebih Sedikit' : `Lihat Lainnya (${voluntaryRequests.length - 2} lagi)`}
                     </button>
                   </div>
                 )}
@@ -725,7 +725,7 @@ const MySaving = () => {
 
               <div className="sv-table-wrapper">
                 {loadingBills ? (
-                  <p style={{ color: '#94A3B8', fontSize: 13, textAlign: 'center', padding: '24px 0' }}>Loading...</p>
+                  <p style={{ color: '#94A3B8', fontSize: 13, textAlign: 'center', padding: '24px 0' }}>Memuat...</p>
                 ) : paidBills.length === 0 ? (
                   <p style={{ color: '#94A3B8', fontSize: 13, textAlign: 'center', padding: '24px 0' }}>
                     Belum ada transaksi simpanan
@@ -775,14 +775,14 @@ const MySaving = () => {
                             onClick={() => setBillsPage(p => Math.max(1, p - 1))}
                             disabled={billsPage === 1}
                           >
-                            Prev
+                            Sblm
                           </button>
                           <button
                             className="sv-page-btn"
                             onClick={() => setBillsPage(p => Math.min(billsTotalPages, p + 1))}
                             disabled={billsPage === billsTotalPages}
                           >
-                            Next
+                            Slnjt
                           </button>
                         </div>
                       </div>
@@ -798,7 +798,7 @@ const MySaving = () => {
                 <h3 className="sv-card-title">Jadwal Pembayaran</h3>
               </div>
               {loadingSchedule ? (
-                <p style={{ color: '#94A3B8', fontSize: 13, padding: '16px 0' }}>Loading...</p>
+                <p style={{ color: '#94A3B8', fontSize: 13, padding: '16px 0' }}>Memuat...</p>
               ) : (paymentSchedule.paid.length === 0 && paymentSchedule.upcoming.length === 0) ? (
                 <p style={{ color: '#94A3B8', fontSize: 13, padding: '16px 0' }}>
                   Belum ada jadwal pembayaran
@@ -807,8 +807,8 @@ const MySaving = () => {
                 <div className="sv-timeline">
                   {(() => {
                     const combined = [
-                      ...paymentSchedule.paid.map((bill) => ({ ...bill, schedule_status: 'Paid' })),
-                      ...paymentSchedule.upcoming.map((bill) => ({ ...bill, schedule_status: 'Upcoming' })),
+                      ...paymentSchedule.paid.map((bill) => ({ ...bill, schedule_status: 'Lunas' })),
+                      ...paymentSchedule.upcoming.map((bill) => ({ ...bill, schedule_status: 'Akan Datang' })),
                     ];
                     const sorted = combined.sort((a, b) => {
                       const aDate = new Date(a.bill_period_start || a.due_date || a.paid_at);
@@ -822,12 +822,12 @@ const MySaving = () => {
                           const period = bill.bill_period_start ? new Date(bill.bill_period_start) : null;
                           const label = period
                             ? period.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
-                            : 'No Period';
+                            : 'Tanpa Periode';
                           const dueDate = bill.paid_at || bill.due_date;
                           const dueLabel = dueDate
                             ? new Date(dueDate).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })
                             : '-';
-                          const isPaid = bill.schedule_status === 'Paid';
+                          const isPaid = bill.schedule_status === 'Lunas';
                           return (
                             <div key={`${bill.id}-${bill.schedule_status}`} className={`sv-tl-item ${isPaid ? 'paid' : 'upcoming'}`}>
                               <div className="sv-tl-icon">
@@ -847,7 +847,7 @@ const MySaving = () => {
                               className="sv-show-all-btn"
                               onClick={() => setShowAllSchedule(prev => !prev)}
                             >
-                              {showAllSchedule ? 'Tampilkan Lebih Sedikit' : `Show All (${combined.length})`}
+                              {showAllSchedule ? 'Tampilkan Lebih Sedikit' : `Tampilkan Semua (${combined.length})`}
                             </button>
                           </div>
                         )}
@@ -867,7 +867,7 @@ const MySaving = () => {
           <div className="wd-left">
             <div className="sv-banner navy">
               <div className="sv-banner-left">
-                <span className="sv-banner-title">Current Balance Voluntary Saving</span>
+                <span className="sv-banner-title">Saldo Simpanan Sukarela Saat Ini</span>
                 <h2 className="sv-banner-amount">
                   {loadingWallets ? '...' : `RP ${getBalance(false)},00`}
                 </h2>
@@ -879,7 +879,7 @@ const MySaving = () => {
                   disabled={checkingBankAccount}
                   style={{ display: showWithdrawForm ? 'none' : 'inline-flex' }}
                 >
-                  {checkingBankAccount ? 'Checking...' : 'Withdraw'}
+                  {checkingBankAccount ? 'Memeriksa...' : 'Tarik Dana'}
                 </button>
               </div>
             </div>
@@ -887,9 +887,9 @@ const MySaving = () => {
             <div className="sv-card">
               <div className="sv-card-header">
                 <div>
-                  <h3 className="sv-card-title">Savings Growth</h3>
+                  <h3 className="sv-card-title">Pertumbuhan Simpanan</h3>
                   <p style={{ fontSize: 12, color: '#64748B', margin: '4px 0 0' }}>
-                    Last 6 Months Performance
+                    Performa 6 Bulan Terakhir
                   </p>
                 </div>
                 <span ></span>
@@ -903,7 +903,7 @@ const MySaving = () => {
           {showWithdrawForm && (
             <div className="sv-card slide-in-right wd-form-panel">
               <div className="sv-card-header">
-                <h3 className="sv-card-title">Withdraw Amount</h3>
+                <h3 className="sv-card-title">Jumlah Penarikan</h3>
                 <button
                   onClick={() => { setShowWithdrawForm(false); setWdError(''); }}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8' }}
@@ -913,7 +913,7 @@ const MySaving = () => {
               </div>
 
               <div className="inp-group" style={{ marginBottom: 16 }}>
-                <label className="inp-label">AMOUNT (IDR)</label>
+                <label className="inp-label">JUMLAH (IDR)</label>
                 <div className="input-with-prefix">
                   <div className="prefix" style={{ background: '#fff', borderRight: 'none', color: '#94A3B8' }}>Rp</div>
                   <input
@@ -925,15 +925,15 @@ const MySaving = () => {
                   />
                 </div>
                 <span className="inp-desc" style={{ marginTop: 6 }}>
-                  Minimum deposit amount is Rp 50.000,00
+                  Jumlah minimum penarikan adalah Rp 50.000,00
                 </span>
               </div>
 
               <div className="inp-group">
-                <label className="inp-label">NOTES</label>
+                <label className="inp-label">CATATAN</label>
                 <textarea
                   className="prof-input"
-                  placeholder="Reason for withdrawal..."
+                  placeholder="Alasan penarikan..."
                   value={wdNotes}
                   onChange={e => setWdNotes(e.target.value)}
                   style={{ minHeight: 120 }}
@@ -949,8 +949,8 @@ const MySaving = () => {
                   style={{ marginTop: 4, cursor: 'pointer' }}
                 />
                 <label htmlFor="wd-agree" style={{ fontSize: 12, color: '#475569', lineHeight: 1.5, cursor: 'pointer' }}>
-                  I hereby declare that the information I have provided is correct, and I am submitting
-                  my request to withdraw my voluntary savings in a conscious state and without coercion.
+                  Saya menyatakan bahwa informasi yang saya berikan adalah benar, dan saya mengajukan
+                  penarikan simpanan sukarela ini dalam keadaan sadar dan tanpa paksaan.
                 </label>
               </div>
 
@@ -964,18 +964,18 @@ const MySaving = () => {
                 onClick={handleWithdrawSubmit}
                 disabled={wdLoading}
               >
-                {wdLoading ? 'Submitting...' : 'Submit'}
+                {wdLoading ? 'Mengirim...' : 'Kirim'}
               </button>
             </div>
           )}
 
           <div className="wd-left-bottom wd-left" style={{ gridColumn: '1 / 2' }}>
             <h3 style={{ fontSize: 18, margin: '8px 0', fontFamily: 'var(--font-family)', fontWeight: 700 }}>
-              Approvals
+              Persetujuan
             </h3>
             <div className="appr-list">
               {loadingWd ? (
-                <p style={{ color: '#94A3B8', fontSize: 13 }}>Loading...</p>
+                <p style={{ color: '#94A3B8', fontSize: 13 }}>Memuat...</p>
               ) : withdrawals.length === 0 ? (
                 <p style={{ color: '#94A3B8', fontSize: 13 }}>Belum ada riwayat penarikan</p>
               ) : (
@@ -1008,7 +1008,7 @@ const MySaving = () => {
                           fontSize: 13, fontWeight: 600, textDecoration: 'underline',
                         }}
                       >
-                        {expandApprovals ? 'View Less' : `View More (${withdrawals.length - 3} more)`}
+                        {expandApprovals ? 'Tampilkan Lebih Sedikit' : `Lihat Lainnya (${withdrawals.length - 3} lagi)`}
                       </button>
                     </div>
                   )}
@@ -1095,7 +1095,7 @@ const MySaving = () => {
                 onClick={handleBankFormSubmit}
                 disabled={bankFormLoading}
               >
-                {bankFormLoading ? 'Menyimpan...' : 'Simpan & Lanjut Withdraw'}
+                {bankFormLoading ? 'Menyimpan...' : 'Simpan & Lanjut Penarikan'}
               </button>
               <button
                 className="sv-bank-popup-secondary"

@@ -3,9 +3,9 @@ import "./SavingsTabNav.css";
 
 const TABS = [
   { label: "Dashboard", to: "/dashboard/admin/ls-savings" },
-  { label: "Savings Management", to: "/dashboard/admin/savings-management" },
-  { label: "Savings Obligations", to: "/dashboard/admin/mandatory-savings" },
-  { label: "Withdrawal", to: "/dashboard/admin/withdrawal-requests" },
+  { label: "Manajemen Simpanan", to: "/dashboard/admin/savings-management" },
+  { label: "Kewajiban Simpanan", to: "/dashboard/admin/mandatory-savings" },
+  { label: "Penarikan", to: "/dashboard/admin/withdrawal-requests" },
 ];
 
 export default function SavingsTabNav() {

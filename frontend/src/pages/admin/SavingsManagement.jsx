@@ -75,7 +75,7 @@ export default function SavingsManagement() {
   return (
     <div className="card">
       <div className="savings-header">
-        <h2>Savings Management</h2>
+        <h2>Manajemen Simpanan</h2>
         <SavingsTabNav />
       </div>
 
@@ -91,7 +91,7 @@ export default function SavingsManagement() {
             fontSize: 13,
             outline: 'none',
           }}
-          placeholder="Search by name, NIK, or Loan ID..."
+          placeholder="Cari berdasarkan nama, NIK, atau ID Pinjaman..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
@@ -101,7 +101,7 @@ export default function SavingsManagement() {
           value={department}
           onChange={handleDepartmentChange}
         >
-          <option value="">Semua Department</option>
+          <option value="">Semua Departemen</option>
           {departments.map(d => (
             <option key={d.id} value={d.id}>{d.department_name || d.name}</option>
           ))}
@@ -109,7 +109,7 @@ export default function SavingsManagement() {
         <button
           disabled={loading || data.length === 0}
           onClick={() => {
-            const headers = ['No', 'Nama Anggota', 'NIK', 'Department', 'Withdrawal', 'Simp. Pokok', 'Simp. Wajib', 'Simp. Sukarela', 'Total'];
+            const headers = ['No', 'Nama Anggota', 'NIK', 'Departemen', 'Penarikan', 'Simp. Pokok', 'Simp. Wajib', 'Simp. Sukarela', 'Total'];
             const rows = data.map((item, i) => {
               const wajib      = getWalletBalance(item.wallets, 1);
               const sukarela   = getWalletBalance(item.wallets, 2);
@@ -131,7 +131,7 @@ export default function SavingsManagement() {
             display: 'flex', alignItems: 'center', gap: 6,
           }}
         >
-          ⬇ Export Excel
+          ⬇ Ekspor Excel
         </button>
       </div>
 
@@ -141,8 +141,8 @@ export default function SavingsManagement() {
           <tr>
             <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none', width: 40 }}>No</th>
             <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Anggota</th>
-            <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Department</th>
-            <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Withdraw</th>
+            <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Departemen</th>
+            <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Penarikan</th>
             <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Simp Pokok</th>
             <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Simp Wajib</th>
             <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Simp Sukarela</th>
@@ -199,11 +199,11 @@ export default function SavingsManagement() {
             <span>{(currentPage - 1) * rowsPerPage + 1}–{Math.min(currentPage * rowsPerPage, data.length)} dari {data.length}</span>
             <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
               style={{ padding: '4px 12px', borderRadius: 6, border: '1px solid #d1d5db', background: currentPage === 1 ? '#f3f4f6' : '#fff', cursor: currentPage === 1 ? 'not-allowed' : 'pointer' }}>
-              Prev
+              Sblm
             </button>
             <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
               style={{ padding: '4px 12px', borderRadius: 6, border: '1px solid #d1d5db', background: currentPage === totalPages ? '#f3f4f6' : '#fff', cursor: currentPage === totalPages ? 'not-allowed' : 'pointer' }}>
-              Next
+              Slnjt
             </button>
           </div>
         </div>

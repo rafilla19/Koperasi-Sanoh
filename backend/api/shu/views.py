@@ -19,7 +19,6 @@ from .models import (
     ShuResults, ShuMemberBases, ShuComponentAllocation,
 )
 from django.db import transaction, IntegrityError, connection
-from .forecasting import forecast_shu
 from .serializers import (
     AdminAnnualJasaModalSerializer,
     AdminShuDistributionSerializer,
@@ -167,46 +166,27 @@ def my_shu_analytics(request):
     ).aggregate(total_shu=Sum('total_shu'))
     total_shu = total_shu_qs['total_shu'] or Decimal('0')
 
-    # 2. Data Chart Per Bulan — use FK period → ShuResults for reliable month
-    monthly_data = (
-        ShuMemberDistributionsMonthly.objects.filter(
-            member_id=member_id,
-            period__deleted_at__isnull=True,
-            period__period_month__gte=1,
-            period__period_month__lte=12,
-        )
-        .values(
-            p_year=F('period__period_year'),
-            p_month=F('period__period_month'),
-        )
-        .annotate(total_shu=Sum('total_shu'))
-        .order_by('p_year', 'p_month')
-    )
-
+    # 2. ML Forecast + Chart Data (from shu_trainer)
     chart_data = []
-    for row in monthly_data:
-        chart_data.append({
-            'month': f"{row['p_year']}-{row['p_month']:02d}",
-            'total_shu': float(row['total_shu'] or 0)
-        })
-
-    # 3. Growth Percentage based on the last 2 months
+    forecast_result = None
     growth_percentage = 0.0
     previous_total = 0.0
+    try:
+        from ml_service.shu_trainer import predict_member_shu
+        prediction = predict_member_shu(member_id)
+        if prediction:
+            chart_data = prediction['chart_data']
+            forecast_result = prediction['forecast']
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception("SHU forecast failed")
+
     if len(chart_data) >= 2:
         c_total = chart_data[-1]['total_shu']
         p_total = chart_data[-2]['total_shu']
         previous_total = p_total
         if p_total > 0:
             growth_percentage = round(((c_total - p_total) / p_total) * 100, 1)
-
-    # 4. ML Forecast
-    forecast_result = None
-    try:
-        forecast_result = forecast_shu(chart_data)
-    except Exception:
-        import logging
-        logging.getLogger(__name__).exception("SHU forecast failed")
 
     # 5. Current-year monthly SHU breakdown
     current_year = timezone.now().year
@@ -2341,3 +2321,22 @@ def save_component_allocations(request):
                     )
 
     return Response({'message': 'Alokasi SHU dan distribusi anggota berhasil diperbarui'})
+
+
+@api_view(['GET'])
+def admin_shu_forecast(request):
+    months = int(request.query_params.get('months', 6))
+    months = max(1, min(months, 12))
+
+    try:
+        from ml_service.shu_admin_trainer import predict_admin_shu
+        result = predict_admin_shu(months=months)
+        if result is None:
+            return Response({
+                'error': 'Model belum di-train atau data tidak cukup. Jalankan: python manage.py train_shu_admin_model'
+            }, status=404)
+        return Response(result)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).exception("SHU admin forecast failed")
+        return Response({'error': str(e)}, status=500)

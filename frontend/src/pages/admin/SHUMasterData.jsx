@@ -4,11 +4,11 @@ import { apiUrl } from '../../services/api';
 import './SHUManagement.css';
 
 const TABS = [
-  { id: 'shu', label: 'SHU Components', icon: Percent, apiUrl: apiUrl('/master/shu-components/') },
-  { id: 'dept', label: 'Departments', icon: Building, apiUrl: apiUrl('/master/departments/') },
-  { id: 'loan_type', label: 'Loan Types', icon: CreditCard, apiUrl: apiUrl('/loan/loan-types/') },
-  { id: 'payment_channel', label: 'Payment Channels', icon: Wallet, apiUrl: apiUrl('/master/payment-channels/') },
-  { id: 'inc_exp_cat', label: 'Inc/Exp Categories', icon: Tags, apiUrl: apiUrl('/master/income-expense-categories/') },
+  { id: 'shu', label: 'Komponen SHU', icon: Percent, apiUrl: apiUrl('/master/shu-components/') },
+  { id: 'dept', label: 'Departemen', icon: Building, apiUrl: apiUrl('/master/departments/') },
+  { id: 'loan_type', label: 'Jenis Pinjaman', icon: CreditCard, apiUrl: apiUrl('/loan/loan-types/') },
+  { id: 'payment_channel', label: 'Kanal Pembayaran', icon: Wallet, apiUrl: apiUrl('/master/payment-channels/') },
+  { id: 'inc_exp_cat', label: 'Kategori Masuk/Keluar', icon: Tags, apiUrl: apiUrl('/master/income-expense-categories/') },
 ];
 
 const SHUMasterData = () => {
@@ -74,7 +74,7 @@ const SHUMasterData = () => {
       }
 
       if (currentTotalWithoutThis + newPercentage > 100.001) {
-        alert(`Cannot save. Total distribution would exceed 100%`);
+        alert(`Tidak dapat menyimpan. Total distribusi akan melebihi 100%`);
         return;
       }
     }
@@ -123,9 +123,9 @@ const SHUMasterData = () => {
         const errorText = await res.text();
         try {
           const errorData = JSON.parse(errorText);
-          alert(errorData?.detail || errorData?.error || 'Failed to save. Please check your data.');
+          alert(errorData?.detail || errorData?.error || 'Gagal menyimpan. Silakan periksa data Anda.');
         } catch {
-          alert('Failed to save. Please check your data.');
+          alert('Gagal menyimpan. Silakan periksa data Anda.');
         }
       }
     } catch (err) {
@@ -135,10 +135,10 @@ const SHUMasterData = () => {
 
   const handleDelete = async (id) => {
     const confirmed = await window.appConfirm({
-      title: 'Delete item?',
-      message: 'Are you sure you want to delete this item?',
-      confirmText: 'Delete',
-      cancelText: 'Cancel',
+      title: 'Hapus item?',
+      message: 'Apakah Anda yakin ingin menghapus item ini?',
+      confirmText: 'Hapus',
+      cancelText: 'Batal',
       variant: 'danger',
     });
     if (!confirmed) return;
@@ -199,15 +199,15 @@ const SHUMasterData = () => {
     <div className="shum-container">
       <div className="shum-header">
         <div>
-          <h1 className="shum-title">Master Data Management</h1>
-          <p className="shum-subtitle">Configure system-wide master data and settings</p>
+          <h1 className="shum-title">Manajemen Data Master</h1>
+          <p className="shum-subtitle">Konfigurasi data master dan pengaturan sistem</p>
         </div>
         {activeTab !== 'payment_channel' && (
           <button 
             className="shum-add-btn"
             onClick={() => { resetForm(); setShowForm(true); }}
           >
-            <Plus size={18} /> Add {currentTab.label.replace('s', '')}
+            <Plus size={18} /> Tambah
           </button>
         )}
       </div>
@@ -230,23 +230,23 @@ const SHUMasterData = () => {
           <div className="shum-form-overlay">
             <div className="shum-form-card">
               <div className="shum-form-header">
-                <h3>{editingId ? 'Edit' : 'Add New'} {currentTab.label.replace('s', '')}</h3>
+                <h3>{editingId ? 'Edit' : 'Tambah'} {currentTab.label}</h3>
                 <button onClick={resetForm}><X size={20} /></button>
               </div>
               <form onSubmit={handleSave}>
                 {activeTab === 'shu' && (
                   <>
                     <div className="shum-form-group">
-                      <label>Component Name</label>
-                      <input 
-                        type="text" 
+                      <label>Nama Komponen</label>
+                      <input
+                        type="text"
                         value={formData.component_name}
                         onChange={(e) => setFormData({...formData, component_name: e.target.value})}
                         required
                       />
                     </div>
                     <div className="shum-form-group">
-                      <label>Percentage (%)</label>
+                      <label>Persentase (%)</label>
                       <input 
                         type="number" 
                         step="0.01"
@@ -262,14 +262,14 @@ const SHUMasterData = () => {
                         checked={formData.distributed_member}
                         onChange={(e) => setFormData({...formData, distributed_member: e.target.checked})}
                       />
-                      <label htmlFor="dist">Distributed to Members</label>
+                      <label htmlFor="dist">Didistribusikan ke Anggota</label>
                     </div>
                   </>
                 )}
 
                 {activeTab === 'dept' && (
                   <div className="shum-form-group">
-                    <label>Department Name</label>
+                    <label>Nama Departemen</label>
                     <input 
                       type="text" 
                       value={formData.department_name}
@@ -281,7 +281,7 @@ const SHUMasterData = () => {
 
                 {activeTab === 'loan_type' && (
                   <div className="shum-form-group">
-                    <label>Loan Type Name</label>
+                    <label>Nama Jenis Pinjaman</label>
                     <input 
                       type="text" 
                       value={formData.name}
@@ -294,7 +294,7 @@ const SHUMasterData = () => {
                 {activeTab === 'payment_channel' && (
                   <>
                     <div className="shum-form-group">
-                      <label>Channel Name</label>
+                      <label>Nama Kanal</label>
                       <input 
                         type="text" 
                         value={formData.channel_name}
@@ -302,7 +302,7 @@ const SHUMasterData = () => {
                       />
                     </div>
                     <div className="shum-form-group">
-                      <label>Fee Percentage (%)</label>
+                      <label>Persentase Biaya (%)</label>
                       <input 
                         type="number" 
                         step="0.01"
@@ -312,7 +312,7 @@ const SHUMasterData = () => {
                       />
                     </div>
                     <div className="shum-form-group">
-                      <label>Fixed Fee (Rp)</label>
+                      <label>Biaya Tetap (Rp)</label>
                       <input 
                         type="number" 
                         step="0.01"
@@ -327,7 +327,7 @@ const SHUMasterData = () => {
                 {activeTab === 'inc_exp_cat' && (
                   <>
                     <div className="shum-form-group">
-                      <label>Category Name</label>
+                      <label>Nama Kategori</label>
                       <input 
                         type="text" 
                         value={formData.category_name}
@@ -336,23 +336,23 @@ const SHUMasterData = () => {
                       />
                     </div>
                     <div className="shum-form-group">
-                      <label>Type</label>
+                      <label>Jenis</label>
                       <select
                         value={formData.type}
                         onChange={(e) => setFormData({...formData, type: e.target.value})}
                         required
                       >
-                        <option value="INCOME">Income</option>
-                        <option value="EXPENSE">Outcome</option>
+                        <option value="INCOME">Pemasukan</option>
+                        <option value="EXPENSE">Pengeluaran</option>
                       </select>
                     </div>
                   </>
                 )}
 
                 <div className="shum-form-actions">
-                  <button type="button" className="btn-cancel" onClick={resetForm}>Cancel</button>
+                  <button type="button" className="btn-cancel" onClick={resetForm}>Batal</button>
                   <button type="submit" className="btn-save">
-                    {editingId ? 'Update' : 'Create'}
+                    {editingId ? 'Perbarui' : 'Buat'}
                   </button>
                 </div>
               </form>
@@ -365,37 +365,37 @@ const SHUMasterData = () => {
             <tr>
               {activeTab === 'shu' ? (
                 <>
-                  <th>Component Name</th>
-                  <th>Percentage</th>
-                  <th>Distributed</th>
+                  <th>Nama Komponen</th>
+                  <th>Persentase</th>
+                  <th>Distribusi</th>
                 </>
               ) : activeTab === 'dept' ? (
-                <th>Department Name</th>
+                <th>Nama Departemen</th>
               ) : activeTab === 'loan_type' ? (
-                <th>Loan Type Name</th>
+                <th>Nama Jenis Pinjaman</th>
               ) : activeTab === 'payment_channel' ? (
                 <>
-                  <th>Channel Code</th>
-                  <th>Channel Name</th>
-                  <th>Fee %</th>
-                  <th>Fixed Fee</th>
+                  <th>Kode Kanal</th>
+                  <th>Nama Kanal</th>
+                  <th>Biaya %</th>
+                  <th>Biaya Tetap</th>
                 </>
               ) : activeTab === 'inc_exp_cat' ? (
                 <>
-                  <th>Category Name</th>
-                  <th>Type</th>
+                  <th>Nama Kategori</th>
+                  <th>Jenis</th>
                 </>
               ) : (
-                <th>Category Name</th>
+                <th>Nama Kategori</th>
               )}
-              <th>Actions</th>
+              <th>Aksi</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan="4" style={{ textAlign: 'center', padding: '40px' }}>Loading...</td></tr>
+              <tr><td colSpan="4" style={{ textAlign: 'center', padding: '40px' }}>Memuat...</td></tr>
             ) : data.length === 0 ? (
-              <tr><td colSpan="4" style={{ textAlign: 'center', padding: '40px' }}>No data found</td></tr>
+              <tr><td colSpan="4" style={{ textAlign: 'center', padding: '40px' }}>Data tidak ditemukan</td></tr>
             ) : data.map((item) => (
               <tr key={item.id}>
                 <td className="font-bold">
@@ -410,7 +410,7 @@ const SHUMasterData = () => {
                     <td><span className="shum-badge blue">{item.percentage}%</span></td>
                     <td>
                       <span className={`shum-badge ${item.distributed_member ? 'green' : 'gray'}`}>
-                        {item.distributed_member ? 'Yes' : 'No'}
+                        {item.distributed_member ? 'Ya' : 'Tidak'}
                       </span>
                     </td>
                   </>
@@ -424,7 +424,7 @@ const SHUMasterData = () => {
                 )}
                 {activeTab === 'inc_exp_cat' && (
                   <td>
-                    <span className="shum-badge blue">{item.type === 'EXPENSE' ? 'Outcome' : 'Income'}</span>
+                    <span className="shum-badge blue">{item.type === 'EXPENSE' ? 'Pengeluaran' : 'Pemasukan'}</span>
                   </td>
                 )}
                 <td>
@@ -440,7 +440,7 @@ const SHUMasterData = () => {
             
             {activeTab === 'shu' && (
               <tr className="shum-total-row">
-                <td>Total Distribution</td>
+                <td>Total Distribusi</td>
                 <td colSpan="3">
                   <span className={`shum-total-badge ${totalPercentage > 100 ? 'red' : 'green'}`}>
                     {totalPercentage.toFixed(2)}%

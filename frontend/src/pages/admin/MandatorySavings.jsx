@@ -4,8 +4,8 @@ import "./MandatorySavings.css";
 import SavingsTabNav from "../../components/SavingsTabNav";
 
 const MONTH_NAMES = [
-  'January','February','March','April','May','June',
-  'July','August','September','October','November','December',
+  'Januari','Februari','Maret','April','Mei','Juni',
+  'Juli','Agustus','September','Oktober','November','Desember',
 ];
 
 const YEARS = ['2024', '2025', '2026'];
@@ -152,7 +152,7 @@ export default function MandatorySavings() {
   return (
     <div className="card mandatory-savings">
       <div className="savings-header">
-        <h2>Savings Obligations</h2>
+        <h2>Kewajiban Simpanan</h2>
         <SavingsTabNav />
       </div>
 
@@ -203,7 +203,7 @@ export default function MandatorySavings() {
           style={{ padding: '10px 16px', borderRadius: 10, border: '1px solid #d1d5db', background: '#f3f4f6', fontSize: 13, cursor: 'pointer' }}
           onClick={handleClear}
         >
-          Clear
+          Hapus
         </button>
         <button
           style={{ padding: '10px 18px', borderRadius: 10, background: '#3b82f6', color: '#fff', border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
@@ -214,7 +214,7 @@ export default function MandatorySavings() {
         <button
           disabled={loading || data.length === 0}
           onClick={() => {
-            const headers = ['No', 'NIK', 'Nama Member', 'Department', 'Status Karyawan', 'Simp. Pokok', 'Simp. Wajib', 'Simp. Sukarela', 'Total', 'Status'];
+            const headers = ['No', 'NIK', 'Nama Anggota', 'Departemen', 'Status Karyawan', 'Simp. Pokok', 'Simp. Wajib', 'Simp. Sukarela', 'Total', 'Status'];
             const rows = data.map((row, i) => [
               i + 1, row.nik_employee || '-', row.member_name,
               row.department_name || '-', row.employee_status_name || '-',
@@ -232,7 +232,7 @@ export default function MandatorySavings() {
             display: 'flex', alignItems: 'center', gap: 6,
           }}
         >
-          ⬇ Export Excel
+          ⬇ Ekspor Excel
         </button>
       </div>
 
@@ -253,10 +253,10 @@ export default function MandatorySavings() {
             transition: 'background 0.2s',
           }}
         >
-          {generating ? 'Generating...' : `Generate Bills${someChecked ? ` (${selectedIds.length})` : ''}`}
+          {generating ? 'Memproses...' : `Buat Tagihan${someChecked ? ` (${selectedIds.length})` : ''}`}
         </button>
         {!someChecked && !loading && data.length > 0 && (
-          <span style={{ fontSize: 12, color: '#9ca3af' }}>Centang member untuk mengaktifkan Generate Bills</span>
+          <span style={{ fontSize: 12, color: '#9ca3af' }}>Centang anggota untuk mengaktifkan Buat Tagihan</span>
         )}
         {generateResult && (
           <span style={{ fontSize: 13, color: generateResult.error ? '#dc2626' : '#16a34a' }}>
@@ -282,9 +282,9 @@ export default function MandatorySavings() {
               />
             </th>
             <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none', width: 40 }}>No</th>
-            <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Nama Member</th>
+            <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Nama Anggota</th>
             <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>NIK</th>
-            <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Department</th>
+            <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Departemen</th>
             <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Status Karyawan</th>
             <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Simp. Pokok</th>
             <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Simp. Wajib</th>
@@ -376,11 +376,11 @@ export default function MandatorySavings() {
             <span>{(currentPage - 1) * rowsPerPage + 1}–{Math.min(currentPage * rowsPerPage, data.length)} dari {data.length}</span>
             <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
               style={{ padding: '4px 12px', borderRadius: 6, border: '1px solid #d1d5db', background: currentPage === 1 ? '#f3f4f6' : '#fff', cursor: currentPage === 1 ? 'not-allowed' : 'pointer' }}>
-              Prev
+              Sblm
             </button>
             <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
               style={{ padding: '4px 12px', borderRadius: 6, border: '1px solid #d1d5db', background: currentPage === totalPages ? '#f3f4f6' : '#fff', cursor: currentPage === totalPages ? 'not-allowed' : 'pointer' }}>
-              Next
+              Slnjt
             </button>
           </div>
         </div>

@@ -236,4 +236,7 @@ export const shuApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(year ? { year } : {}),
     }).then(r => r.json()),
+
+  getShuForecast: ({ months = 6 } = {}) =>
+    fetchJson(apiUrl(`/admin/shu/forecast/?months=${months}`)),
 }

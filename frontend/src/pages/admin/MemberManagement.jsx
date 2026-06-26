@@ -132,7 +132,7 @@ const MemberManagement = () => {
             <Users size={20} />
           </div>
           <div className="mm-stat-info">
-            <span className="mm-stat-label">Total Members</span>
+            <span className="mm-stat-label">Total Anggota</span>
             <strong className="mm-stat-value">{totalMembers}</strong>
           </div>
         </div>
@@ -142,7 +142,7 @@ const MemberManagement = () => {
             <PiggyBank size={20} />
           </div>
           <div className="mm-stat-info">
-            <span className="mm-stat-label">Total Savings</span>
+            <span className="mm-stat-label">Total Simpanan</span>
             <strong className="mm-stat-value">{formatRupiah(totalSavings)}</strong>
           </div>
         </div>
@@ -162,7 +162,7 @@ const MemberManagement = () => {
             <TrendingUp size={20} />
           </div>
           <div className="mm-stat-info">
-            <span className="mm-stat-label">Average Savings</span>
+            <span className="mm-stat-label">Rata-Rata Simpanan</span>
             <strong className="mm-stat-value">{formatRupiah(avgSavings)}</strong>
           </div>
         </div>

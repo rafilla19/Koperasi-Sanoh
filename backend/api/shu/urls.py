@@ -77,6 +77,8 @@ urlpatterns = [
     # ── Admin: Statistik ─────────────────────────────────────────
     # GET  → KPI stats SHU
     path('admin/shu/stats/', views.admin_shu_stats, name='admin-shu-stats'),
+    # GET ?months=6 → XGBoost forecast SHU untuk admin dashboard
+    path('admin/shu/forecast/', views.admin_shu_forecast, name='admin-shu-forecast'),
 
     # ── Admin: Outcome Transaction ────────────────────────────────
     # GET  → daftar kategori outcome

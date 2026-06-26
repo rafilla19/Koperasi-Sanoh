@@ -699,7 +699,7 @@ const DashboardHome = () => {
       doc.text('KOPERASI SANOH SINERGI BERSAMA', 105, 30, { align: 'center' });
 
       doc.setFontSize(14);
-      doc.text('TRANSACTION RECEIPT', 105, 40, { align: 'center' });
+      doc.text('BUKTI TRANSAKSI', 105, 40, { align: 'center' });
 
       doc.setLineWidth(0.5);
       doc.line(20, 45, 190, 45);
@@ -710,10 +710,10 @@ const DashboardHome = () => {
 
       const rows = [
         ['Status', tx.status],
-        ['Category', tx.transaction_type],
-        ['Date', new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(tx.transaction_date))],
-        ['Member Name', summary?.full_name],
-        ['Amount', formatRupiah(tx.amount)]
+        ['Kategori', tx.transaction_type],
+        ['Tanggal', new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(tx.transaction_date))],
+        ['Nama Anggota', summary?.full_name],
+        ['Jumlah', formatRupiah(tx.amount)]
       ];
 
       autoTable(doc, {
@@ -726,19 +726,19 @@ const DashboardHome = () => {
 
       doc.setFontSize(10);
       doc.setTextColor(100);
-      doc.text('Thank you for being a part of Koperasi Sanoh.', 105, doc.lastAutoTable.finalY + 20, { align: 'center' });
+      doc.text('Terima kasih telah menjadi bagian dari Koperasi Sanoh.', 105, doc.lastAutoTable.finalY + 20, { align: 'center' });
 
       doc.save(`Receipt_${tx.reference || 'TX'}.pdf`);
     } catch (error) {
       console.error('Failed to generate Receipt:', error);
-      alert('Failed to generate receipt.');
+      alert('Gagal membuat bukti transaksi.');
     }
   };
 
   const formatMonthLabel = (monthStr) => {
     const [yy, mm] = monthStr.split('-');
     const date = new Date(parseInt(yy), parseInt(mm) - 1, 1);
-    return date.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+    return date.toLocaleString('id-ID', { month: 'short', year: 'numeric' });
   };
 
   const getFilteredChartData = () => {
@@ -852,8 +852,8 @@ const DashboardHome = () => {
       {/* ── Page Header ────────────────────────────────────── */}
       <div className="dh-page-header">
         <div>
-          <h1>Welcome Back, {loading && !user ? '...' : (user?.full_name || summary?.full_name || 'Member')}!</h1>
-          <p>Here is your financial overview for this period.</p>
+          <h1>Selamat Datang, {loading && !user ? '...' : (user?.full_name || summary?.full_name || 'Anggota')}!</h1>
+          <p>Berikut ringkasan keuangan Anda untuk periode ini.</p>
         </div>
         <button className="dh-report-btn hidden-mobile" onClick={handleDownloadReport} disabled={isGeneratingReport}>
           {isGeneratingReport ? <><Loader size={14} className="spinner" /> Generating...</> : <><Download size={14} /> Report Overview</>}
@@ -888,7 +888,7 @@ const DashboardHome = () => {
               <Briefcase size={20} />
             </div>
           </div>
-          <p className="summary-label">Principal Savings</p>
+          <p className="summary-label">Simpanan Pokok</p>
           <h3 className="summary-value">{loading ? '...' : formatRupiah(summary?.principle_balance)}</h3>
         </div>
 
@@ -902,7 +902,7 @@ const DashboardHome = () => {
               <ArrowUpRight size={11} /> {calculateGrowth(summary?.voluntary_month_inc, summary?.voluntary_balance)}%
             </span>
           </div>
-          <p className="summary-label">Voluntary Savings</p>
+          <p className="summary-label">Simpanan Sukarela</p>
           <h3 className="summary-value">{loading ? '...' : formatRupiah(summary?.voluntary_balance)}</h3>
         </div>
 
@@ -916,7 +916,7 @@ const DashboardHome = () => {
               <ArrowUpRight size={11} /> {calculateGrowth(summary?.mandatory_month_inc, summary?.mandatory_balance)}%
             </span>
           </div>
-          <p className="summary-label">Mandatory Savings</p>
+          <p className="summary-label">Simpanan Wajib</p>
           <h3 className="summary-value">{loading ? '...' : formatRupiah(summary?.mandatory_balance)}</h3>
         </div>
 
@@ -931,14 +931,14 @@ const DashboardHome = () => {
                 className="pay-now-badge-btn" 
                 onClick={() => setShowPaymentModal(true)}
               >
-                Pay Now
+                Bayar Sekarang
               </button>
             )}
             {summary?.employee_status_id !== 3 && (
-              <span className="badge-soft-gray">Upcoming</span>
+              <span className="badge-soft-gray">Akan Datang</span>
             )}
           </div>
-          <p className="summary-label">Outstanding Payment</p>
+          <p className="summary-label">Tagihan Tertunggak</p>
           <h3 className="summary-value" style={{ color: '#E11D48' }}>
             {loading ? '...' : formatRupiah(summary?.grand_total_outstanding)}
           </h3>
@@ -958,11 +958,11 @@ const DashboardHome = () => {
                 <TrendingUp size={18} />
               </div>
               <div>
-                <p className="chart-title">SHU Analytics</p>
+                <p className="chart-title">Analitik SHU</p>
                 <p className="chart-subtitle">
                   {activeChart.estimatedAnnual
-                    ? `Est. annual return: ${formatRupiah(activeChart.estimatedAnnual)}`
-                    : 'Estimated annual return'}
+                    ? `Est. pengembalian tahunan: ${formatRupiah(activeChart.estimatedAnnual)}`
+                    : 'Estimasi pengembalian tahunan'}
                 </p>
               </div>
             </div>
@@ -987,7 +987,7 @@ const DashboardHome = () => {
           <div className="chart-metrics-row">
             <div className="chart-metric shu-tooltip-wrap">
               <p className="metric-label-small">
-                Current SHU {shuAnalytics?.current_year?.year || new Date().getFullYear()}
+                SHU Saat Ini {shuAnalytics?.current_year?.year || new Date().getFullYear()}
                 <Info size={11} style={{ marginLeft: 4, verticalAlign: 'middle', opacity: 0.5 }} />
               </p>
               <h4 className="metric-value-big dark">
@@ -1000,7 +1000,7 @@ const DashboardHome = () => {
             {shuAnalytics?.forecast?.trend && (
               <div className="chart-metric shu-tooltip-wrap">
                 <p className="metric-label-small">
-                  Predicted Growth (6 mo)
+                  Prediksi Pertumbuhan (6 bln)
                   <Info size={11} style={{ marginLeft: 4, verticalAlign: 'middle', opacity: 0.5 }} />
                 </p>
                 <h4 className="metric-value-big" style={{
@@ -1030,17 +1030,21 @@ const DashboardHome = () => {
             )}
             {shuAnalytics?.yearly_history?.length > 0 && (
               <div
-                className="chart-metric"
+                className="chart-metric shu-tooltip-wrap"
                 style={{ cursor: 'pointer' }}
                 onClick={() => setShowShuHistory(true)}
               >
                 <p className="metric-label-small" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <FileText size={12} />
-                  SHU History
+                  Riwayat SHU
+                  <Info size={11} style={{ opacity: 0.5 }} />
                 </p>
                 <h4 className="metric-value-big" style={{ color: '#2D6BE4', fontSize: 13 }}>
-                  View details
+                  Lihat detail
                 </h4>
+                <div className="shu-tooltip-box">
+                  Klik untuk lihat rincian SHU bulanan tahun ini dan total SHU tahun-tahun sebelumnya.
+                </div>
               </div>
             )}
           </div>
@@ -1050,12 +1054,12 @@ const DashboardHome = () => {
         <div className="premium-card" style={{ display: 'flex', flexDirection: 'column' }}>
 
           <div>
-            <p className="loan-balance-label">Active Loan Balance</p>
+            <p className="loan-balance-label">Saldo Pinjaman Aktif</p>
             <h2 className="loan-amount-big">
               {loading ? '...' : formatRupiah(summary?.total_loan_remaining)}
             </h2>
             <p className="loan-subtitle">
-              From total approved loan of <strong>{loading ? '...' : formatRupiah(summary?.principal_amount)}</strong>
+              Dari total pinjaman disetujui sebesar <strong>{loading ? '...' : formatRupiah(summary?.principal_amount)}</strong>
             </p>
           </div>
 
@@ -1082,21 +1086,21 @@ const DashboardHome = () => {
                   </svg>
                   <div className="donut-center-text">
                     <span className="donut-pct">{paidPct}%</span>
-                    <span className="donut-pct-lbl">Paid</span>
+                    <span className="donut-pct-lbl">Terbayar</span>
                   </div>
                 </div>
               );
             })()}
 
             <div className="loan-install-info">
-              <h4>{summary?.paid_installments || 0} of {summary?.total_installments || 0} Installments</h4>
-              <p>Keep up the good payment history to increase your next loan limit.</p>
+              <h4>{summary?.paid_installments || 0} dari {summary?.total_installments || 0} Angsuran</h4>
+              <p>Pertahankan riwayat pembayaran yang baik untuk meningkatkan limit pinjaman berikutnya.</p>
             </div>
           </div>
 
           <div className="loan-footer-row">
             <div>
-              <p className="due-chip-label">Next Payment Due</p>
+              <p className="due-chip-label">Jatuh Tempo Berikutnya</p>
               <p className="due-chip-val">
                 {summary?.next_due_date
                   ? new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(summary.next_due_date))
@@ -1104,7 +1108,7 @@ const DashboardHome = () => {
               </p>
             </div>
             <div style={{ textAlign: 'right' }}>
-              <p className="due-chip-label">Amount Due</p>
+              <p className="due-chip-label">Jumlah Tagihan</p>
               <p className="due-chip-val danger">
                 {summary?.next_due_amount ? formatRupiah(summary.next_due_amount) : '-'}
               </p>
@@ -1118,12 +1122,12 @@ const DashboardHome = () => {
       <div className="premium-card" style={{ padding: 0, marginTop: '18px', overflow: 'hidden' }}>
 
         <div className="tx-card-header">
-          <h3>Recent Transactions</h3>
+          <h3>Transaksi Terbaru</h3>
         </div>
 
         {/* Filters */}
         <div className="tx-filters-strip">
-          <span className="filter-strip-label">Trans. Type</span>
+          <span className="filter-strip-label">Jenis Trans.</span>
           <select
             id="transaction-type-filter"
             name="transactionType"
@@ -1131,14 +1135,14 @@ const DashboardHome = () => {
             value={txTypeFilter}
             onChange={(e) => setTxTypeFilter(e.target.value)}
           >
-            <option value="all">All Types</option>
-            <option value="deposit">Deposit</option>
-            <option value="loan">Loan Installment</option>
-            <option value="withdrawal">Withdrawals</option>
-            <option value="shu_distribution">SHU Distribution</option>
+            <option value="all">Semua Jenis</option>
+            <option value="deposit">Setoran</option>
+            <option value="loan">Angsuran Pinjaman</option>
+            <option value="withdrawal">Penarikan</option>
+            <option value="shu_distribution">Distribusi SHU</option>
           </select>
 
-          <span className="filter-strip-label">Date</span>
+          <span className="filter-strip-label">Tanggal</span>
           <input 
             type="date" 
             className="filter-pill-date" 
@@ -1158,13 +1162,13 @@ const DashboardHome = () => {
               className="btn-filter-clear" 
               onClick={handleClearFilters}
             >
-              Clear
+              Hapus
             </button>
-            <button 
-              className="btn-filter-search" 
+            <button
+              className="btn-filter-search"
               onClick={() => setSearchTrigger(prev => prev + 1)}
             >
-              Search
+              Cari
             </button>
           </div>
         </div>
@@ -1174,10 +1178,10 @@ const DashboardHome = () => {
           <table className="tx-table">
             <thead>
               <tr>
-                <th style={{ width: '20%' }}>Date</th>
-                <th style={{ width: '20%' }}>Ref ID</th>
-                <th style={{ width: '25%' }}>Transaction Type</th>
-                <th style={{ width: '15%' }}>Amount</th>
+                <th style={{ width: '20%' }}>Tanggal</th>
+                <th style={{ width: '20%' }}>ID Referensi</th>
+                <th style={{ width: '25%' }}>Jenis Transaksi</th>
+                <th style={{ width: '15%' }}>Jumlah</th>
                 <th style={{ width: '20%', textAlign: 'center' }}>Status</th>
               </tr>
             </thead>
@@ -1185,7 +1189,7 @@ const DashboardHome = () => {
               {transactions.length === 0 ? (
                 <tr>
                   <td colSpan="5" style={{ textAlign: 'center', padding: '40px', color: '#94A3B8' }}>
-                    No recent transactions found.
+                    Tidak ada transaksi terbaru.
                   </td>
                 </tr>
               ) : (
@@ -1228,7 +1232,7 @@ const DashboardHome = () => {
         {transactions.length > 0 && (
           <div className="tx-pagination-row">
             <span className="pg-count-label">
-              Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, transactions.length)} of {transactions.length} entries
+              Menampilkan {((currentPage - 1) * itemsPerPage) + 1} sampai {Math.min(currentPage * itemsPerPage, transactions.length)} dari {transactions.length} data
             </span>
             <div className="pg-btn-group">
               <button
@@ -1236,7 +1240,7 @@ const DashboardHome = () => {
                 onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                 disabled={currentPage === 1}
               >
-                Prev
+                Sblm
               </button>
               {Array.from({ length: Math.ceil(transactions.length / itemsPerPage) }, (_, i) => (
                 <button
@@ -1252,7 +1256,7 @@ const DashboardHome = () => {
                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, Math.ceil(transactions.length / itemsPerPage)))}
                 disabled={currentPage === Math.ceil(transactions.length / itemsPerPage)}
               >
-                Next
+                Slnjt
               </button>
             </div>
           </div>
@@ -1269,8 +1273,8 @@ const DashboardHome = () => {
                   <CreditCard size={20} color="#E11D48" />
                 </div>
                 <div>
-                  <h3>Select Payment</h3>
-                  <p>Choose bills you want to pay</p>
+                  <h3>Pilih Pembayaran</h3>
+                  <p>Pilih tagihan yang ingin dibayar</p>
                 </div>
               </div>
               <button className="close-btn" onClick={() => setShowPaymentModal(false)}>
@@ -1282,16 +1286,16 @@ const DashboardHome = () => {
               <div className="payment-options">
                 {/* Savings Bill Section */}
                 <div className="payment-group-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span>Saving Bills</span>
+                  <span>Tagihan Simpanan</span>
                   {uniqueSavingMonths.length > 0 && (
                     <select 
                       value={savingMonthFilter} 
                       onChange={e => setSavingMonthFilter(e.target.value)}
                       style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #E2E8F0', fontSize: '12px', background: '#fff' }}
                     >
-                      <option value="ALL">All Months</option>
+                      <option value="ALL">Semua Bulan</option>
                       {uniqueSavingMonths.map(m => (
-                        <option key={m} value={m}>{new Date(m + '-01').toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</option>
+                        <option key={m} value={m}>{new Date(m + '-01').toLocaleDateString('id-ID', { month: 'short', year: 'numeric' })}</option>
                       ))}
                     </select>
                   )}
@@ -1309,19 +1313,19 @@ const DashboardHome = () => {
                           {selectedPayments.savingIds.includes(b.id) && <Check size={14} />}
                         </div>
                         <div>
-                          <span className="option-label">{b.saving_type_id === 1 ? 'Mandatory Saving' : 'Voluntary Saving'}</span>
-                          <span className="option-desc">Bill Date: {new Date(b.bill_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                          <span className="option-label">{b.saving_type_id === 1 ? 'Simpanan Wajib' : 'Simpanan Sukarela'}</span>
+                          <span className="option-desc">Tanggal Tagihan: {new Date(b.bill_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                         </div>
                       </div>
                       <span className="option-amount">{formatRupiah(b.amount_due - (b.amount_paid || 0))}</span>
                     </div>
                   ))
                 ) : (
-                  <div className="no-items-msg">No unpaid saving bills</div>
+                  <div className="no-items-msg">Tidak ada tagihan simpanan</div>
                 )}
 
                 {/* Loan Installments Section */}
-                <div className="payment-group-label">Loan Installments</div>
+                <div className="payment-group-label">Angsuran Pinjaman</div>
                 {summary?.unpaid_installments_list?.length > 0 ? (
                   summary.unpaid_installments_list.map((inst) => (
                     <div 
@@ -1334,15 +1338,15 @@ const DashboardHome = () => {
                           {selectedPayments.loanIds.includes(inst.id) && <Check size={14} />}
                         </div>
                         <div>
-                          <span className="option-label">Installment #{inst.installment_number}</span>
-                          <span className="option-desc">Due: {new Date(inst.due_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                          <span className="option-label">Angsuran #{inst.installment_number}</span>
+                          <span className="option-desc">Jatuh Tempo: {new Date(inst.due_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                         </div>
                       </div>
                       <span className="option-amount">{formatRupiah(inst.amount_total)}</span>
                     </div>
                   ))
                 ) : (
-                  <div className="no-items-msg">No unpaid installments</div>
+                  <div className="no-items-msg">Tidak ada angsuran tertunggak</div>
                 )}
               </div>
 
@@ -1390,7 +1394,7 @@ const DashboardHome = () => {
                   <>
                     <div className="payment-summary-box" style={{ background: '#F8FAFC', borderRadius: '12px', padding: '16px', marginBottom: '20px' }}>
                       <div className="summary-row" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#64748B', marginBottom: '8px' }}>
-                        <span>Subtotal Selected</span>
+                        <span>Subtotal Terpilih</span>
                         <span className="summary-val" style={{ fontWeight: '500', color: '#1E293B' }}>
                           {formatRupiah(subtotal)}
                         </span>
@@ -1404,7 +1408,7 @@ const DashboardHome = () => {
                         </div>
                       )}
                       <div className="summary-row total" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', fontWeight: '700', color: '#0F172A', borderTop: '1px solid #E2E8F0', paddingTop: '10px' }}>
-                        <span>Total Amount</span>
+                        <span>Total Pembayaran</span>
                         <span className="total-val" style={{ color: '#E11D48' }}>
                           {formatRupiah(selectedPaymentMethod ? totalAmount : subtotal)}
                         </span>
@@ -1433,7 +1437,7 @@ const DashboardHome = () => {
                         textAlign: 'center'
                       }}
                     >
-                      {isInitiating ? 'Processing...' : (!isSequentialSelectionValid() ? 'Please Select Chronologically' : (!selectedPaymentMethod ? 'Pilih Metode Pembayaran' : 'Pay Now'))}
+                      {isInitiating ? 'Memproses...' : (!isSequentialSelectionValid() ? 'Pilih Secara Berurutan' : (!selectedPaymentMethod ? 'Pilih Metode Pembayaran' : 'Bayar Sekarang'))}
                     </button>
                   </>
                 );
@@ -1459,7 +1463,7 @@ const DashboardHome = () => {
               <HandCoins size={30} color="#059669" />
             </div>
             <div className="modal-header-text">
-              <h3>Transaction Receipt</h3>
+              <h3>Bukti Transaksi</h3>
               <span className={`modal-status-tag ${selectedTx.status?.toLowerCase().includes('berhasil') || selectedTx.status?.toLowerCase().includes('success') ? 'success' : 'pending'}`}>
                 {selectedTx.status}
               </span>
@@ -1470,12 +1474,12 @@ const DashboardHome = () => {
             {/* Rows */}
             <div className="modal-rows">
               <div className="modal-row">
-                <span className="modal-row-key">Category</span>
+                <span className="modal-row-key">Kategori</span>
                 <span className="modal-row-val tag">{selectedTx.transaction_type}</span>
               </div>
 
               <div className="modal-row">
-                <span className="modal-row-key">Date</span>
+                <span className="modal-row-key">Tanggal</span>
                 <div className="modal-row-val">
                   {new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(selectedTx.transaction_date))}
                 </div>
@@ -1483,7 +1487,7 @@ const DashboardHome = () => {
 
               <div className="modal-id-block">
                 <div>
-                  <span className="modal-row-key">Reference ID</span>
+                  <span className="modal-row-key">ID Referensi</span>
                   <span className="modal-id-code">{selectedTx.reference || '-'}</span>
                 </div>
                 <button className="modal-copy-btn" title="Copy to clipboard">
@@ -1492,7 +1496,7 @@ const DashboardHome = () => {
               </div>
 
               <div className="modal-row">
-                <span className="modal-row-key">Organization</span>
+                <span className="modal-row-key">Organisasi</span>
                 <div className="modal-recipient-chip">
                   <div className="recipient-avatar">KS</div>
                   <span className="modal-row-val">Koperasi Sanoh</span>
@@ -1503,13 +1507,13 @@ const DashboardHome = () => {
             <hr className="modal-dashed-divider" />
 
             <div className="modal-total-row">
-              <span className="modal-total-label">Total Amount</span>
+              <span className="modal-total-label">Total Pembayaran</span>
               <span className="modal-total-amount">{formatRupiah(selectedTx.amount)}</span>
             </div>
 
             <div className="modal-actions">
               <button className="btn-modal-ghost" onClick={() => setSelectedTx(null)}>
-                Close
+                Tutup
               </button>
               {/* <button className="btn-modal-primary" onClick={() => handleDownloadReceipt(selectedTx)}>
                 <Download size={15} /> Download Receipt
@@ -1532,28 +1536,28 @@ const DashboardHome = () => {
             </button>
 
             <div style={{ padding: '24px 24px 0' }}>
-              <h3 style={{ fontSize: 17, fontWeight: 700, color: '#0F172A', marginBottom: 4 }}>SHU History</h3>
-              <p style={{ fontSize: 13, color: '#64748B', marginBottom: 20 }}>Annual SHU summary &amp; current year breakdown</p>
+              <h3 style={{ fontSize: 17, fontWeight: 700, color: '#0F172A', marginBottom: 4 }}>Riwayat SHU</h3>
+              <p style={{ fontSize: 13, color: '#64748B', marginBottom: 20 }}>Ringkasan SHU tahunan &amp; rincian tahun berjalan</p>
             </div>
 
             {/* Current year breakdown */}
             {shuAnalytics.current_year?.months?.length > 0 && (
               <div style={{ padding: '0 24px 16px' }}>
                 <p style={{ fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 8 }}>
-                  {shuAnalytics.current_year.year} (Current Year)
+                  {shuAnalytics.current_year.year} (Tahun Berjalan)
                 </p>
                 <div style={{ maxHeight: 220, overflowY: 'auto', border: '1px solid #E8ECF1', borderRadius: 10 }}>
                   <table className="tx-table" style={{ fontSize: 13 }}>
                     <thead>
                       <tr>
-                        <th>Month</th>
-                        <th style={{ textAlign: 'right' }}>Savings</th>
+                        <th>Bulan</th>
+                        <th style={{ textAlign: 'right' }}>Simpanan</th>
                         <th style={{ textAlign: 'right' }}>SHU</th>
                       </tr>
                     </thead>
                     <tbody>
                       {shuAnalytics.current_year.months.map((m) => {
-                        const monthName = new Date(2026, m.month - 1, 1).toLocaleString('en-US', { month: 'long' });
+                        const monthName = new Date(2026, m.month - 1, 1).toLocaleString('id-ID', { month: 'long' });
                         return (
                           <tr key={m.month}>
                             <td>{monthName}</td>
@@ -1575,13 +1579,13 @@ const DashboardHome = () => {
             {/* Past years */}
             {shuAnalytics.yearly_history?.length > 0 && (
               <div style={{ padding: '0 24px 24px' }}>
-                <p style={{ fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 8 }}>Past Years</p>
+                <p style={{ fontSize: 13, fontWeight: 600, color: '#334155', marginBottom: 8 }}>Tahun Sebelumnya</p>
                 <div style={{ border: '1px solid #E8ECF1', borderRadius: 10 }}>
                   <table className="tx-table" style={{ fontSize: 13 }}>
                     <thead>
                       <tr>
-                        <th>Year</th>
-                        <th style={{ textAlign: 'right' }}>Total Savings</th>
+                        <th>Tahun</th>
+                        <th style={{ textAlign: 'right' }}>Total Simpanan</th>
                         <th style={{ textAlign: 'right' }}>Total SHU</th>
                       </tr>
                     </thead>
@@ -1600,7 +1604,7 @@ const DashboardHome = () => {
             )}
 
             <div style={{ padding: '0 24px 24px', display: 'flex', justifyContent: 'flex-end' }}>
-              <button className="btn-modal-ghost" onClick={() => setShowShuHistory(false)}>Close</button>
+              <button className="btn-modal-ghost" onClick={() => setShowShuHistory(false)}>Tutup</button>
             </div>
           </div>
         </div>

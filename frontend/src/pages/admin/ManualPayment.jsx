@@ -4,21 +4,21 @@ import { apiUrl } from '../../services/api';
 import './ManualPayment.css';
 
 const MONTHS = [
-  { value: 1, label: 'January' }, { value: 2, label: 'February' },
-  { value: 3, label: 'March' }, { value: 4, label: 'April' },
-  { value: 5, label: 'May' }, { value: 6, label: 'June' },
-  { value: 7, label: 'July' }, { value: 8, label: 'August' },
-  { value: 9, label: 'September' }, { value: 10, label: 'October' },
-  { value: 11, label: 'November' }, { value: 12, label: 'December' },
+  { value: 1, label: 'Januari' }, { value: 2, label: 'Februari' },
+  { value: 3, label: 'Maret' }, { value: 4, label: 'April' },
+  { value: 5, label: 'Mei' }, { value: 6, label: 'Juni' },
+  { value: 7, label: 'Juli' }, { value: 8, label: 'Agustus' },
+  { value: 9, label: 'September' }, { value: 10, label: 'Oktober' },
+  { value: 11, label: 'November' }, { value: 12, label: 'Desember' },
 ];
 const currentYear = new Date().getFullYear();
 const YEARS = Array.from({ length: currentYear - 2020 + 3 }, (_, i) => 2020 + i);
 
 const PAYMENT_TYPES = [
-  { value: 'mandatory', label: 'Mandatory Saving', detailKey: 'mandatory_outstanding' },
-  { value: 'voluntary', label: 'Voluntary Saving', detailKey: 'voluntary_outstanding' },
-  { value: 'loan', label: 'Loan Repayment', detailKey: 'loan_deduction' },
-  { value: 'withdrawal', label: 'Withdrawal', detailKey: '' },
+  { value: 'mandatory', label: 'Simpanan Wajib', detailKey: 'mandatory_outstanding' },
+  { value: 'voluntary', label: 'Simpanan Sukarela', detailKey: 'voluntary_outstanding' },
+  { value: 'loan', label: 'Cicilan Pinjaman', detailKey: 'loan_deduction' },
+  { value: 'withdrawal', label: 'Penarikan', detailKey: '' },
 ];
 
 const MAX_FILE_MB = 10;
@@ -172,13 +172,13 @@ const ManualPayment = () => {
     if (!file) return;
     const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
     if (!allowedTypes.includes(file.type)) {
-      setFileError('Only JPG, PNG, and PDF files are allowed.');
+      setFileError('Hanya file JPG, PNG, dan PDF yang diperbolehkan.');
       setProofFile(null);
       e.target.value = '';
       return;
     }
     if (file.size > MAX_FILE_MB * 1024 * 1024) {
-      setFileError(`File size must be under ${MAX_FILE_MB}MB.`);
+      setFileError(`Ukuran file harus di bawah ${MAX_FILE_MB}MB.`);
       setProofFile(null);
       e.target.value = '';
       return;
@@ -192,21 +192,21 @@ const ManualPayment = () => {
   const handleProcessPayment = async () => {
     if (loading) return;
     setFormError('');
-    if (!selectedMemberId) { setFormError('Please select a member.'); return; }
-    
+    if (!selectedMemberId) { setFormError('Silakan pilih anggota.'); return; }
+
     const activePayments = payments.filter(p => p.type && p.amount);
-    if (activePayments.length === 0) { 
-      setFormError('Please add at least one payment type and amount.'); 
-      return; 
+    if (activePayments.length === 0) {
+      setFormError('Silakan tambahkan minimal satu jenis pembayaran dan jumlah.');
+      return;
     }
-    
-    if (!notes.trim()) { 
-      setFormError('Notes are required before processing payment.'); 
-      return; 
+
+    if (!notes.trim()) {
+      setFormError('Catatan wajib diisi sebelum memproses pembayaran.');
+      return;
     }
 
     if (!proofFile) {
-      setFormError('Proof of Transfer is required before processing payment.');
+      setFormError('Bukti transfer wajib diunggah sebelum memproses pembayaran.');
       return;
     }
 
@@ -230,7 +230,7 @@ const ManualPayment = () => {
 
       if (res.ok || res.status === 207) {
         if (result.errors && result.errors.length > 0) {
-          setFormError(`Partial success. Errors: ${result.errors.join(', ')}`);
+          setFormError(`Sebagian berhasil. Kesalahan: ${result.errors.join(', ')}`);
         } else {
           setSubmitSuccess(true);
           // Refresh data member untuk melihat saldo terbaru
@@ -239,7 +239,7 @@ const ManualPayment = () => {
           }
           
           // Simpan ringkasan hasil untuk ditampilkan
-          const summary = result.results ? result.results.join(' | ') : 'All payments processed';
+          const summary = result.results ? result.results.join(' | ') : 'Semua pembayaran berhasil diproses';
           setSuccessMessage(summary);
 
           setTimeout(() => {
@@ -249,13 +249,13 @@ const ManualPayment = () => {
           }, 5000); // Beri waktu lebih lama agar admin bisa baca ringkasan
         }
       } else {
-        const errorMsg = result.error || 'Failed to process payment.';
+        const errorMsg = result.error || 'Gagal memproses pembayaran.';
         const detailedErrors = result.details ? `: ${result.details.join(', ')}` : '';
         setFormError(errorMsg + detailedErrors);
       }
     } catch (err) {
       console.error('Submit error:', err);
-      setFormError('Network error. Please try again.');
+      setFormError('Kesalahan jaringan. Silakan coba lagi.');
     } finally {
       setLoading(false);
     }
@@ -282,7 +282,7 @@ const ManualPayment = () => {
   return (
     <div className="mp-container">
       <div className="mp-top-bar">
-        <h1 className="mp-title">Manual Transaction</h1>
+        <h1 className="mp-title">Transaksi Manual</h1>
 
         {/* Period Filter */}
         <div className="mp-period-filter">
@@ -309,7 +309,7 @@ const ManualPayment = () => {
                 <input
                   type="text"
                   className="mp-search-input"
-                  placeholder={selectedMemberLabel || 'Search member by name or NIK...'}
+                  placeholder={selectedMemberLabel || 'Cari anggota berdasarkan nama atau NIK...'}
                   value={memberSearch}
                   onChange={e => { setMemberSearch(e.target.value); setShowDropdown(true); }}
                   onFocus={() => setShowDropdown(true)}
@@ -321,7 +321,7 @@ const ManualPayment = () => {
               {showDropdown && (
                 <div className="mp-member-dropdown">
                   {filteredMembers.length === 0 ? (
-                    <div className="mp-dropdown-empty">No members found</div>
+                    <div className="mp-dropdown-empty">Anggota tidak ditemukan</div>
                   ) : (
                     filteredMembers.map(m => (
                       <div
@@ -339,39 +339,39 @@ const ManualPayment = () => {
             </div>
 
             <div className="mp-user-meta">
-              Department: {memberDetail?.department_name || '-'}<br />
-              NIK Employee: {memberDetail?.nik_employee || '-'}
+              Departemen: {memberDetail?.department_name || '-'}<br />
+              NIK Karyawan: {memberDetail?.nik_employee || '-'}
             </div>
           </div>
 
           <div className="mp-user-details">
             Email: {memberDetail?.email || '-'}<br />
-            Phone: {memberDetail?.phone_number || '-'}
+            Telepon: {memberDetail?.phone_number || '-'}
           </div>
         </div>
 
         {/* ── Outstanding Detail ── */}
         <div className="mp-section">
           <div className="mp-section-header-row">
-            <h2 className="mp-section-title" style={{ margin: 0 }}>Detail Outstanding</h2>
+            <h2 className="mp-section-title" style={{ margin: 0 }}>Detail Tunggakan</h2>
             {memberDetail && (
-              <span className="mp-period-badge">Period: {selectedMonthLabel} {selectedYear}</span>
+              <span className="mp-period-badge">Periode: {selectedMonthLabel} {selectedYear}</span>
             )}
-            {loading && <span className="mp-loading-text">Loading...</span>}
+            {loading && <span className="mp-loading-text">Memuat...</span>}
           </div>
 
           <div className="mp-grid">
             <div className="mp-outstanding-list">
               <div className="mp-out-item">
-                <label>Loan Deduction (Current Cycle)</label>
+                <label>Potongan Pinjaman (Siklus Saat Ini)</label>
                 <div className="mp-amount">{formatRupiah(memberDetail?.loan_deduction)}</div>
               </div>
               <div className="mp-out-item">
-                <label>Mandatory Saving (Outstanding)</label>
+                <label>Simpanan Wajib (Tunggakan)</label>
                 <div className="mp-amount">{formatRupiah(memberDetail?.mandatory_outstanding)}</div>
               </div>
               <div className="mp-out-item">
-                <label>Voluntary Saving (Outstanding)</label>
+                <label>Simpanan Sukarela (Tunggakan)</label>
                 <div className="mp-amount">{formatRupiah(memberDetail?.voluntary_outstanding)}</div>
               </div>
             </div>
@@ -379,19 +379,19 @@ const ManualPayment = () => {
             <div className="mp-saving-card">
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <div>
-                  <label>Saving Balance</label>
+                  <label>Saldo Simpanan</label>
                   <h3>{formatRupiah(memberDetail?.amount_saving_balance)}</h3>
-                  <label style={{ marginTop: '16px' }}>Total Loan Balance</label>
+                  <label style={{ marginTop: '16px' }}>Total Saldo Pinjaman</label>
                   <h3>{formatRupiah(memberDetail?.loans_balance)}</h3>
                   <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #eee' }}>
-                    <label style={{ fontSize: '11px', color: '#666' }}>Monthly Mandatory Set</label>
+                    <label style={{ fontSize: '11px', color: '#666' }}>Simpanan Wajib Bulanan</label>
                     <div style={{ fontWeight: '700', color: '#1a1a1a' }}>{formatRupiah(memberDetail?.mandatory_monthly_amount)}</div>
-                    <label style={{ fontSize: '11px', color: '#666', marginTop: '8px', display: 'block' }}>Monthly Voluntary Set</label>
+                    <label style={{ fontSize: '11px', color: '#666', marginTop: '8px', display: 'block' }}>Simpanan Sukarela Bulanan</label>
                     <div style={{ fontWeight: '700', color: '#1a1a1a' }}>{formatRupiah(memberDetail?.voluntary_monthly_amount)}</div>
                   </div>
                 </div>
                 <div>
-                  <label>Bank Info</label>
+                  <label>Info Bank</label>
                   <h4 style={{ fontSize: '13px', margin: '4px 0 0' }}>
                     {memberDetail?.bank_name || '-'}<br />
                     {memberDetail?.account_number || '-'}<br />
@@ -407,16 +407,16 @@ const ManualPayment = () => {
         <div className="mp-section">
           <div className="mp-section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h2 className="mp-section-title" style={{ margin: 0 }}>
-              Payment
+              Pembayaran
               <span className="mp-row-count">{payments.length}/{PAYMENT_TYPES.length}</span>
             </h2>
             <button
               className="mp-add-payment-btn"
               onClick={addPayment}
               disabled={!canAddMore}
-              title={!canAddMore ? 'Maximum 3 payment types' : 'Add payment row'}
+              title={!canAddMore ? 'Maksimal 3 jenis pembayaran' : 'Tambah baris pembayaran'}
             >
-              <Plus size={16} /> Add More
+              <Plus size={16} /> Tambah
             </button>
           </div>
 
@@ -431,7 +431,7 @@ const ManualPayment = () => {
                     value={pay.type}
                     onChange={e => handleTypeChange(idx, e.target.value)}
                   >
-                    <option value="">— Transaction Type —</option>
+                    <option value="">— Jenis Transaksi —</option>
                     {opts.map(pt => (
                       <option key={pt.value} value={pt.value}>{pt.label}</option>
                     ))}
@@ -449,13 +449,13 @@ const ManualPayment = () => {
                     onChange={e => handleAmountChange(idx, e.target.value)}
                   />
                   {pay.type && memberDetail && pay.type !== 'withdrawal' && (
-                    <span className="mp-auto-label">auto-filled</span>
+                    <span className="mp-auto-label">otomatis</span>
                   )}
                 </div>
 
                 {/* Remove */}
                 {payments.length > 1 && (
-                  <button className="mp-remove-btn" onClick={() => removePayment(idx)} title="Remove row">
+                  <button className="mp-remove-btn" onClick={() => removePayment(idx)} title="Hapus baris">
                     <Trash2 size={18} color="#ef4444" />
                   </button>
                 )}
@@ -470,12 +470,12 @@ const ManualPayment = () => {
             {/* Notes — required */}
             <div className="mp-input-group">
               <label className="mp-label">
-                Notes <span className="mp-required">*</span>
-                <span className="mp-required-hint">(required)</span>
+                Catatan <span className="mp-required">*</span>
+                <span className="mp-required-hint">(wajib)</span>
               </label>
               <textarea
                 className={`mp-clean-input mp-textarea ${!notes.trim() && formError ? 'mp-input-error' : ''}`}
-                placeholder="Enter transaction notes (required)..."
+                placeholder="Masukkan catatan transaksi (wajib)..."
                 value={notes}
                 onChange={e => { setNotes(e.target.value); if (formError) setFormError(''); }}
               />
@@ -484,7 +484,7 @@ const ManualPayment = () => {
             {/* Proof of Transfer */}
             <div className="mp-input-group">
               <label className="mp-label">
-                Proof of Transfer <span className="mp-required">*</span>
+                Bukti Transfer <span className="mp-required">*</span>
               </label>
               <div className="mp-file-upload">
                 <input
@@ -504,7 +504,7 @@ const ManualPayment = () => {
                   ) : (
                     <>
                       <Upload size={20} style={{ flexShrink: 0 }} />
-                      <span>Upload Proof of Transfer</span>
+                      <span>Unggah Bukti Transfer</span>
                       <span className="mp-file-hint">JPG, PNG, PDF · Max {MAX_FILE_MB}MB</span>
                     </>
                   )}
@@ -527,7 +527,7 @@ const ManualPayment = () => {
           <div className="mp-form-success">
             <CheckCircle size={20} style={{ marginTop: '2px', flexShrink: 0 }} />
             <div>
-              <div className="mp-success-title">Payment Processed Successfully!</div>
+              <div className="mp-success-title">Pembayaran Berhasil Diproses!</div>
               <div className="mp-success-detail">{successMessage}</div>
             </div>
           </div>
@@ -536,9 +536,9 @@ const ManualPayment = () => {
         {/* ── Actions ── */}
         <div className="mp-actions">
           <button className="mp-btn mp-btn-process" onClick={handleProcessPayment} disabled={loading}>
-            {loading ? <><Loader size={16} className="spinner" /> Processing...</> : 'Process Payment'}
+            {loading ? <><Loader size={16} className="spinner" /> Proses Pembayaran...</> : 'Process Payment'}
           </button>
-          <button className="mp-btn" onClick={handleClear}>Clear</button>
+          <button className="mp-btn" onClick={handleClear}>Hapus</button>
         </div>
       </div>
     </div>

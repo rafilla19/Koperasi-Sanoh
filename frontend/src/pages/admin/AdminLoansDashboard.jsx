@@ -33,10 +33,10 @@ const AdminLoansDashboard = () => {
   ];
 
   const [stats, setStats] = useState([
-    { title: 'Total Outstanding', value: 'Loading...', up: '', tooltip: 'Total outstanding loan amount across all active loans.' },
-    { title: 'Active Borrowers', value: 'Loading...', up: '', tooltip: 'Number of members with active loans.' },
-    { title: 'Interest Achieved', value: 'Loading...', up: '', tooltip: 'Total interest collected from all loans.' },
-    { title: 'Pending Approvals', value: 'Loading...', up: '', tooltip: 'Number of loan applications currently pending approval.' }
+    { title: 'Total Tertunggak', value: 'Memuat...', up: '', tooltip: 'Total saldo pinjaman tertunggak dari semua pinjaman aktif.' },
+    { title: 'Peminjam Aktif', value: 'Memuat...', up: '', tooltip: 'Jumlah anggota dengan pinjaman aktif.' },
+    { title: 'Bunga Tercapai', value: 'Memuat...', up: '', tooltip: 'Total bunga terkumpul dari semua pinjaman.' },
+    { title: 'Menunggu Persetujuan', value: 'Memuat...', up: '', tooltip: 'Jumlah pengajuan pinjaman yang menunggu persetujuan.' }
   ]);
 
   const [pendingList, setPendingList] = useState([]);
@@ -86,20 +86,20 @@ const AdminLoansDashboard = () => {
       if (response.ok) {
         const data = await response.json();
         row1Stats = [
-          { title: 'Total Outstanding', value: formatRupiah(data.total_outstanding), up: data.outstanding_trend },
-          { title: 'Active Borrowers', value: formatRupiah(data.active_borrowers), up: data.borrowers_trend },
-          { title: 'Interest Achieved', value: formatRupiah(data.interest_achieved), up: data.interest_trend },
-          { title: 'Pending Approvals', value: (data.pending_approvals || 0).toString(), up: '' }
+          { title: 'Total Tertunggak', value: formatRupiah(data.total_outstanding), up: data.outstanding_trend },
+          { title: 'Peminjam Aktif', value: formatRupiah(data.active_borrowers), up: data.borrowers_trend },
+          { title: 'Bunga Tercapai', value: formatRupiah(data.interest_achieved), up: data.interest_trend },
+          { title: 'Menunggu Persetujuan', value: (data.pending_approvals || 0).toString(), up: '' }
         ];
       }
 
       if (response2.ok) {
         const data = await response2.json();
         row2Stats = [
-          { title: 'Total Active Loan', value: `${data.active_loans}/${data.total_members} Members`, up: '' },
-          { title: 'Collected This Month', value: `${formatRupiah(data.collected_this_month)}`, up: '' },
-          { title: 'Total Overdue Loans This Month', value: formatRupiah(data.total_overdue), up: '' },
-          { title: 'Remaining Loan Allocation This Month', value: formatRupiah(data.remaining_allocation || data.monthly_limit || 0), up: '' }
+          { title: 'Total Pinjaman Aktif', value: `${data.active_loans}/${data.total_members} Anggota`, up: '' },
+          { title: 'Terkumpul Bulan Ini', value: `${formatRupiah(data.collected_this_month)}`, up: '' },
+          { title: 'Total Pinjaman Macet Bulan Ini', value: formatRupiah(data.total_overdue), up: '' },
+          { title: 'Sisa Alokasi Pinjaman Bulan Ini', value: formatRupiah(data.remaining_allocation || data.monthly_limit || 0), up: '' }
         ];
       }
 
@@ -143,12 +143,12 @@ const AdminLoansDashboard = () => {
         setFundingSetting({ id: null, monthly_limit: '', effective_date: '' });
       } else {
         const error = await response.json();
-        setFundingError(error.error || 'Failed to load funding settings');
+        setFundingError(error.error || 'Gagal memuat pengaturan dana');
       }
       setShowFundingModal(true);
     } catch (error) {
       console.error('Failed to load funding settings:', error);
-      setFundingError('Failed to load funding settings');
+      setFundingError('Gagal memuat pengaturan dana');
       setShowFundingModal(true);
     }
   };
@@ -160,7 +160,7 @@ const AdminLoansDashboard = () => {
   const saveFundingSettings = async () => {
     setFundingError('');
     if (!fundingSetting.monthly_limit || !fundingSetting.effective_date) {
-      setFundingError('Monthly limit and effective date are required.');
+      setFundingError('Batas bulanan dan tanggal efektif wajib diisi.');
       return;
     }
 
@@ -180,7 +180,7 @@ const AdminLoansDashboard = () => {
 
       if (!response.ok) {
         const error = await response.json();
-        setFundingError(error.error || 'Failed to save funding settings');
+        setFundingError(error.error || 'Gagal menyimpan pengaturan dana');
         return;
       }
 
@@ -188,7 +188,7 @@ const AdminLoansDashboard = () => {
       setShowFundingModal(false);
     } catch (error) {
       console.error('Failed to save funding settings:', error);
-      setFundingError('Failed to save funding settings');
+      setFundingError('Gagal menyimpan pengaturan dana');
     } finally {
       setIsSavingFunding(false);
     }
@@ -196,12 +196,12 @@ const AdminLoansDashboard = () => {
 
   // Month/year options
   const MONTHS = [
-    { value: 1, label: 'January' }, { value: 2, label: 'February' },
-    { value: 3, label: 'March' }, { value: 4, label: 'April' },
-    { value: 5, label: 'May' }, { value: 6, label: 'June' },
-    { value: 7, label: 'July' }, { value: 8, label: 'August' },
-    { value: 9, label: 'September' }, { value: 10, label: 'October' },
-    { value: 11, label: 'November' }, { value: 12, label: 'December' },
+    { value: 1, label: 'Januari' }, { value: 2, label: 'Februari' },
+    { value: 3, label: 'Maret' }, { value: 4, label: 'April' },
+    { value: 5, label: 'Mei' }, { value: 6, label: 'Juni' },
+    { value: 7, label: 'Juli' }, { value: 8, label: 'Agustus' },
+    { value: 9, label: 'September' }, { value: 10, label: 'Oktober' },
+    { value: 11, label: 'November' }, { value: 12, label: 'Desember' },
   ];
   const currentYear = new Date().getFullYear();
   const YEARS = Array.from({ length: currentYear - 2020 + 3 }, (_, i) => 2020 + i);
@@ -291,7 +291,7 @@ const AdminLoansDashboard = () => {
           onClick={() => currentPage < totalPages && handlePageChange(currentPage + 1)}
           style={{ opacity: currentPage >= totalPages ? 0.5 : 1, pointerEvents: currentPage >= totalPages ? 'none' : 'auto' }}
         >
-          NEXT &gt;
+          SLNJT &gt;
         </button>
       </div>
     );
@@ -321,7 +321,7 @@ const AdminLoansDashboard = () => {
   const handleSendReminder = async () => {
     if (isSendingReminder) return;
     if (selectedLoans.length === 0) {
-      alert('Please select at least one loan to send reminder');
+      alert('Silakan pilih minimal satu pinjaman untuk mengirim pengingat');
       return;
     }
 
@@ -339,16 +339,16 @@ const AdminLoansDashboard = () => {
 
       if (response.ok) {
         const data = await response.json();
-        alert(`✓ Reminder emails sent successfully!\nSuccessful: ${data.success_count}\nFailed: ${data.failed_count || 0}`);
+        alert(`✓ Email pengingat berhasil dikirim!\nBerhasil: ${data.success_count}\nGagal: ${data.failed_count || 0}`);
         setSelectedLoans([]);
         setSelectAll(false);
       } else {
         const error = await response.json();
-        alert(`Error: ${error.error || 'Failed to send reminders'}`);
+        alert(`Kesalahan: ${error.error || 'Gagal mengirim pengingat'}`);
       }
     } catch (error) {
-      console.error('Error sending reminder:', error);
-      alert('Error sending reminders. Please try again.');
+      console.error('Kesalahan saat mengirim pengingat:', error);
+      alert('Kesalahan saat mengirim pengingat. Silakan coba lagi.');
     } finally {
       setIsSendingReminder(false);
     }
@@ -357,10 +357,10 @@ const AdminLoansDashboard = () => {
   const handleAutoSendAll = async () => {
     if (isAutoSending) return;
     const confirmed = await window.appConfirm({
-      title: 'Send all reminders?',
-      message: 'This will send reminder emails to all members with overdue installments. Continue?',
-      confirmText: 'Send Reminders',
-      cancelText: 'Cancel',
+      title: 'Kirim semua pengingat?',
+      message: 'Ini akan mengirim email pengingat ke semua anggota dengan angsuran tertunggak. Lanjutkan?',
+      confirmText: 'Kirim Pengingat',
+      cancelText: 'Batal',
     });
     if (!confirmed) return;
 
@@ -373,13 +373,13 @@ const AdminLoansDashboard = () => {
 
       if (response.ok) {
         const data = await response.json();
-        alert(`Auto-reminders process completed!\nEmails Sent: ${data.success_count}`);
+        alert(`Proses pengingat otomatis selesai!\nEmail Terkirim: ${data.success_count}`);
       } else {
-        alert('Failed to trigger auto-reminders');
+        alert('Gagal memicu pengingat otomatis');
       }
     } catch (error) {
       console.error(error);
-      alert('Error triggering auto-reminders');
+      alert('Kesalahan saat memicu pengingat otomatis');
     } finally {
       setIsAutoSending(false);
     }
@@ -388,17 +388,17 @@ const AdminLoansDashboard = () => {
   const handleExportExcel = () => {
     if (isExporting) return;
     setIsExporting(true);
-    const headers = ['ID', 'Name', 'NIK', 'Purpose', 'Type', 'Department', 'Start Date', 'End Date', 'Principal', 'Interest', 'Total Amount', 'Remaining Balance', 'Progress', 'Current Month Due Date', 'Current Month Installment', 'Status'];
+    const headers = ['ID', 'Nama', 'NIK', 'Tujuan', 'Jenis', 'Departemen', 'Tgl Mulai', 'Tgl Akhir', 'Pokok', 'Bunga', 'Total', 'Sisa Saldo', 'Progres', 'Jatuh Tempo Bulan Ini', 'Angsuran Bulan Ini', 'Status'];
     const csvRows = [headers.join(',')];
 
     filteredLoans.forEach(loan => {
-      let statusDisplay = 'Active';
+      let statusDisplay = 'Aktif';
       if (loan.current_month_status_id === 27) {
         statusDisplay = 'Macet';
       } else if (loan.current_month_status_id === 30) {
-        statusDisplay = 'Terlambat (Late Paid)';
+        statusDisplay = 'Terlambat';
       } else if (loan.status_code && (loan.status_code.toLowerCase().includes('paid') || loan.status_code.toLowerCase() === 'paid_off')) {
-        statusDisplay = 'Paid Off';
+        statusDisplay = 'Lunas';
       }
 
       const dueDate = loan.current_month_due_date
@@ -451,14 +451,14 @@ const AdminLoansDashboard = () => {
       <div className="ald-stats">
         {stats.map((stat, i) => {
           const iconCfg = STAT_ICONS[i] || STAT_ICONS[0];
-          const isEditableStat = stat.title === 'Remaining Loan Allocation This Month';
+          const isEditableStat = stat.title === 'Sisa Alokasi Pinjaman Bulan Ini';
           return (
             <div
               key={i}
               className="ald-stat-card"
               onDoubleClick={isEditableStat ? openFundingModal : undefined}
               style={{ cursor: isEditableStat ? 'pointer' : 'default' }}
-              title={isEditableStat ? 'Double click to edit funding settings' : stat.tooltip}
+              title={isEditableStat ? 'Klik dua kali untuk edit pengaturan dana' : stat.tooltip}
             >
               <div className="ald-stat-top">
                 <div className="ald-stat-title">{stat.title}</div>
@@ -491,8 +491,8 @@ const AdminLoansDashboard = () => {
           <div className="ald-modal-card" onClick={(e) => e.stopPropagation()}>
             <div className="ald-modal-header">
               <div>
-                <h3>Edit Loan Funding Settings</h3>
-                <p>Update the active monthly limit and effective date.</p>
+                <h3>Edit Pengaturan Dana Pinjaman</h3>
+                <p>Perbarui batas bulanan aktif dan tanggal efektif.</p>
               </div>
               <button className="ald-modal-close" onClick={() => setShowFundingModal(false)}>
                 ×
@@ -500,16 +500,16 @@ const AdminLoansDashboard = () => {
             </div>
             <div className="ald-modal-body">
               <label>
-                Monthly Limit
+                Batas Bulanan
                 <input
                   type="number"
                   value={fundingSetting.monthly_limit}
                   onChange={(e) => handleFundingFieldChange('monthly_limit', e.target.value)}
-                  placeholder="Enter monthly limit"
+                  placeholder="Masukkan batas bulanan"
                 />
               </label>
               <label>
-                Effective Date
+                Tanggal Efektif
                 <input
                   type="date"
                   value={fundingSetting.effective_date}
@@ -519,9 +519,9 @@ const AdminLoansDashboard = () => {
               {fundingError && <div className="ald-modal-error">{fundingError}</div>}
             </div>
             <div className="ald-modal-actions">
-              <button className="ald-modal-cancel" onClick={() => setShowFundingModal(false)}>Cancel</button>
+              <button className="ald-modal-cancel" onClick={() => setShowFundingModal(false)}>Batal</button>
               <button className="ald-modal-save" onClick={saveFundingSettings} disabled={isSavingFunding}>
-                {isSavingFunding ? 'Saving...' : 'Save Changes'}
+                {isSavingFunding ? 'Menyimpan...' : 'Simpan Perubahan'}
               </button>
             </div>
           </div>
@@ -529,9 +529,9 @@ const AdminLoansDashboard = () => {
       )}
       <div className="ald-pending-section">
         <div className="ald-pending-header">
-          <h2>Pending Approvals</h2>
+          <h2>Menunggu Persetujuan</h2>
           <Link to="/dashboard/admin/ls-loans/pending" className="ald-view-more">
-            View More &rarr;
+            Lihat Semua &rarr;
           </Link>
         </div>
 
@@ -547,16 +547,16 @@ const AdminLoansDashboard = () => {
               </div>
               <div className="ald-pc-mid">
                 <div className="ald-pc-col">
-                  <div className="ald-pc-label">Purpose</div>
+                  <div className="ald-pc-label">Tujuan</div>
                   <div className="ald-pc-desc">{item.purpose}</div>
                 </div>
                 <div className="ald-pc-col term">
-                  <div className="ald-pc-label">Term</div>
+                  <div className="ald-pc-label">Jangka Waktu</div>
                   <div className="ald-pc-desc">{item.duration_months} Bulan</div>
                 </div>
               </div>
               <div className="ald-pc-amount">
-                <span>Amount</span>
+                <span>Jumlah</span>
                 <span>
                   {new Intl.NumberFormat('id-ID', {
                     style: 'currency',
@@ -601,7 +601,7 @@ const AdminLoansDashboard = () => {
               id="search-loans"
               name="search-loans"
               type="text"
-              placeholder="Search by name or ID..."
+              placeholder="Cari berdasarkan nama atau ID..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -613,9 +613,9 @@ const AdminLoansDashboard = () => {
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
             >
-              <option value="All">All</option>
-              <option value="Active">Active</option>
-              <option value="Close">Close</option>
+              <option value="All">Semua</option>
+              <option value="Active">Aktif</option>
+              <option value="Close">Tutup</option>
             </select>
           </div>
           <button className="ald-print-btn" onClick={handleExportExcel} title="Export to Excel (CSV)" disabled={isExporting}>
@@ -638,20 +638,20 @@ const AdminLoansDashboard = () => {
                 {[
                   { label: <input id="select-all-loans" name="select-all-loans" type="checkbox" checked={selectAll} onChange={handleSelectAll} className="ald-checkbox-header" />, key: 'cb' },
                   { label: 'ID', key: 'id' },
-                  { label: 'Name', key: 'name' },
+                  { label: 'Nama', key: 'name' },
                   { label: 'NIK', key: 'nik' },
-                  { label: 'Purpose', key: 'purpose' },
-                  { label: 'Type', key: 'type' },
-                  { label: 'Department', key: 'dept' },
-                  { label: 'Start Date', key: 'start' },
-                  { label: 'End Date', key: 'end' },
-                  { label: 'Principal', key: 'principal' },
-                  { label: 'Interest', key: 'interest' },
-                  { label: 'Total Amount', key: 'total' },
-                  { label: 'Remaining Balance', key: 'remaining' },
-                  { label: 'Progress', key: 'progress' },
-                  { label: 'Current Month Due Date', key: 'due' },
-                  { label: 'Current Month Installment', key: 'inst' },
+                  { label: 'Tujuan', key: 'purpose' },
+                  { label: 'Jenis', key: 'type' },
+                  { label: 'Departemen', key: 'dept' },
+                  { label: 'Tgl Mulai', key: 'start' },
+                  { label: 'Tgl Akhir', key: 'end' },
+                  { label: 'Pokok', key: 'principal' },
+                  { label: 'Bunga', key: 'interest' },
+                  { label: 'Total', key: 'total' },
+                  { label: 'Sisa Saldo', key: 'remaining' },
+                  { label: 'Progres', key: 'progress' },
+                  { label: 'Jatuh Tempo Bulan Ini', key: 'due' },
+                  { label: 'Angsuran Bulan Ini', key: 'inst' },
                   { label: 'Status', key: 'status' },
                 ].map(({ label, key }) => (
                   <th
@@ -675,22 +675,19 @@ const AdminLoansDashboard = () => {
             <tbody>
               {currentLoans.map((loan, idx) => {
                 // Determine status display
-                let statusDisplay = 'Active';
+                let statusDisplay = 'Aktif';
                 let statusClass = 'active';
 
-                // Check if it's Macet (status_id = 27)
                 if (loan.current_month_status_id === 27) {
                   statusDisplay = 'Macet';
                   statusClass = 'macet';
                 }
-                // Check if it's Late Paid (status_id = 30)
                 else if (loan.current_month_status_id === 30) {
-                  statusDisplay = 'Terlambat (Late Paid)';
+                  statusDisplay = 'Terlambat';
                   statusClass = 'late-paid';
                 }
-                // Check if it's paid off
                 else if (loan.status_code && (loan.status_code.toLowerCase().includes('paid') || loan.status_code.toLowerCase() === 'paid_off')) {
-                  statusDisplay = 'Paid Off';
+                  statusDisplay = 'Lunas';
                   statusClass = 'close';
                 }
 
@@ -699,7 +696,7 @@ const AdminLoansDashboard = () => {
                     key={idx}
                     onDoubleClick={() => handleActiveLoanDetails(loan.loan_id)}
                     style={{ cursor: 'pointer' }}
-                    title="Double click to view loan details"
+                    title="Klik dua kali untuk lihat detail pinjaman"
                   >
                     <td className="ald-checkbox-cell">
                       <input
