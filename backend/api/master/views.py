@@ -293,18 +293,18 @@ class AuthViewSet(viewsets.ViewSet):
                     first_name = user_row.get('email')
 
                 _send_styled_email(
-                    'Password Reset Request',
+                    'Permintaan Reset Password',
                     user_row['email'],
-                    'We received a request to reset your password.',
+                    'Kami menerima permintaan untuk mereset password Anda.',
                     details=[
-                        ('Account', first_name),
+                        ('Akun', first_name),
                         ('Email', user_row['email']),
                     ],
-                    highlight=('Action Required', 'Click the button below to choose a new password.'),
+                    highlight=('Tindakan Diperlukan', 'Klik tombol di bawah untuk memilih password baru.'),
                     cta_label='Reset Password',
                     cta_url=reset_link,
-                    footer_note='This password reset link will expire after 1 hour. If you did not request this reset, you can ignore this email.',
-                    plain_fallback=f'Reset your password using this link: {reset_link}',
+                    footer_note='Link reset password ini akan kedaluwarsa setelah 1 jam. Jika Anda tidak meminta reset ini, Anda dapat mengabaikan email ini.',
+                    plain_fallback=f'Reset password Anda menggunakan link ini: {reset_link}',
                 )
 
             return Response({'status': 'success', 'message': 'If the email exists, a reset link has been sent.'})
@@ -462,22 +462,22 @@ class AuthViewSet(viewsets.ViewSet):
             if member_email:
                 try:
                     email_message = EmailMultiAlternatives(
-                        'Close Account Approved',
-                        'Your close account request has been approved.',
+                        'Penutupan Akun Disetujui',
+                        'Permintaan penutupan akun Anda telah disetujui.',
                         getattr(settings, 'DEFAULT_FROM_EMAIL', None),
                         [member_email],
                     )
                     email_message.attach_alternative(
                         _build_email_html(
-                            'Close Account Approved',
-                            'Your close account request has been approved.',
+                            'Penutupan Akun Disetujui',
+                            'Permintaan penutupan akun Anda telah disetujui.',
                             details=[
-                                ('Member Name', member_name),
+                                ('Nama Anggota', member_name),
                                 ('NIK', request_details.get('nik_employee') if request_details else '-'),
-                                ('Transfer File', 'Attached'),
+                                ('File Transfer', 'Terlampir'),
                             ],
-                            highlight=('Status', 'Approved'),
-                            footer_note='Please review the attached transfer file for the settlement details.',
+                            highlight=('Status', 'Disetujui'),
+                            footer_note='Silakan periksa file transfer terlampir untuk detail penyelesaian.',
                         ),
                         'text/html',
                     )
@@ -530,28 +530,28 @@ class AuthViewSet(viewsets.ViewSet):
             if member_email:
                 try:
                     _send_styled_email(
-                        'Close Account Rejected',
+                        'Penutupan Akun Ditolak',
                         member_email,
-                        'Your close account request has been rejected.',
+                        'Permintaan penutupan akun Anda telah ditolak.',
                         details=[
-                            ('Member Name', member_name),
+                            ('Nama Anggota', member_name),
                             ('NIK', request_details.get('nik_employee') if request_details else '-'),
-                            ('Reason', notes or 'No reason provided'),
+                            ('Alasan', notes or 'Tidak ada alasan yang diberikan'),
                         ],
-                        highlight=('Status', 'Rejected'),
-                        footer_note='If you have questions, please contact the administrator.',
-                        plain_fallback='Your close account request has been rejected.',
+                        highlight=('Status', 'Ditolak'),
+                        footer_note='Jika Anda memiliki pertanyaan, silakan hubungi administrator.',
+                        plain_fallback='Permintaan penutupan akun Anda telah ditolak.',
                     )
                     # attach transfer file if uploaded
                     if transfer_link:
                         try:
                             msg = EmailMultiAlternatives(
-                                'Close Account Rejected - Attachment',
-                                'Attached is the transfer file related to your close account request.',
+                                'Penutupan Akun Ditolak - Lampiran',
+                                'Terlampir adalah file transfer terkait permintaan penutupan akun Anda.',
                                 getattr(settings, 'DEFAULT_FROM_EMAIL', None),
                                 [member_email],
                             )
-                            msg.attach_alternative(_build_email_html('Close Account Rejected', 'Your close account request has been rejected.', details=[('Member Name', member_name), ('Reason', notes or 'No reason provided')], highlight=('Status', 'Rejected')), 'text/html')
+                            msg.attach_alternative(_build_email_html('Penutupan Akun Ditolak', 'Permintaan penutupan akun Anda telah ditolak.', details=[('Nama Anggota', member_name), ('Alasan', notes or 'Tidak ada alasan yang diberikan')], highlight=('Status', 'Ditolak')), 'text/html')
                             _attach_transfer_file_from_url(msg, transfer_link)
                             msg.send(fail_silently=True)
                         except Exception:

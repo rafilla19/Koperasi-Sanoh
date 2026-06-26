@@ -56,20 +56,20 @@ class Command(BaseCommand):
                 full_name = data['full_name']
                 installments = data['installments']
                 
-                subject = "AUTOMATIC SYSTEM REMINDER - Overdue Loan Installment"
-                
+                subject = "PENGINGAT OTOMATIS SISTEM - Angsuran Pinjaman Jatuh Tempo"
+
                 details = []
                 for inst in installments:
-                    details.append((f"Installment #{inst['installment_number']} ({inst['due_date']})", f"Rp {inst['amount_total']:,.0f}"))
-                
+                    details.append((f"Angsuran #{inst['installment_number']} ({inst['due_date']})", f"Rp {inst['amount_total']:,.0f}"))
+
                 try:
                     send_styled_email(
                         subject=subject,
                         recipient=email,
-                        intro=f"Dear {full_name}, this is an automated system reminder regarding your outstanding loan installments.",
+                        intro=f"Halo {full_name}, ini adalah pengingat otomatis mengenai angsuran pinjaman Anda yang belum dibayar.",
                         details=details,
-                        highlight=("Overdue Installments", "Please settle these payments immediately."),
-                        footer_note="If you have any questions, contact the cooperative administration."
+                        highlight=("Angsuran Jatuh Tempo", "Segera lunasi pembayaran ini."),
+                        footer_note="Jika Anda memiliki pertanyaan, hubungi pengurus koperasi."
                     )
                     success_count += 1
                     self.stdout.write(self.style.SUCCESS(f"Successfully sent to {email}"))

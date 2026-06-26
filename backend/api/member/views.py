@@ -419,16 +419,16 @@ class MemberViewSet(viewsets.ViewSet):
             },
         )
 
-        subject = 'Your verification code'
-        message = f'Hello {full_name or email}, your verification code is {code}.'
+        subject = 'Kode Verifikasi Anda'
+        message = f'Halo {full_name or email}, kode verifikasi Anda adalah {code}.'
         try:
             send_styled_email(
                 subject,
                 email,
-                f'Hello {full_name or email}, your verification code is ready.',
-                details=[('Verification Code', code)],
-                highlight=('Email Verification', 'Complete the verification step to continue registration'),
-                footer_note='If you did not request this code, you can safely ignore this message.',
+                f'Halo {full_name or email}, kode verifikasi Anda sudah siap.',
+                details=[('Kode Verifikasi', code)],
+                highlight=('Verifikasi Email', 'Selesaikan langkah verifikasi untuk melanjutkan pendaftaran'),
+                footer_note='Jika Anda tidak meminta kode ini, Anda dapat mengabaikan pesan ini.',
                 plain_fallback=message,
             )
         except Exception:
@@ -519,18 +519,18 @@ class MemberViewSet(viewsets.ViewSet):
             if member_email:
                 try:
                     send_styled_email(
-                        'Registration Request Received',
+                        'Permintaan Pendaftaran Diterima',
                         member_email,
-                        'Your registration request has been received and is waiting for admin approval.',
+                        'Permintaan pendaftaran Anda telah diterima dan sedang menunggu persetujuan admin.',
                         details=[
-                            ('Member Name', member_name),
-                            ('Employee NIK', data.get('nikEmployee') or '-'),
-                            ('Employee Status', employee_status_name or data.get('employeeStatusId') or '-'),
-                            ('Department', department_name or data.get('departmentId') or '-'),
+                            ('Nama Anggota', member_name),
+                            ('NIK Karyawan', data.get('nikEmployee') or '-'),
+                            ('Status Karyawan', employee_status_name or data.get('employeeStatusId') or '-'),
+                            ('Departemen', department_name or data.get('departmentId') or '-'),
                         ],
-                        highlight=('Next Step', 'Admin will review your registration and send an approval or rejection notice.'),
-                        footer_note='You do not need to take any action until you receive the next email.',
-                        plain_fallback='Your registration request has been received and is waiting for admin approval.',
+                        highlight=('Langkah Selanjutnya', 'Admin akan meninjau pendaftaran Anda dan mengirimkan pemberitahuan persetujuan atau penolakan.'),
+                        footer_note='Anda tidak perlu melakukan tindakan apapun hingga menerima email selanjutnya.',
+                        plain_fallback='Permintaan pendaftaran Anda telah diterima dan sedang menunggu persetujuan admin.',
                     )
                 except Exception:
                     pass
@@ -538,19 +538,19 @@ class MemberViewSet(viewsets.ViewSet):
             if admin_email:
                 try:
                     send_styled_email(
-                        'New Member Registration Request',
+                        'Permintaan Pendaftaran Anggota Baru',
                         admin_email,
-                        'A new member registration request has been submitted and is ready for review.',
+                        'Permintaan pendaftaran anggota baru telah diajukan dan siap untuk ditinjau.',
                         details=[
-                            ('Name', member_name),
+                            ('Nama', member_name),
                             ('Email', member_email or '-'),
-                            ('NIK Employee', data.get('nikEmployee') or '-'),
-                            ('Employee Status', employee_status_name or data.get('employeeStatusId') or '-'),
-                            ('Department', department_name or data.get('departmentId') or '-'),
+                            ('NIK Karyawan', data.get('nikEmployee') or '-'),
+                            ('Status Karyawan', employee_status_name or data.get('employeeStatusId') or '-'),
+                            ('Departemen', department_name or data.get('departmentId') or '-'),
                         ],
-                        highlight=('Required Action', 'Please review the request in the admin dashboard.'),
-                        footer_note='This notification is automatically generated from the registration flow.',
-                        plain_fallback='A new member registration request has been submitted.',
+                        highlight=('Tindakan Diperlukan', 'Silakan tinjau permintaan di dashboard admin.'),
+                        footer_note='Notifikasi ini dibuat secara otomatis dari alur pendaftaran.',
+                        plain_fallback='Permintaan pendaftaran anggota baru telah diajukan.',
                     )
                 except Exception:
                     pass
@@ -624,18 +624,18 @@ class MemberViewSet(viewsets.ViewSet):
             if admin_email:
                 try:
                     send_styled_email(
-                        'Close Account Request Submitted',
+                        'Permintaan Penutupan Akun Diajukan',
                         admin_email,
-                        'A close account request has been submitted and needs review.',
+                        'Permintaan penutupan akun telah diajukan dan perlu ditinjau.',
                         details=[
-                            ('Name', member_row.get('full_name') if member_row else member_id),
+                            ('Nama', member_row.get('full_name') if member_row else member_id),
                             ('NIK', member_row.get('nik_employee') if member_row else '-'),
-                            ('Member Email', member_row.get('email') if member_row else '-'),
-                            ('Reason', reason or '-'),
+                            ('Email Anggota', member_row.get('email') if member_row else '-'),
+                            ('Alasan', reason or '-'),
                         ],
-                        highlight=('Required Action', 'Please review the request in the admin dashboard.'),
-                        footer_note='The request was created by the member close-account flow.',
-                        plain_fallback='A close account request has been submitted.',
+                        highlight=('Tindakan Diperlukan', 'Silakan tinjau permintaan di dashboard admin.'),
+                        footer_note='Permintaan ini dibuat melalui alur penutupan akun anggota.',
+                        plain_fallback='Permintaan penutupan akun telah diajukan.',
                     )
                 except Exception:
                     pass
@@ -726,22 +726,22 @@ class MemberViewSet(viewsets.ViewSet):
 
                 admin_email = getattr(settings, 'ADMIN_EMAIL', None) or getattr(settings, 'DEFAULT_FROM_EMAIL', None)
                 if admin_email:
-                    subject = 'Voluntary Saving Change Request Pending Approval'
+                    subject = 'Permintaan Perubahan Simpanan Sukarela Menunggu Persetujuan'
                     try:
                         send_styled_email(
                             subject,
                             admin_email,
-                            'A voluntary saving change request is waiting for admin approval.',
+                            'Permintaan perubahan simpanan sukarela sedang menunggu persetujuan admin.',
                             details=[
-                                ('Member', member_row.get('full_name') if member_row else member_id),
+                                ('Anggota', member_row.get('full_name') if member_row else member_id),
                                 ('NIK', member_row.get('nik_employee') if member_row else '-'),
-                                ('Member Email', member_row.get('email') if member_row else '-'),
-                                ('Current Amount', current_amount),
-                                ('Requested Amount', requested_amount),
+                                ('Email Anggota', member_row.get('email') if member_row else '-'),
+                                ('Jumlah Saat Ini', current_amount),
+                                ('Jumlah Diminta', requested_amount),
                             ],
-                            highlight=('Required Action', 'Please review and approve or reject the request in the admin dashboard.'),
-                            footer_note='This is an automated notification from the voluntary saving request flow.',
-                            plain_fallback='A voluntary saving change request has been submitted.',
+                            highlight=('Tindakan Diperlukan', 'Silakan tinjau dan setujui atau tolak permintaan di dashboard admin.'),
+                            footer_note='Ini adalah notifikasi otomatis dari alur permintaan simpanan sukarela.',
+                            plain_fallback='Permintaan perubahan simpanan sukarela telah diajukan.',
                         )
                     except Exception:
                         pass
@@ -1383,28 +1383,28 @@ class MemberViewSet(viewsets.ViewSet):
                 # Determine link based on status_id OR employee_status (employees 1 & 2 get direct access)
                 if status_id == 7 or employee_status_id in (1, 2):
                     # Direct login access for approved registrations and employee types 1 or 2
-                    subject = 'Registration Approved - You Can Use the App'
-                    intro = 'Your member registration has been approved and your account is ready to use.'
+                    subject = 'Pendaftaran Disetujui - Anda Dapat Menggunakan Aplikasi'
+                    intro = 'Pendaftaran keanggotaan Anda telah disetujui dan akun Anda siap digunakan.'
                     login_link = f"{settings.FRONTEND_BASE_URL.rstrip('/')}/login"
-                    cta_label = 'Login to Your Account'
+                    cta_label = 'Login ke Akun Anda'
                     cta_url = login_link
                     details = [
-                        ('Member Name', registration_row.get('full_name') or registration_row.get('email')),
-                        ('Employee NIK', registration_row.get('nik_employee') or '-'),
-                        ('Status', 'Approved - Direct Access'),
+                        ('Nama Anggota', registration_row.get('full_name') or registration_row.get('email')),
+                        ('NIK Karyawan', registration_row.get('nik_employee') or '-'),
+                        ('Status', 'Disetujui - Akses Langsung'),
                     ]
                 else:
                     # Registrations that still require principal saving payment
-                    subject = 'Registration Approved - Principal Saving Required'
-                    intro = 'Your member registration has been approved. Complete the principal saving payment to activate your membership.'
+                    subject = 'Pendaftaran Disetujui - Pembayaran Simpanan Pokok Diperlukan'
+                    intro = 'Pendaftaran keanggotaan Anda telah disetujui. Selesaikan pembayaran simpanan pokok untuk mengaktifkan keanggotaan Anda.'
                     login_link = f"{settings.FRONTEND_BASE_URL.rstrip('/')}/register/under-review?id={pk}"
-                    cta_label = 'Continue to Payment'
+                    cta_label = 'Lanjutkan ke Pembayaran'
                     cta_url = login_link
                     details = [
-                        ('Member Name', registration_row.get('full_name') or registration_row.get('email')),
-                        ('Employee NIK', registration_row.get('nik_employee') or '-'),
-                        ('Required Payment', f'Rp {min_amount:,.0f}'),
-                        ('Purpose', 'Principal Savings (Mandatory)'),
+                        ('Nama Anggota', registration_row.get('full_name') or registration_row.get('email')),
+                        ('NIK Karyawan', registration_row.get('nik_employee') or '-'),
+                        ('Pembayaran Diperlukan', f'Rp {min_amount:,.0f}'),
+                        ('Tujuan', 'Simpanan Pokok (Wajib)'),
                     ]
 
                 try:
@@ -1413,10 +1413,10 @@ class MemberViewSet(viewsets.ViewSet):
                         registration_row['email'],
                         intro,
                         details=details,
-                        highlight=('Next Step', cta_label),
+                        highlight=('Langkah Selanjutnya', cta_label),
                         cta_label=cta_label,
                         cta_url=cta_url,
-                        footer_note='If you have questions, please contact the administrator.',
+                        footer_note='Jika Anda memiliki pertanyaan, silakan hubungi administrator.',
                         plain_fallback=intro,
                     )
                 except Exception:
@@ -1485,17 +1485,17 @@ class MemberViewSet(viewsets.ViewSet):
             if registration_row and registration_row.get('email'):
                 try:
                     send_styled_email(
-                        'Registration Rejected',
+                        'Pendaftaran Ditolak',
                         registration_row['email'],
-                        'Your member registration request has been rejected.',
+                        'Permintaan pendaftaran keanggotaan Anda telah ditolak.',
                         details=[
-                            ('Member Name', registration_row.get('full_name') or registration_row.get('email')),
-                            ('Employee NIK', registration_row.get('nik_employee') or '-'),
-                            ('Reason', comment or 'No reason provided'),
+                            ('Nama Anggota', registration_row.get('full_name') or registration_row.get('email')),
+                            ('NIK Karyawan', registration_row.get('nik_employee') or '-'),
+                            ('Alasan', comment or 'Tidak ada alasan yang diberikan'),
                         ],
-                        highlight=('Status', 'Rejected'),
-                        footer_note='Please contact the administrator if you need clarification or would like to resubmit later.',
-                        plain_fallback='Your member registration request has been rejected.',
+                        highlight=('Status', 'Ditolak'),
+                        footer_note='Silakan hubungi administrator jika Anda memerlukan klarifikasi atau ingin mengajukan kembali.',
+                        plain_fallback='Permintaan pendaftaran keanggotaan Anda telah ditolak.',
                     )
                 except Exception:
                     pass

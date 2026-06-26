@@ -59,20 +59,20 @@ class Command(BaseCommand):
                 full_name = data['full_name']
                 installments = data['installments']
                 
-                subject = "REMINDER - Loan Payment Due in 3 Days"
-                
+                subject = "PENGINGAT - Pembayaran Pinjaman Jatuh Tempo 3 Hari Lagi"
+
                 details = []
                 for inst in installments:
-                    details.append((f"Installment #{inst['installment_number']} ({inst['due_date']})", f"Rp {inst['amount_total']:,.0f}"))
-                
+                    details.append((f"Angsuran #{inst['installment_number']} ({inst['due_date']})", f"Rp {inst['amount_total']:,.0f}"))
+
                 try:
                     send_styled_email(
                         subject=subject,
                         recipient=email,
-                        intro=f"Dear {full_name}, this is a friendly reminder that your loan installment is due in 3 days.",
+                        intro=f"Halo {full_name}, ini adalah pengingat bahwa angsuran pinjaman Anda akan jatuh tempo dalam 3 hari.",
                         details=details,
-                        highlight=("Upcoming Installments", "Please ensure you have sufficient funds to avoid late fees."),
-                        footer_note="Thank you for your cooperation."
+                        highlight=("Angsuran Akan Datang", "Pastikan Anda memiliki dana yang cukup untuk menghindari denda keterlambatan."),
+                        footer_note="Terima kasih atas kerja sama Anda."
                     )
                     success_count += 1
                     self.stdout.write(self.style.SUCCESS(f"Successfully sent to {email}"))

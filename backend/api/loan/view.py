@@ -2291,7 +2291,7 @@ class LoanViewSet(viewsets.ModelViewSet):
                     has_upcoming = len(mdata['upcoming']) > 0
 
                     if has_overdue:
-                        details.append(('--- OVERDUE ---', ''))
+                        details.append(('--- JATUH TEMPO ---', ''))
                         for inst in mdata['overdue']:
                             details.append((
                                 f"Angsuran #{inst['installment_number']} (Jatuh tempo: {inst['due_date']})",
@@ -2299,7 +2299,7 @@ class LoanViewSet(viewsets.ModelViewSet):
                             ))
 
                     if has_upcoming:
-                        details.append(('--- UPCOMING ---', ''))
+                        details.append(('--- AKAN DATANG ---', ''))
                         for inst in mdata['upcoming']:
                             details.append((
                                 f"Angsuran #{inst['installment_number']} (Jatuh tempo: {inst['due_date']})",
@@ -2307,16 +2307,16 @@ class LoanViewSet(viewsets.ModelViewSet):
                             ))
 
                     if has_overdue and has_upcoming:
-                        subject = "Payment Reminder - Overdue & Upcoming Installments"
-                        intro = f"Dear {mdata['full_name']}, Anda memiliki angsuran yang telah jatuh tempo dan angsuran yang akan datang."
+                        subject = "Pengingat Pembayaran - Angsuran Jatuh Tempo & Akan Datang"
+                        intro = f"Halo {mdata['full_name']}, Anda memiliki angsuran yang telah jatuh tempo dan angsuran yang akan datang."
                         highlight = ("Perhatian", "Segera lunasi angsuran yang telah jatuh tempo dan persiapkan pembayaran berikutnya.")
                     elif has_overdue:
-                        subject = "Payment Reminder - Overdue Installment"
-                        intro = f"Dear {mdata['full_name']}, Anda memiliki angsuran yang telah melewati jatuh tempo."
-                        highlight = ("Overdue", "Segera lunasi pembayaran Anda untuk menghindari denda.")
+                        subject = "Pengingat Pembayaran - Angsuran Jatuh Tempo"
+                        intro = f"Halo {mdata['full_name']}, Anda memiliki angsuran yang telah melewati jatuh tempo."
+                        highlight = ("Jatuh Tempo", "Segera lunasi pembayaran Anda untuk menghindari denda.")
                     else:
-                        subject = "Payment Reminder - Upcoming Installment"
-                        intro = f"Dear {mdata['full_name']}, ini adalah pengingat untuk angsuran Anda yang akan datang."
+                        subject = "Pengingat Pembayaran - Angsuran Akan Datang"
+                        intro = f"Halo {mdata['full_name']}, ini adalah pengingat untuk angsuran Anda yang akan datang."
                         highlight = ("Pengingat", "Pastikan saldo Anda mencukupi untuk pembayaran berikutnya.")
 
                     send_styled_email(
@@ -2399,22 +2399,22 @@ class LoanViewSet(viewsets.ModelViewSet):
                 full_name = data['full_name']
                 installments = data['installments']
                 
-                subject = "AUTOMATIC REMINDER - Overdue Loan Installment"
-                
+                subject = "PENGINGAT OTOMATIS - Angsuran Pinjaman Jatuh Tempo"
+
                 # Group installments
                 details = []
                 for inst in installments:
-                    details.append((f"Installment #{inst['installment_number']} ({inst['due_date']})", f"Rp {inst['amount_total']:,.0f}"))
+                    details.append((f"Angsuran #{inst['installment_number']} ({inst['due_date']})", f"Rp {inst['amount_total']:,.0f}"))
 
                 try:
                     from api.utils.email import send_styled_email
                     send_styled_email(
                         subject=subject,
                         recipient=email,
-                        intro=f"Dear {full_name}, this is an automated system reminder regarding your outstanding loan installments.",
+                        intro=f"Halo {full_name}, ini adalah pengingat otomatis mengenai angsuran pinjaman Anda yang belum dibayar.",
                         details=details,
-                        highlight=("Overdue Installments", "Please settle these payments immediately."),
-                        footer_note="If you have any questions, contact the cooperative administration."
+                        highlight=("Angsuran Jatuh Tempo", "Segera lunasi pembayaran ini."),
+                        footer_note="Jika Anda memiliki pertanyaan, hubungi pengurus koperasi."
                     )
                     success_count += 1
                 except:
@@ -2492,18 +2492,18 @@ class LoanViewSet(viewsets.ModelViewSet):
             # POST: Send email
             details = []
             for inst in results:
-                details.append((f"Installment #{inst['installment_number']} ({inst['due_date']})", f"Rp {inst['amount_total']:,.0f}"))
-            
-            subject = "Payment Reminder - Overdue Loan Installment (TEST)"
-            
+                details.append((f"Angsuran #{inst['installment_number']} ({inst['due_date']})", f"Rp {inst['amount_total']:,.0f}"))
+
+            subject = "Pengingat Pembayaran - Angsuran Pinjaman Jatuh Tempo (TEST)"
+
             from api.utils.email import send_styled_email
             send_styled_email(
                 subject=subject,
                 recipient=email,
-                intro=f"Dear {full_name}, this is a test reminder email that you have overdue loan payment(s).",
+                intro=f"Halo {full_name}, ini adalah email pengingat test bahwa Anda memiliki angsuran pinjaman yang sudah jatuh tempo.",
                 details=details,
-                highlight=("Outstanding Installments", "Please make your payment as soon as possible to avoid additional penalties."),
-                footer_note="If you have already made this payment, please disregard this message."
+                highlight=("Angsuran Tertunggak", "Segera lakukan pembayaran untuk menghindari denda tambahan."),
+                footer_note="Jika Anda sudah melakukan pembayaran ini, abaikan pesan ini."
             )
             
             return Response({
@@ -2854,7 +2854,7 @@ class LoanViewSet(viewsets.ModelViewSet):
                         member_email = user_info[0]
                         member_name = user_info[1]
                         
-                        subject = 'Payment Confirmation - Koperasi Sanoh'
+                        subject = 'Konfirmasi Pembayaran - Koperasi Sanoh'
                         
                         new_date_str = timezone.now().strftime('%d %B %Y, %H:%M')
                         
@@ -2871,17 +2871,17 @@ class LoanViewSet(viewsets.ModelViewSet):
                                 pass
 
                         html_message = _build_email_html(
-                            'Payment Confirmation',
-                            f'Dear {member_name}, your manual payment has been processed successfully by the administrator.',
+                            'Konfirmasi Pembayaran',
+                            f'Halo {member_name}, pembayaran manual Anda telah berhasil diproses oleh administrator.',
                             details=[
-                                ('Total Amount Processed', f'Rp {total_processed:,.0f}'),
-                                ('Transaction Details', ', '.join(results) if results else '-'),
-                                ('Notes', notes if notes else '-'),
-                                ('Date', new_date_str),
-                                ('Proof of Transfer', 'Attached in this email' if file_path else 'Not attached'),
+                                ('Total Jumlah Diproses', f'Rp {total_processed:,.0f}'),
+                                ('Detail Transaksi', ', '.join(results) if results else '-'),
+                                ('Catatan', notes if notes else '-'),
+                                ('Tanggal', new_date_str),
+                                ('Bukti Transfer', 'Terlampir dalam email ini' if file_path else 'Tidak terlampir'),
                             ],
-                            highlight=('Status', 'Processed Successfully'),
-                            footer_note='This is an automated message from Koperasi Sanoh Sinergi Bersama. Please do not reply to this email.'
+                            highlight=('Status', 'Berhasil Diproses'),
+                            footer_note='Ini adalah pesan otomatis dari Koperasi Sanoh Sinergi Bersama. Mohon jangan membalas email ini.'
                         )
 
                         email = EmailMultiAlternatives(
