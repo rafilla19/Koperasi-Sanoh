@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { User, Plus, Trash2, Calendar, Search, Upload, FileText, AlertCircle, CheckCircle } from 'lucide-react';
+import { User, Plus, Trash2, Calendar, Search, Upload, FileText, AlertCircle, CheckCircle, Loader } from 'lucide-react';
 import { apiUrl } from '../../services/api';
 import './ManualPayment.css';
 
@@ -190,6 +190,7 @@ const ManualPayment = () => {
   // ── Submit ─────────────────────────────────────────────────────
 
   const handleProcessPayment = async () => {
+    if (loading) return;
     setFormError('');
     if (!selectedMemberId) { setFormError('Please select a member.'); return; }
     
@@ -534,8 +535,8 @@ const ManualPayment = () => {
 
         {/* ── Actions ── */}
         <div className="mp-actions">
-          <button className="mp-btn mp-btn-process" onClick={handleProcessPayment}>
-            Process Payment
+          <button className="mp-btn mp-btn-process" onClick={handleProcessPayment} disabled={loading}>
+            {loading ? <><Loader size={16} className="spinner" /> Processing...</> : 'Process Payment'}
           </button>
           <button className="mp-btn" onClick={handleClear}>Clear</button>
         </div>

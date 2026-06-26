@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Printer, CheckCircle, AlertTriangle, User, Calendar, CreditCard, DollarSign, ExternalLink, FileText } from 'lucide-react';
-import { apiUrl, getAuthHeaders } from '../../services/api';
+import { ArrowLeft, Printer, CheckCircle, AlertTriangle, User, Calendar, CreditCard, DollarSign, ExternalLink, FileText, X, Eye, Download } from 'lucide-react';
+import { apiUrl, API_ORIGIN, getAuthHeaders } from '../../services/api';
 import './AdminActiveLoanDetail.css';
 
 const AdminActiveLoanDetail = () => {
@@ -11,6 +12,18 @@ const AdminActiveLoanDetail = () => {
   const [loanData, setLoanData] = useState(null);
   const [schedule, setSchedule] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [previewDoc, setPreviewDoc] = useState(null);
+
+  const resolveFileUrl = (filePath) => {
+    if (!filePath) return '';
+    const path = String(filePath).trim();
+    if (path.startsWith('http://') || path.startsWith('https://')) return path;
+    const base = API_ORIGIN || window.location.origin;
+    if (path.startsWith('/')) return `${base}${path}`;
+    return `${base}/${path}`;
+  };
+
+  const isImageFile = (url) => /\.(jpg|jpeg|png|gif|bmp|webp|svg)(\?|$)/i.test(url || '');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -174,9 +187,12 @@ const AdminActiveLoanDetail = () => {
                       </td>
                       <td>
                         {s.payment_proof ? (
-                          <a href={s.payment_proof} target="_blank" rel="noopener noreferrer" style={{ color: '#4f7df3' }}>
-                            <FileText size={16} />
-                          </a>
+                          <button
+                            onClick={() => setPreviewDoc({ url: resolveFileUrl(s.payment_proof), name: `Bukti Pembayaran #${s.installment_number}` })}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#4f7df3', padding: 0 }}
+                          >
+                            <Eye size={16} />
+                          </button>
                         ) : '-'}
                       </td>
                     </tr>
@@ -211,26 +227,25 @@ const AdminActiveLoanDetail = () => {
               <div className="info-item" style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #eee' }}>
                 <label>Documents</label>
                 {loanData.salary_statement_file ? (
-                  <a 
-                    href={loanData.salary_statement_file}
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="salary-statement-link"
-                    style={{ 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      gap: '8px', 
-                      color: '#4f7df3', 
-                      textDecoration: 'none',
+                  <button
+                    onClick={() => setPreviewDoc({ url: resolveFileUrl(loanData.salary_statement_file), name: 'Salary Statement' })}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      color: '#4f7df3',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
                       fontSize: '14px',
                       fontWeight: '500',
-                      marginTop: '8px'
+                      marginTop: '8px',
+                      padding: 0,
                     }}
                   >
-                    <FileText size={16} />
+                    <Eye size={16} />
                     Salary Statement
-                    <ExternalLink size={14} />
-                  </a>
+                  </button>
                 ) : (
                   <span style={{ color: '#94a3b8', fontSize: '13px', fontStyle: 'italic' }}>No statement uploaded</span>
                 )}
@@ -249,6 +264,32 @@ const AdminActiveLoanDetail = () => {
           </div> */}
         </div>
       </div>
+
+      {previewDoc && createPortal(
+        <div className="aald-preview-overlay" onClick={() => setPreviewDoc(null)}>
+          <div className="aald-preview-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="aald-preview-header">
+              <h3>{previewDoc.name}</h3>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <button className="aald-preview-action" onClick={() => window.open(previewDoc.url, '_blank')}>
+                  <Download size={14} /> Unduh
+                </button>
+                <button className="aald-preview-close" onClick={() => setPreviewDoc(null)}>
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+            <div className="aald-preview-body">
+              {isImageFile(previewDoc.url) ? (
+                <img src={previewDoc.url} alt={previewDoc.name} className="aald-preview-img" />
+              ) : (
+                <iframe src={previewDoc.url} title={previewDoc.name} className="aald-preview-iframe" />
+              )}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 };

@@ -2204,109 +2204,141 @@ class LoanViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def send_reminder_email(self, request):
-        from django.core.mail import send_mail
-        from django.conf import settings
-        
+        """Send reminder for overdue AND upcoming payments to selected members."""
         member_ids = request.data.get('member_ids', [])
-        
+
         if not member_ids or len(member_ids) == 0:
             return Response({'error': 'member_ids is required and cannot be empty'}, status=400)
-        
+
         success_count = 0
         failed_count = 0
         errors = []
-        
+
         try:
-            # Build query with proper parameter placeholders
             placeholders = ','.join(['%s'] * len(member_ids))
-            query = f"""
-            SELECT 
-                m.id as member_id,
-                m.full_name,
-                u.email,
-                l.id as loan_id,
-                li.installment_number,
-                li.due_date,
-                li.amount_total,
-                lt.name as loan_type
+
+            overdue_query = f"""
+            SELECT
+                m.id as member_id, m.full_name, u.email,
+                li.installment_number, li.due_date, li.amount_total,
+                'OVERDUE' as reminder_type
             FROM loans l
             INNER JOIN members m ON l.member_id = m.id
             INNER JOIN users u ON m.user_id = u.id
-            INNER JOIN loan_applications la ON l.application_id = la.id
-            INNER JOIN loan_types lt ON la.loan_type_id = lt.id
             INNER JOIN loan_installments li ON li.loan_id = l.id
             WHERE m.id IN ({placeholders})
               AND li.status_id IN (27, 28)
               AND li.due_date <= CURRENT_DATE
               AND u.is_active = true
             """
-            
+
+            upcoming_query = f"""
+            SELECT
+                m.id as member_id, m.full_name, u.email,
+                li.installment_number, li.due_date, li.amount_total,
+                'UPCOMING' as reminder_type
+            FROM loans l
+            INNER JOIN members m ON l.member_id = m.id
+            INNER JOIN users u ON m.user_id = u.id
+            INNER JOIN loan_installments li ON li.loan_id = l.id
+            WHERE m.id IN ({placeholders})
+              AND li.status_id = 28
+              AND li.due_date > CURRENT_DATE
+              AND li.due_date <= CURRENT_DATE + INTERVAL '30 days'
+              AND u.is_active = true
+            ORDER BY li.due_date ASC
+            """
+
             with connection.cursor() as cursor:
-                cursor.execute(query, member_ids)
+                cursor.execute(overdue_query, member_ids)
                 columns = [col[0] for col in cursor.description]
-                results = [dict(zip(columns, row)) for row in cursor.fetchall()]
-            
-            if not results:
+                overdue_results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+                cursor.execute(upcoming_query, member_ids)
+                columns = [col[0] for col in cursor.description]
+                upcoming_results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+            all_results = overdue_results + upcoming_results
+
+            if not all_results:
                 return Response({
                     'success_count': 0,
                     'failed_count': 0,
                     'errors': [],
-                    'message': 'No overdue installments found for selected members'
+                    'message': 'No overdue or upcoming installments found for selected members'
                 }, status=200)
-            
-            # Group by member for efficient emailing
+
             members_email_map = {}
-            for row in results:
-                member_id = row['member_id']
-                if member_id not in members_email_map:
-                    members_email_map[member_id] = {
+            for row in all_results:
+                mid = row['member_id']
+                if mid not in members_email_map:
+                    members_email_map[mid] = {
                         'email': row['email'],
                         'full_name': row['full_name'],
-                        'installments': []
+                        'overdue': [],
+                        'upcoming': [],
                     }
-                members_email_map[member_id]['installments'].append(row)
-            
-            # Send emails
-            for member_id, data in members_email_map.items():
-                try:
-                    email = data['email']
-                    full_name = data['full_name']
-                    installments = data['installments']
-                    
-                    # Format installment details
-                    installment_details = []
-                    for inst in installments:
-                        detail = f"Installment #{inst['installment_number']} - Due: {inst['due_date']} - Amount: Rp {inst['amount_total']:,.0f}"
-                        installment_details.append(detail)
-                    
-                    subject = "Payment Reminder - Overdue Loan Installment"
-                    
-                    # Group installments
-                    details = []
-                    for inst in installments:
-                        details.append((f"Installment #{inst['installment_number']} ({inst['due_date']})", f"Rp {inst['amount_total']:,.0f}"))
+                if row['reminder_type'] == 'OVERDUE':
+                    members_email_map[mid]['overdue'].append(row)
+                else:
+                    members_email_map[mid]['upcoming'].append(row)
 
-                    from api.utils.email import send_styled_email
+            from api.utils.email import send_styled_email
+            for member_id, mdata in members_email_map.items():
+                try:
+                    details = []
+                    has_overdue = len(mdata['overdue']) > 0
+                    has_upcoming = len(mdata['upcoming']) > 0
+
+                    if has_overdue:
+                        details.append(('--- OVERDUE ---', ''))
+                        for inst in mdata['overdue']:
+                            details.append((
+                                f"Angsuran #{inst['installment_number']} (Jatuh tempo: {inst['due_date']})",
+                                f"Rp {inst['amount_total']:,.0f}"
+                            ))
+
+                    if has_upcoming:
+                        details.append(('--- UPCOMING ---', ''))
+                        for inst in mdata['upcoming']:
+                            details.append((
+                                f"Angsuran #{inst['installment_number']} (Jatuh tempo: {inst['due_date']})",
+                                f"Rp {inst['amount_total']:,.0f}"
+                            ))
+
+                    if has_overdue and has_upcoming:
+                        subject = "Payment Reminder - Overdue & Upcoming Installments"
+                        intro = f"Dear {mdata['full_name']}, Anda memiliki angsuran yang telah jatuh tempo dan angsuran yang akan datang."
+                        highlight = ("Perhatian", "Segera lunasi angsuran yang telah jatuh tempo dan persiapkan pembayaran berikutnya.")
+                    elif has_overdue:
+                        subject = "Payment Reminder - Overdue Installment"
+                        intro = f"Dear {mdata['full_name']}, Anda memiliki angsuran yang telah melewati jatuh tempo."
+                        highlight = ("Overdue", "Segera lunasi pembayaran Anda untuk menghindari denda.")
+                    else:
+                        subject = "Payment Reminder - Upcoming Installment"
+                        intro = f"Dear {mdata['full_name']}, ini adalah pengingat untuk angsuran Anda yang akan datang."
+                        highlight = ("Pengingat", "Pastikan saldo Anda mencukupi untuk pembayaran berikutnya.")
+
                     send_styled_email(
                         subject=subject,
-                        recipient=email,
-                        intro=f"Dear {full_name}, this is a reminder that you have overdue loan payment(s) that require your attention.",
+                        recipient=mdata['email'],
+                        intro=intro,
                         details=details,
-                        highlight=("Outstanding Installments", "Please make your payment as soon as possible to avoid additional penalties."),
-                        footer_note="If you have already made this payment, please disregard this message."
+                        highlight=highlight,
+                        footer_note="Jika Anda sudah melakukan pembayaran, abaikan pesan ini."
                     )
                     success_count += 1
                 except Exception as e:
                     failed_count += 1
                     errors.append(f"Member {member_id}: {str(e)}")
-            
+
             return Response({
                 'success_count': success_count,
                 'failed_count': failed_count,
                 'errors': errors,
                 'message': f'Reminder emails sent to {success_count} member(s)'
             })
-        
+
         except Exception as e:
             return Response({'error': str(e)}, status=400)
 

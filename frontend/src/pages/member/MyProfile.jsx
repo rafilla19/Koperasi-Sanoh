@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { Edit2, AlertTriangle, XCircle, CheckCircle, X, ShieldAlert, ChevronRight } from 'lucide-react';
+import { Edit2, AlertTriangle, XCircle, CheckCircle, X, ShieldAlert, ChevronRight, Loader } from 'lucide-react';
 import { apiUrl } from '../../services/api';
 import './MyProfile.css';
 
@@ -18,6 +18,9 @@ const MyProfile = () => {
   const memberId = userLocal?.member_id || 1;
 
   const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isRequestingVoluntary, setIsRequestingVoluntary] = useState(false);
+  const [isProcessingClosure, setIsProcessingClosure] = useState(false);
   const [banks, setBanks] = useState([]);
   const [isValidated, setIsValidated] = useState(true);
   const [isValidating, setIsValidating] = useState(false);
@@ -110,8 +113,9 @@ const MyProfile = () => {
   const canProcess = isNotMinus && !hasOutstandingMonthlySavingDue && isAgreed;
 
   const handleProcessClosure = async () => {
-    if (!canProcess) return;
-    
+    if (!canProcess || isProcessingClosure) return;
+
+    setIsProcessingClosure(true);
     try {
       const response = await fetch(apiUrl('/member/members/request_account_closure/'), {
         method: 'POST',
@@ -123,7 +127,7 @@ const MyProfile = () => {
           reason: reason
         })
       });
-      
+
       const resData = await response.json();
       if (response.ok) {
         setProfile(prev => ({ ...prev, hasPendingClosure: true }));
@@ -135,6 +139,8 @@ const MyProfile = () => {
     } catch (error) {
       console.error('Error processing closure:', error);
       alert('Network error. Failed to submit request.');
+    } finally {
+      setIsProcessingClosure(false);
     }
   };
 
@@ -177,16 +183,16 @@ const MyProfile = () => {
   };
 
   const handleSaveProfile = async () => {
+    if (isSaving) return;
     if (!profile.phone || !profile.email || !profile.destBank || !profile.accName || !profile.accNo) {
       alert("All profile fields must be filled before saving.");
       return;
     }
 
-    // Removed mandatory bank validation as requested
-    
     const selectedBankObj = banks.find(b => b.bank_name === profile.destBank);
     const bankId = selectedBankObj ? selectedBankObj.id : profile.bankId;
-    
+
+    setIsSaving(true);
     try {
       const response = await fetch(apiUrl('/member/members/update_profile/'), {
         method: 'POST',
@@ -202,7 +208,7 @@ const MyProfile = () => {
           acc_no: profile.accNo
         })
       });
-      
+
       if (response.ok) {
         await fetchProfile();
         setIsEditing(false);
@@ -214,15 +220,19 @@ const MyProfile = () => {
     } catch (error) {
       console.error('Error saving profile:', error);
       alert('Error connecting to the server. Please try again.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
   const handleSubmitVoluntaryRequest = async () => {
+    if (isRequestingVoluntary) return;
     if (!profile.volRequestSaving) {
       alert("Please enter a voluntary saving amount first.");
       return;
     }
-    
+
+    setIsRequestingVoluntary(true);
     try {
       const response = await fetch(apiUrl('/member/members/request_voluntary_saving/'), {
         method: 'POST',
@@ -235,7 +245,7 @@ const MyProfile = () => {
           demo_bypass: demoBypass
         })
       });
-      
+
       const resData = await response.json();
       if (response.ok) {
         await fetchProfile();
@@ -246,6 +256,8 @@ const MyProfile = () => {
     } catch (error) {
       console.error('Error submitting voluntary request:', error);
       alert('Network error. Failed to submit request.');
+    } finally {
+      setIsRequestingVoluntary(false);
     }
   };
 
@@ -442,6 +454,7 @@ const MyProfile = () => {
                   <button
                     type="button"
                     onClick={handleSubmitVoluntaryRequest}
+                    disabled={isRequestingVoluntary}
                     style={{
                       padding: '0 16px',
                       backgroundColor: '#0a1628',
@@ -449,13 +462,17 @@ const MyProfile = () => {
                       border: 'none',
                       borderRadius: '8px',
                       fontWeight: '600',
-                      cursor: 'pointer',
+                      cursor: isRequestingVoluntary ? 'not-allowed' : 'pointer',
                       fontSize: '12px',
                       whiteSpace: 'nowrap',
-                      transition: 'background-color 0.2s'
+                      transition: 'background-color 0.2s',
+                      opacity: isRequestingVoluntary ? 0.7 : 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
                     }}
                   >
-                    Request Change
+                    {isRequestingVoluntary ? <><Loader size={12} className="spinner" /> Submitting...</> : 'Request Change'}
                   </button>
                 )}
               </div>
@@ -473,7 +490,9 @@ const MyProfile = () => {
           <button className="btn btn-outline" onClick={() => setIsEditing(!isEditing)}>
             <Edit2 size={16} /> {isEditing ? 'Cancel Edit' : 'Edit Profile'}
           </button>
-          <button className="btn btn-navy" onClick={handleSaveProfile} disabled={!isEditing} style={{ opacity: isEditing ? 1 : 0.6, cursor: isEditing ? 'pointer' : 'not-allowed' }}>Save</button>
+          <button className="btn btn-navy" onClick={handleSaveProfile} disabled={!isEditing || isSaving} style={{ opacity: (isEditing && !isSaving) ? 1 : 0.6, cursor: (isEditing && !isSaving) ? 'pointer' : 'not-allowed' }}>
+            {isSaving ? <><Loader size={14} className="spinner" /> Saving...</> : 'Save'}
+          </button>
         </div>
       </div>
 
@@ -669,11 +688,11 @@ const MyProfile = () => {
                   ) : (
                     <button
                       className={`btn btn-red`}
-                      style={{ opacity: canProcess ? 1 : 0.6, cursor: canProcess ? 'pointer' : 'not-allowed' }}
-                      disabled={!canProcess}
+                      style={{ opacity: (canProcess && !isProcessingClosure) ? 1 : 0.6, cursor: (canProcess && !isProcessingClosure) ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', gap: '6px' }}
+                      disabled={!canProcess || isProcessingClosure}
                       onClick={handleProcessClosure}
                     >
-                      Process
+                      {isProcessingClosure ? <><Loader size={14} className="spinner" /> Processing...</> : 'Process'}
                     </button>
                   )}
                 </div>

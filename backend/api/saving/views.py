@@ -722,17 +722,20 @@ def admin_approve_voluntary_request(request, pk):
     req.processed_date = timezone.now()
     req.save()
 
-    Notifications.objects.create(
-        member_id=req.member_id,
-        title='Perubahan Simpanan Sukarela Disetujui',
-        message=(
-            f'Permintaan perubahan simpanan sukarela Anda dari '
-            f'Rp {int(req.current_amount):,} menjadi Rp {int(req.requested_amount):,} '
-            f'telah disetujui.'
-        ),
-        notification_type='voluntary_approved',
-        reference_id=req.id,
-    )
+    try:
+        Notifications.objects.create(
+            member_id=req.member_id,
+            title='Perubahan Simpanan Sukarela Disetujui',
+            message=(
+                f'Permintaan perubahan simpanan sukarela Anda dari '
+                f'Rp {int(req.current_amount):,} menjadi Rp {int(req.requested_amount):,} '
+                f'telah disetujui.'
+            ),
+            notification_type='voluntary_approved',
+            reference_id=req.id,
+        )
+    except Exception:
+        pass
 
     send_member_notification_email(
         req.member_id,
@@ -767,17 +770,20 @@ def admin_reject_voluntary_request(request, pk):
     req.processed_date = timezone.now()
     req.save()
 
-    Notifications.objects.create(
-        member_id=req.member_id,
-        title='Perubahan Simpanan Sukarela Ditolak',
-        message=(
-            f'Permintaan perubahan simpanan sukarela Anda dari '
-            f'Rp {int(req.current_amount):,} menjadi Rp {int(req.requested_amount):,} '
-            f'ditolak. Alasan: {reject_reason or "Tidak ada alasan."}'
-        ),
-        notification_type='voluntary_rejected',
-        reference_id=req.id,
-    )
+    try:
+        Notifications.objects.create(
+            member_id=req.member_id,
+            title='Perubahan Simpanan Sukarela Ditolak',
+            message=(
+                f'Permintaan perubahan simpanan sukarela Anda dari '
+                f'Rp {int(req.current_amount):,} menjadi Rp {int(req.requested_amount):,} '
+                f'ditolak. Alasan: {reject_reason or "Tidak ada alasan."}'
+            ),
+            notification_type='voluntary_rejected',
+            reference_id=req.id,
+        )
+    except Exception:
+        pass
 
     return Response({'message': 'Pengajuan berhasil ditolak'})
 
@@ -1290,7 +1296,7 @@ def admin_member_wallets(request):
     """
     search = request.query_params.get('search', '')
     department_id = request.query_params.get('department_id', '')
-    members_qs = Members.objects.filter(deleted_at__isnull=True)
+    members_qs = Members.objects.filter(deleted_at__isnull=True, user__is_active=True)
     if search:
         members_qs = members_qs.filter(
             Q(full_name__icontains=search) |
@@ -1405,7 +1411,7 @@ def admin_member_obligations(request):
     status_filter = request.query_params.get('status', '')
     employee_status_filter = request.query_params.get('employee_status', '')
 
-    members_qs = Members.objects.filter(deleted_at__isnull=True).order_by('full_name')
+    members_qs = Members.objects.filter(deleted_at__isnull=True, user__is_active=True).order_by('full_name')
     if search:
         members_qs = members_qs.filter(
             Q(full_name__icontains=search) |
@@ -1431,11 +1437,11 @@ def admin_member_obligations(request):
     principal_type = SavingTypes.objects.filter(name__icontains='PRINCIPLE').first()
     principal_min = principal_type.minimum_amount if principal_type else 0
 
-    # Bill status for selected period
-    period_start = date_cls(year, month, 1)
+    # Bill status for selected period (match by month/year, not exact date)
     bills = MonthlySavingBills.objects.filter(
         member_id__in=member_ids,
-        bill_period_start=period_start,
+        bill_period_start__month=month,
+        bill_period_start__year=year,
         deleted_at__isnull=True,
     ).select_related('status').values('member_id', 'status__status_code')
 
@@ -1468,6 +1474,8 @@ def admin_member_obligations(request):
             bill_status = 'not_generated'
         elif all(s == 'PAID' for s in statuses):
             bill_status = 'paid'
+        elif 'OVERDUE' in statuses:
+            bill_status = 'overdue'
         else:
             bill_status = 'pending'
 
@@ -1495,11 +1503,10 @@ def admin_member_obligations(request):
 @api_view(['POST'])
 def admin_generate_bills(request):
     """
-    Generate tagihan bulanan.
-    Body: { "month": 5, "year": 2026, "include_mandatory": true, "include_voluntary": true, "member_ids": [...] }
+    Generate tagihan bulanan via stored procedure sp_generate_bills.
+    Body: { "month": 5, "year": 2026, "member_ids": [...] }
     Jika member_ids diberikan, hanya generate untuk member tersebut.
     Jika tidak, generate untuk semua member aktif (employee_status_id 1/2).
-    Simpanan pokok hanya dibuat untuk member yang baru join di periode tersebut.
     """
     serializer = GenerateBillsSerializer(data=request.data)
     if not serializer.is_valid():
@@ -1507,150 +1514,52 @@ def admin_generate_bills(request):
 
     month = serializer.validated_data['month']
     year = serializer.validated_data['year']
-    include_mandatory = serializer.validated_data['include_mandatory']
-    include_voluntary = serializer.validated_data['include_voluntary']
     member_ids_filter = serializer.validated_data.get('member_ids', None)
 
-    period_date = datetime(year, month, 1).date()
-    _, last_day = calendar.monthrange(year, month)
-    period_end = period_date.replace(day=last_day)
-
-    pending_status = Statuses.objects.filter(status_code='PENDING').first()
-    if not pending_status:
-        return Response({'error': 'Status "PENDING" tidak ditemukan di database'}, status=500)
-
-    principal_type = SavingTypes.objects.filter(name__icontains='PRINCIPLE').first()
-    mandatory_type = SavingTypes.objects.filter(name__icontains='MANDATORY').first()
-    voluntary_type = SavingTypes.objects.filter(name__icontains='VOLUNTARY').first()
-
-    if include_mandatory and not mandatory_type:
-        return Response({'error': 'Tipe simpanan wajib tidak ditemukan di database'}, status=500)
-    if include_voluntary and not voluntary_type:
-        return Response({'error': 'Tipe simpanan sukarela tidak ditemukan di database'}, status=500)
-
     if member_ids_filter:
-        active_members = list(Members.objects.filter(
+        member_ids = list(Members.objects.filter(
             id__in=member_ids_filter,
             deleted_at__isnull=True,
-        ))
+            user__is_active=True,
+        ).values_list('id', flat=True))
     else:
-        active_members = list(Members.objects.filter(
+        member_ids = list(Members.objects.filter(
             deleted_at__isnull=True,
+            user__is_active=True,
             employee_status_id__in=[1, 2],
-        ))
+        ).values_list('id', flat=True))
 
-    active_member_ids = [m.id for m in active_members]
+    if not member_ids:
+        return Response({
+            'message': f'Tidak ada member aktif untuk periode {month:02d}/{year}',
+            'bills_created': 0,
+            'skipped_existing': 0,
+            'errors': [],
+        }, status=200)
 
-    # Pre-fetch all relevant obligations in one query
-    obligation_types = [t for t in [mandatory_type, voluntary_type] if t]
-    obligations_qs = MemberSavingObligations.objects.filter(
-        member_id__in=active_member_ids,
-        saving_type__in=obligation_types,
-        is_active=True,
-        deleted_at__isnull=True,
-    )
-    # obligation_map: {(member_id, saving_type_id): monthly_amount}
-    obligation_map = {
-        (o.member_id, o.saving_type_id): o.monthly_amount
-        for o in obligations_qs
-    }
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT * FROM sp_generate_bills(%s::integer[], %s, %s)",
+                [member_ids, month, year]
+            )
+            row = cursor.fetchone()
 
-    # Pre-fetch all existing bills for this period in one query
-    existing_bills = set(
-        MonthlySavingBills.objects.filter(
-            member_id__in=active_member_ids,
-            bill_period_start=period_date,
-        ).values_list('member_id', 'saving_type_id')
-    )
+        generated = row[0] if row else 0
+        skipped = row[1] if row else 0
+        error_msg = row[2] if row and row[2] else None
 
-    bills_created = 0
-    skipped = 0
-    errors = []
-    now_ts = timezone.now()
+        errors = [error_msg] if error_msg else []
 
-    for member in active_members:
-        member_join_month = member.join_date.month if member.join_date else None
-        member_join_year  = member.join_date.year  if member.join_date else None
+        return Response({
+            'message': f'Tagihan {month:02d}/{year} berhasil digenerate',
+            'bills_created': generated,
+            'skipped_existing': skipped,
+            'errors': errors,
+        }, status=201)
 
-        if principal_type and member_join_year == year and member_join_month == month:
-            key = (member.id, principal_type.id)
-            if key not in existing_bills:
-                try:
-                    MonthlySavingBills.objects.create(
-                        member=member,
-                        saving_type=principal_type,
-                        bill_period_start=period_date,
-                        bill_period_end=period_end,
-                        amount_due=principal_type.minimum_amount or Decimal('0'),
-                        amount_paid=Decimal('0'),
-                        status=pending_status,
-                        due_date=period_end,
-                        created_at=now_ts,
-                        updated_at=now_ts,
-                    )
-                    existing_bills.add(key)
-                    bills_created += 1
-                except Exception as e:
-                    errors.append(f'Member {member.id} (pokok): {e}')
-            else:
-                skipped += 1
-
-        if include_mandatory and mandatory_type:
-            mand_amount = obligation_map.get((member.id, mandatory_type.id), Decimal('0'))
-            if mand_amount > 0:
-                key = (member.id, mandatory_type.id)
-                if key not in existing_bills:
-                    try:
-                        MonthlySavingBills.objects.create(
-                            member=member,
-                            saving_type=mandatory_type,
-                            bill_period_start=period_date,
-                            bill_period_end=period_end,
-                            amount_due=mand_amount,
-                            amount_paid=Decimal('0'),
-                            status=pending_status,
-                            due_date=period_end,
-                            created_at=now_ts,
-                            updated_at=now_ts,
-                        )
-                        existing_bills.add(key)
-                        bills_created += 1
-                    except Exception as e:
-                        errors.append(f'Member {member.id} (wajib): {e}')
-                else:
-                    skipped += 1
-
-        if include_voluntary and voluntary_type:
-            vol_amount = obligation_map.get((member.id, voluntary_type.id), Decimal('0'))
-            if vol_amount > 0:
-                key = (member.id, voluntary_type.id)
-                if key not in existing_bills:
-                    try:
-                        MonthlySavingBills.objects.create(
-                            member=member,
-                            saving_type=voluntary_type,
-                            bill_period_start=period_date,
-                            bill_period_end=period_end,
-                            amount_due=vol_amount,
-                            amount_paid=Decimal('0'),
-                            status=pending_status,
-                            due_date=period_end,
-                            created_at=now_ts,
-                            updated_at=now_ts,
-                        )
-                        existing_bills.add(key)
-                        bills_created += 1
-                    except Exception as e:
-                        errors.append(f'Member {member.id} (sukarela): {e}')
-                else:
-                    skipped += 1
-
-    return Response({
-        'message': f'Tagihan {month:02d}/{year} berhasil digenerate',
-        'bills_created': bills_created,
-        'skipped_existing': skipped,
-        'errors': errors,
-    }, status=201)
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)
 
 
 # ── ADMIN: WITHDRAWAL DETAIL & ACTIONS ──────────────────────────

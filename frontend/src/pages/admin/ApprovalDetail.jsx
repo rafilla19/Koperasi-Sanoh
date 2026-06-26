@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Download, FileText, Loader2, Upload, CheckCircle, XCircle } from 'lucide-react';
-import { apiUrl } from '../../services/api';
+import { Download, FileText, Loader2, Upload, CheckCircle, XCircle, X, Eye } from 'lucide-react';
+import { apiUrl, API_ORIGIN } from '../../services/api';
 import './ApprovalDetail.css';
 
 const ApprovalDetail = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const searchParams = new URLSearchParams(window.location.search);
-  const type = searchParams.get('type') || 'new'; // 'new' or 'close'
+  const type = searchParams.get('type') || 'new';
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
@@ -17,7 +18,8 @@ const ApprovalDetail = () => {
   const [uploadLoading, setUploadLoading] = useState(false);
   const [transferFile, setTransferFile] = useState(null);
   const [uploadSuccess, setUploadSuccess] = useState(false);
-  const [selectedFile, setSelectedFile] = useState(null); // file chosen but not yet uploaded
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [previewDoc, setPreviewDoc] = useState(null);
 
   useEffect(() => {
     fetchData();
@@ -70,10 +72,30 @@ const ApprovalDetail = () => {
     }
   };
 
+  const resolveFileUrl = (filePath) => {
+    if (!filePath) return '';
+    const path = String(filePath).trim();
+    if (path.startsWith('http://') || path.startsWith('https://')) return path;
+    const baseOrigin = API_ORIGIN || window.location.origin;
+    if (path.startsWith('/')) return `${baseOrigin}${path}`;
+    return `${baseOrigin}/${path}`;
+  };
+
   const handleDownloadFile = (filePath) => {
     if (filePath) {
-      window.open(filePath, '_blank');
+      window.open(resolveFileUrl(filePath), '_blank');
     }
+  };
+
+  const handlePreviewDoc = (filePath, docName) => {
+    if (filePath) {
+      setPreviewDoc({ url: resolveFileUrl(filePath), name: docName || 'Document' });
+    }
+  };
+
+  const isImageFile = (url) => {
+    if (!url) return false;
+    return /\.(jpg|jpeg|png|gif|bmp|webp|svg)(\?|$)/i.test(url);
   };
 
   const handleTransferFileUpload = async (event) => {
@@ -115,24 +137,26 @@ const ApprovalDetail = () => {
             transfer_file: transferFile || ''
           });
         }
-        // require comment or transfer file (either already uploaded or selected)
-        if (!comment?.trim() && !transferFile && !selectedFile) {
-          alert('Silakan isi komentar atau unggah file transfer sebelum menyetujui.');
+        if (!selectedFile && !transferFile) {
+          alert('Silakan unggah bukti transfer sebelum menyetujui penutupan akun.');
+          setActionLoading(false);
+          return;
+        }
+        if (!comment?.trim()) {
+          alert('Silakan isi komentar sebelum menyetujui penutupan akun.');
           setActionLoading(false);
           return;
         }
       } else {
-        // Call member registration approve endpoint
         endpoint = apiUrl(`/member/members/${id}/approve_registration/`);
-        body = { comment: comment || '' };
-        // require comment for registration approvals
         if (!comment?.trim()) {
           alert('Silakan isi komentar sebelum menyetujui pendaftaran.');
           setActionLoading(false);
           return;
         }
+        body = JSON.stringify({ comment: comment || '' });
       }
-      
+
       const fetchOpts = { method: 'POST' };
       if (body instanceof FormData) {
         fetchOpts.body = body;
@@ -163,45 +187,35 @@ const ApprovalDetail = () => {
       let endpoint, body;
       
       if (type === 'close') {
-        // Call close account reject endpoint
         endpoint = apiUrl('/master/auth/reject_close_account/');
-        if (selectedFile) {
-          const formData = new FormData();
-          formData.append('transfer_file', selectedFile);
-          formData.append('id', data.id);
-          formData.append('comment', comment || '');
-          formData.append('admin_id', parseInt(sessionStorage.getItem('user_id')) || 1);
-          body = formData;
-        } else {
-          body = JSON.stringify({
-            id: data.id,
-            comment: comment || '',
-            admin_id: parseInt(sessionStorage.getItem('user_id')) || 1
-          });
-        }
-        // require comment when rejecting
-        if (!comment?.trim() && !selectedFile) {
+        if (!comment?.trim()) {
           alert('Silakan masukkan komentar penolakan.');
           setActionLoading(false);
           return;
         }
+        body = JSON.stringify({
+          id: data.id,
+          comment: comment || '',
+          admin_id: parseInt(sessionStorage.getItem('user_id')) || 1
+        });
       } else {
-        // Call member registration reject endpoint
         endpoint = apiUrl(`/member/members/${id}/reject_registration/`);
-        body = { comment: comment || '' };
-        // require comment for registration rejection
         if (!comment?.trim()) {
           alert('Silakan isi komentar penolakan.');
           setActionLoading(false);
           return;
         }
+        body = JSON.stringify({ comment: comment || '' });
       }
-      
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
+
+      const fetchOpts2 = { method: 'POST' };
+      if (body instanceof FormData) {
+        fetchOpts2.body = body;
+      } else {
+        fetchOpts2.headers = { 'Content-Type': 'application/json' };
+        fetchOpts2.body = body;
+      }
+      const res = await fetch(endpoint, fetchOpts2);
 
       if (res.ok) {
         setApprovalStatus('rejected');
@@ -238,11 +252,10 @@ const ApprovalDetail = () => {
 
   const isNewRegistration = type !== 'close';
 
-  // Validation for enabling action buttons
   const hasComment = !!(comment && comment.trim());
-  const hasTransferFile = !!transferFile;
-  const canApprove = type === 'close' ? (hasComment || hasTransferFile) : hasComment;
-  const canReject = hasComment; // rejection always requires comment
+  const hasTransferFile = !!transferFile || !!selectedFile;
+  const canApprove = type === 'close' ? (hasComment && hasTransferFile) : hasComment;
+  const canReject = hasComment;
 
   return (
     <div className="ad-detail-container">
@@ -481,10 +494,10 @@ const ApprovalDetail = () => {
                       <span className="doc-action-icon"><Download size={14} /></span>
                       Unduh
                     </button>
-                    <a className="doc-action-btn" href={data.npwp_file} target="_blank" rel="noreferrer">
-                      <span className="doc-action-icon"><FileText size={14} /></span>
+                    <button className="doc-action-btn" onClick={() => handlePreviewDoc(data.npwp_file, 'NPWP')}>
+                      <span className="doc-action-icon"><Eye size={14} /></span>
                       Lihat
-                    </a>
+                    </button>
                   </div>
                 </div>
               )}
@@ -503,10 +516,10 @@ const ApprovalDetail = () => {
                       <span className="doc-action-icon"><Download size={14} /></span>
                       Unduh
                     </button>
-                    <a className="doc-action-btn" href={data.ktp_file} target="_blank" rel="noreferrer">
-                      <span className="doc-action-icon"><FileText size={14} /></span>
+                    <button className="doc-action-btn" onClick={() => handlePreviewDoc(data.ktp_file, 'KTP')}>
+                      <span className="doc-action-icon"><Eye size={14} /></span>
                       Lihat
-                    </a>
+                    </button>
                   </div>
                 </div>
               )}
@@ -540,10 +553,10 @@ const ApprovalDetail = () => {
                       <span className="doc-action-icon"><Download size={14} /></span>
                       Unduh
                     </button>
-                    <a className="doc-action-btn" href={data.transfer_file_path || data.transfer_file || transferFile} target="_blank" rel="noreferrer">
-                      <span className="doc-action-icon"><FileText size={14} /></span>
+                    <button className="doc-action-btn" onClick={() => handlePreviewDoc(data.transfer_file_path || data.transfer_file || transferFile, 'Bukti Transfer')}>
+                      <span className="doc-action-icon"><Eye size={14} /></span>
                       Lihat
-                    </a>
+                    </button>
                   </div>
                 </div>
               )}
@@ -639,21 +652,23 @@ const ApprovalDetail = () => {
                     <label className="lbl">Komentar / Catatan</label>
                     <textarea
                       className="comment-input"
-                      placeholder="Masukkan komentar (wajib jika tidak mengunggah file transfer)"
+                      placeholder="Masukkan komentar (wajib)"
                       value={comment}
                       onChange={(e) => setComment(e.target.value)}
                       rows={3}
                     />
-                    {transferFile && (
-                      <div style={{ marginTop: '8px' }}>
-                        <button type="button" className="btn" onClick={() => handleDownloadFile(transferFile)} style={{ marginLeft: '8px' }}>
-                          <Download size={14} /> Lihat file
-                        </button>
+                    {type === 'close' && !canApprove && (
+                      <div style={{ marginTop: '8px', color: '#B91C1C', fontSize: '13px' }}>
+                        {!hasTransferFile && !hasComment
+                          ? 'Unggah bukti transfer dan isi komentar untuk menyetujui.'
+                          : !hasTransferFile
+                          ? 'Unggah bukti transfer untuk dapat menyetujui penutupan akun.'
+                          : 'Komentar diperlukan untuk menyetujui penutupan akun.'}
                       </div>
                     )}
-                    {!canApprove && (
+                    {type !== 'close' && !canApprove && (
                       <div style={{ marginTop: '8px', color: '#B91C1C', fontSize: '13px' }}>
-                        {type === 'close' ? 'Lengkapi komentar atau tersedia file transfer untuk dapat menyetujui.' : 'Komentar diperlukan untuk menyetujui pendaftaran.'}
+                        Komentar diperlukan untuk menyetujui pendaftaran.
                       </div>
                     )}
                   </div>
@@ -697,6 +712,32 @@ const ApprovalDetail = () => {
           </button>
         </div>
       </div>
+
+      {previewDoc && createPortal(
+        <div className="doc-preview-overlay" onClick={() => setPreviewDoc(null)}>
+          <div className="doc-preview-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="doc-preview-header">
+              <h3>{previewDoc.name}</h3>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <button className="doc-action-btn" onClick={() => handleDownloadFile(previewDoc.url)} style={{ margin: 0 }}>
+                  <Download size={14} /> Unduh
+                </button>
+                <button className="doc-preview-close" onClick={() => setPreviewDoc(null)}>
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+            <div className="doc-preview-body">
+              {isImageFile(previewDoc.url) ? (
+                <img src={previewDoc.url} alt={previewDoc.name} className="doc-preview-img" />
+              ) : (
+                <iframe src={previewDoc.url} title={previewDoc.name} className="doc-preview-iframe" />
+              )}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 };

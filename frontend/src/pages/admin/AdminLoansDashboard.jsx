@@ -11,7 +11,8 @@ import {
   TrendingUp,
   BarChart3,
   AlertCircle,
-  PiggyBank
+  PiggyBank,
+  Loader
 } from "lucide-react";
 import { apiUrl, getAuthHeaders } from '../../services/api';
 import './AdminLoansDashboard.css';
@@ -56,6 +57,9 @@ const AdminLoansDashboard = () => {
   const [fundingSetting, setFundingSetting] = useState({ id: null, monthly_limit: '', effective_date: '' });
   const [fundingError, setFundingError] = useState('');
   const [isSavingFunding, setIsSavingFunding] = useState(false);
+  const [isSendingReminder, setIsSendingReminder] = useState(false);
+  const [isAutoSending, setIsAutoSending] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -315,11 +319,13 @@ const AdminLoansDashboard = () => {
   };
 
   const handleSendReminder = async () => {
+    if (isSendingReminder) return;
     if (selectedLoans.length === 0) {
       alert('Please select at least one loan to send reminder');
       return;
     }
 
+    setIsSendingReminder(true);
     try {
       const response = await fetch(apiUrl('/loan/loans/send_reminder_email/'), {
         method: 'POST',
@@ -343,10 +349,13 @@ const AdminLoansDashboard = () => {
     } catch (error) {
       console.error('Error sending reminder:', error);
       alert('Error sending reminders. Please try again.');
+    } finally {
+      setIsSendingReminder(false);
     }
   };
 
   const handleAutoSendAll = async () => {
+    if (isAutoSending) return;
     const confirmed = await window.appConfirm({
       title: 'Send all reminders?',
       message: 'This will send reminder emails to all members with overdue installments. Continue?',
@@ -355,6 +364,7 @@ const AdminLoansDashboard = () => {
     });
     if (!confirmed) return;
 
+    setIsAutoSending(true);
     try {
       const response = await fetch(apiUrl('/loan/loans/send_auto_all_reminders/'), {
         method: 'POST',
@@ -370,10 +380,14 @@ const AdminLoansDashboard = () => {
     } catch (error) {
       console.error(error);
       alert('Error triggering auto-reminders');
+    } finally {
+      setIsAutoSending(false);
     }
   };
 
   const handleExportExcel = () => {
+    if (isExporting) return;
+    setIsExporting(true);
     const headers = ['ID', 'Name', 'NIK', 'Purpose', 'Type', 'Department', 'Start Date', 'End Date', 'Principal', 'Interest', 'Total Amount', 'Remaining Balance', 'Progress', 'Current Month Due Date', 'Current Month Installment', 'Status'];
     const csvRows = [headers.join(',')];
 
@@ -424,6 +438,7 @@ const AdminLoansDashboard = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    setTimeout(() => setIsExporting(false), 1000);
   };
 
   return (
@@ -603,15 +618,15 @@ const AdminLoansDashboard = () => {
               <option value="Close">Close</option>
             </select>
           </div>
-          <button className="ald-print-btn" onClick={handleExportExcel} title="Export to Excel (CSV)">
-            <Printer size={16} />
+          <button className="ald-print-btn" onClick={handleExportExcel} title="Export to Excel (CSV)" disabled={isExporting}>
+            {isExporting ? <Loader size={16} className="spinner" /> : <Printer size={16} />}
           </button>
           <div style={{ display: 'flex', gap: '8px' }}>
-            <button className="ald-send-reminder-btn" onClick={handleSendReminder} title="Send Selected Reminder">
-              Send Reminder
+            <button className="ald-send-reminder-btn" onClick={handleSendReminder} title="Kirim reminder overdue & upcoming ke member terpilih" disabled={isSendingReminder}>
+              {isSendingReminder ? <><Loader size={14} className="spinner" /> Sending...</> : 'Send Reminder'}
             </button>
-            <button className="ald-send-reminder-btn" onClick={handleAutoSendAll} title="Auto-Send All Overdue" style={{ background: '#f59e0b' }}>
-              Auto-Send All
+            <button className="ald-send-reminder-btn" onClick={handleAutoSendAll} title="Kirim otomatis ke semua member yang overdue" style={{ background: '#f59e0b' }} disabled={isAutoSending}>
+              {isAutoSending ? <><Loader size={14} className="spinner" /> Sending...</> : 'Auto-Send Overdue'}
             </button>
           </div>
         </div>

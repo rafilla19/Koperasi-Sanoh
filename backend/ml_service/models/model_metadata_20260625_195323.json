@@ -1,0 +1,53 @@
+{
+  "version": "20260625_195323",
+  "model_file": "loan_model_20260625_195323.pkl",
+  "saved_at": "2026-06-25T19:53:23.823272",
+  "feature_names": [
+    "age",
+    "member_tenure_months",
+    "employee_status_id",
+    "is_male",
+    "balance_mandatory",
+    "balance_voluntary",
+    "monthly_voluntary_obligation",
+    "savings_to_total_obligation_ratio",
+    "total_withdrawal_count",
+    "total_withdrawal_amount",
+    "total_past_loans_count",
+    "total_historical_late_installments",
+    "absolute_max_delay_days",
+    "requested_principal_amount",
+    "monthly_installment_estimation",
+    "voluntary_to_installment_ratio"
+  ],
+  "training_date": "2026-06-25T19:53:23.754557",
+  "model_info": {
+    "algorithm": "XGBoost + SMOTE",
+    "cv_accuracy": 0.7818181818181817,
+    "cv_f1_macro": 0.6535675538771514,
+    "holdout_roc_auc": 0.8333333333333333,
+    "holdout_f1_macro": 0.6944444444444444,
+    "training_samples_original": 51,
+    "training_samples_smote": 84,
+    "test_samples": 11,
+    "n_features": 16,
+    "feature_names": [
+      "age",
+      "member_tenure_months",
+      "employee_status_id",
+      "is_male",
+      "balance_mandatory",
+      "balance_voluntary",
+      "monthly_voluntary_obligation",
+      "savings_to_total_obligation_ratio",
+      "total_withdrawal_count",
+      "total_withdrawal_amount",
+      "total_past_loans_count",
+      "total_historical_late_installments",
+      "absolute_max_delay_days",
+      "requested_principal_amount",
+      "monthly_installment_estimation",
+      "voluntary_to_installment_ratio"
+    ]
+  }
+}

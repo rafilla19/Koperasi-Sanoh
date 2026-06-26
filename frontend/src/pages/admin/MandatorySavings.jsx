@@ -31,10 +31,11 @@ const exportToExcel = (headers, rows, filename) => {
   URL.revokeObjectURL(url);
 };
 
-const statusLabel = { not_generated: 'Belum Generate', pending: 'Pending', paid: 'Lunas' };
+const statusLabel = { not_generated: 'Belum Generate', pending: 'Unpaid', overdue: 'Overdue', paid: 'Lunas' };
 const statusStyle = {
   not_generated: { background: '#f3f4f6', color: '#6b7280' },
   pending:       { background: '#fef3c7', color: '#d97706' },
+  overdue:       { background: '#fee2e2', color: '#991b1b' },
   paid:          { background: '#d1fae5', color: '#065f46' },
 };
 
@@ -194,7 +195,8 @@ export default function MandatorySavings() {
         >
           <option value="">Semua Status</option>
           <option value="not_generated">Belum Generate</option>
-          <option value="pending">Pending</option>
+          <option value="pending">Unpaid</option>
+          <option value="overdue">Overdue</option>
           <option value="paid">Lunas</option>
         </select>
         <button

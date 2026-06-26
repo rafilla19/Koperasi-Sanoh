@@ -313,11 +313,24 @@ class AuthViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['post'])
     def reset_password(self, request):
+        import re as _re
         token = request.data.get('token')
         new_password = request.data.get('password')
 
         if not token or not new_password:
             return Response({'error': 'token and password are required'}, status=400)
+
+        pw_errors = []
+        if len(new_password) < 8:
+            pw_errors.append('minimal 8 karakter')
+        if not _re.search(r'[A-Z]', new_password):
+            pw_errors.append('minimal 1 huruf kapital')
+        if not _re.search(r'\d', new_password):
+            pw_errors.append('minimal 1 angka')
+        if not _re.search(r'[!@#$%^&*()_+\-=\[\]{};\':"\\|,.<>/?]', new_password):
+            pw_errors.append('minimal 1 simbol')
+        if pw_errors:
+            return Response({'error': f'Password harus mengandung: {", ".join(pw_errors)}.'}, status=400)
 
         try:
             email = _read_reset_token(token, max_age_seconds=3600)

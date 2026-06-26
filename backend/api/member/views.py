@@ -10,7 +10,7 @@ from urllib.request import urlopen
 from django.conf import settings
 from django.core.files.storage import default_storage
 from django.core.mail import send_mail
-from django.db import connection, transaction
+from django.db import connection, transaction, IntegrityError
 from django.utils import timezone
 from rest_framework import status, viewsets
 from .models import EmailOTP
@@ -262,14 +262,14 @@ class MemberViewSet(viewsets.ViewSet):
                 m.phone_number,
                 COALESCE(sw.total_saving, 0) AS total_saving
             FROM members m
+            INNER JOIN users u ON u.id = m.user_id
             LEFT JOIN departments d ON d.id = m.department_id
-            LEFT JOIN users u ON u.id = m.user_id
             LEFT JOIN (
                 SELECT member_id, SUM(balance) AS total_saving
                 FROM saving_wallets
                 GROUP BY member_id
             ) sw ON sw.member_id = m.id
-            ORDER BY m.full_name ASC
+            ORDER BY u.is_active DESC, m.full_name ASC
             """
         )
         return Response(rows)
@@ -556,6 +556,13 @@ class MemberViewSet(viewsets.ViewSet):
                     pass
 
             return Response({'status': 'success'})
+        except IntegrityError as exc:
+            msg = str(exc)
+            if 'email' in msg.lower():
+                return Response({'error': 'Email ini sudah terdaftar. Silakan gunakan email lain atau login dengan akun yang sudah ada.'}, status=status.HTTP_409_CONFLICT)
+            if 'nik' in msg.lower():
+                return Response({'error': 'NIK ini sudah terdaftar dalam sistem.'}, status=status.HTTP_409_CONFLICT)
+            return Response({'error': 'Data yang Anda masukkan sudah terdaftar dalam sistem.'}, status=status.HTTP_409_CONFLICT)
         except Exception as exc:
             return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -926,6 +933,41 @@ class MemberViewSet(viewsets.ViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
+            # Check for existing paid principal saving (prevent duplicate payment)
+            already_paid = _try_fetchone(
+                """
+                SELECT id FROM saving_transactions
+                WHERE member_id = %s AND saving_type_id = 3 AND transaction_type_id = 1
+                  AND status_id NOT IN (32)
+                LIMIT 1
+                """,
+                [member_id]
+            )
+            if already_paid:
+                return Response(
+                    {'error': 'Simpanan pokok sudah pernah dibayar. Silakan login untuk mengakses akun Anda.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Check for existing pending gateway transaction (prevent double-click)
+            pending_tx = _try_fetchone(
+                """
+                SELECT pgt.id, pgt.gateway_transaction_id
+                FROM payment_gateway_transactions pgt
+                WHERE pgt.gateway_transaction_id LIKE %s
+                  AND pgt.gateway_status = 'pending'
+                  AND pgt.created_at > NOW() - INTERVAL '15 minutes'
+                ORDER BY pgt.created_at DESC
+                LIMIT 1
+                """,
+                [f'KOP-PRINCIPAL-{member_id}-%']
+            )
+            if pending_tx:
+                return Response(
+                    {'error': 'Anda memiliki transaksi pembayaran yang masih diproses. Silakan selesaikan pembayaran tersebut atau tunggu hingga expired.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
             # Fetch principal obligation amount
             obligation = _try_fetchone(
                 """
@@ -1117,6 +1159,33 @@ class MemberViewSet(viewsets.ViewSet):
                 {'error': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+    @action(detail=True, methods=['get'])
+    def principal_payment_status(self, request, pk=None):
+        """Check if member already paid principal saving."""
+        paid = _try_fetchone(
+            """
+            SELECT id FROM saving_transactions
+            WHERE member_id = %s AND saving_type_id = 3 AND transaction_type_id = 1
+              AND status_id NOT IN (32)
+            LIMIT 1
+            """,
+            [pk]
+        )
+        pending = _try_fetchone(
+            """
+            SELECT id FROM payment_gateway_transactions
+            WHERE gateway_transaction_id LIKE %s
+              AND gateway_status = 'pending'
+              AND created_at > NOW() - INTERVAL '15 minutes'
+            LIMIT 1
+            """,
+            [f'KOP-PRINCIPAL-{pk}-%']
+        )
+        return Response({
+            'already_paid': paid is not None,
+            'has_pending': pending is not None,
+        })
 
     @action(detail=False, methods=['get'])
     def principal_savings_obligation(self, request):

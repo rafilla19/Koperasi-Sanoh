@@ -12,7 +12,7 @@ const PaymentSuccess = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const res = await fetch(apiUrl('/members/saving_types_info/'));
+        const res = await fetch(apiUrl('/member/members/saving_types_info/'));
         if (res.ok) {
           const data = await res.json();
           const principalType = data.find(st => st.id === 3);
@@ -39,7 +39,7 @@ const PaymentSuccess = () => {
   };
 
   const handleDashboard = () => {
-    navigate('/dashboard'); 
+    navigate('/login');
   };
 
   return (
@@ -105,7 +105,7 @@ const PaymentSuccess = () => {
 
           <div className="payment-success-actions">
             <button className="payment-success-btn" onClick={handleDashboard}>
-              Go to My Dashboard
+              Go to Login
               <ArrowRight size={16} />
             </button>
           </div>

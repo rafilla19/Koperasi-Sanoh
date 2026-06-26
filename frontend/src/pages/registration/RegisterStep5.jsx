@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShieldCheck, Eye, EyeOff } from 'lucide-react';
+import { ShieldCheck, Eye, EyeOff, Loader } from 'lucide-react';
 import { apiUrl } from '../../services/api';
 import './RegistrationPages.css';
 
@@ -10,11 +10,26 @@ const RegisterStep5 = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+
+  const hasMinLength = password.length >= 8;
+  const hasUpperCase = /[A-Z]/.test(password);
+  const hasNumber = /\d/.test(password);
+  const hasSymbol = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]+/.test(password);
+  const allCriteriaMet = hasMinLength && hasUpperCase && hasNumber && hasSymbol;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submitting) return;
+    setErrorMsg('');
+
+    if (!allCriteriaMet) {
+      setErrorMsg('Password harus memenuhi semua persyaratan keamanan.');
+      return;
+    }
     if (password !== confirmPassword) {
-      alert("Passwords do not match");
+      setErrorMsg('Password dan konfirmasi password tidak cocok.');
       return;
     }
 
@@ -23,16 +38,16 @@ const RegisterStep5 = () => {
     const step3 = JSON.parse(sessionStorage.getItem('regStep3') || '{}');
 
     if (!step2.npwpPath || !step2.ktpPath) {
-      alert("Document files (NPWP/KTP) are missing. Please go back to Step 2 and re-upload your documents.");
-      navigate('/register/step-2');
+      setErrorMsg('File dokumen (NPWP/KTP) tidak ditemukan. Silakan kembali ke Step 2 dan upload ulang.');
       return;
     }
 
     if (!step1.nik || !step2.email) {
-      alert("Registration data is incomplete. Please restart registration.");
+      setErrorMsg('Data registrasi tidak lengkap. Silakan mulai ulang registrasi.');
       return;
     }
 
+    setSubmitting(true);
     try {
       const response = await fetch(apiUrl('/member/members/register_member/'), {
         method: 'POST',
@@ -41,28 +56,36 @@ const RegisterStep5 = () => {
           nik: step1.nik,
           fullName: step1.fullName,
           nikEmployee: step1.nikEmployee,
-          noNpwp: step1.npwp,
-          placeOfBirth: step1.placeOfBirth,
-          dateOfBirth: step1.dob,
-          gender: step1.gender,
-          address: step1.address,
+          noNpwp: step1.npwp || '',
+          placeOfBirth: step1.placeOfBirth || '',
+          dateOfBirth: step1.dob || '',
+          gender: step1.gender || '',
+          address: step1.address || '',
           phoneNumber: step2.mobilePhone,
           email: step2.email,
-          employeeStatusId: step2.employeeStatus,
-          departmentId: step2.department,
-          voluntarySaving: step2.voluntarySaving || 0,
+          employeeStatusId: String(step2.employeeStatus),
+          departmentId: String(step2.department),
+          voluntarySaving: String(step2.voluntarySaving || 0),
           contractEndDate: step2.contractEndDate || '',
-          payrollAgreement: step2.payrollAgree,
+          payrollAgreement: step2.payrollAgree || false,
           tncAgreement: step3.tncAgreement || false,
           password: password,
-          npwpPath: step2.npwpPath,
-          ktpPath: step2.ktpPath
+          npwpPath: step2.npwpPath || '',
+          ktpPath: step2.ktpPath || ''
         })
       });
 
       const result = await response.json();
       if (!response.ok) {
-        alert(result.message || 'Registration failed. Please try again.');
+        const msg = result.message || result.error || result.detail;
+        if (typeof msg === 'string') {
+          setErrorMsg(msg);
+        } else if (typeof result === 'object') {
+          const firstError = Object.values(result).flat().join(', ');
+          setErrorMsg(firstError || 'Registrasi gagal. Silakan coba lagi.');
+        } else {
+          setErrorMsg('Registrasi gagal. Silakan coba lagi.');
+        }
         return;
       }
 
@@ -73,15 +96,11 @@ const RegisterStep5 = () => {
       navigate('/register/under-review');
     } catch (error) {
       console.error('Registration failed', error);
-      alert('Registration failed. Please try again.');
+      setErrorMsg('Koneksi gagal. Silakan coba lagi.');
+    } finally {
+      setSubmitting(false);
     }
   };
-
-  // Password criteria visual checks
-  const hasMinLength = password.length >= 8;
-  const hasUpperCase = /[A-Z]/.test(password);
-  const hasNumber = /\d/.test(password);
-  const hasSymbol = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]+/.test(password);
 
   const togglePassword = () => setShowPassword(!showPassword);
   const toggleConfirm = () => setShowConfirm(!showConfirm);
@@ -97,6 +116,12 @@ const RegisterStep5 = () => {
       <p className="reg-page-subtitle text-center">
         Please create a unique and strong password to<br/> access your savings safely
       </p>
+
+      {errorMsg && (
+        <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', marginTop: '12px', marginBottom: '4px' }}>
+          {errorMsg}
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="reg-form mt-6">
         <div className="reg-form-group relative">
@@ -145,8 +170,8 @@ const RegisterStep5 = () => {
         </div>
 
         <div className="reg-actions full-width mt-6">
-          <button type="submit" className="btn-primary-full">
-            Finalize Account Setup &rarr;
+          <button type="submit" className="btn-primary-full" disabled={submitting || !allCriteriaMet}>
+            {submitting ? <><Loader size={16} className="spinner" /> Processing...</> : 'Finalize Account Setup →'}
           </button>
         </div>
       </form>

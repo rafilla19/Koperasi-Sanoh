@@ -4,8 +4,9 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, FileText, Printer, CheckCircle, AlertTriangle, X, Download, CreditCard, Copy } from 'lucide-react';
+import { ArrowLeft, FileText, Printer, CheckCircle, AlertTriangle, X, Download, CreditCard, Copy, Loader } from 'lucide-react';
 import { apiUrl } from '../../services/api';
+import logoImg from '../../assets/logo.png';
 import './LoanDetails.css';
 
 const LoanDetails = () => {
@@ -30,9 +31,12 @@ const LoanDetails = () => {
   const [paymentChannels, setPaymentChannels] = useState([]);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(null);
   const [hasPendingClosure, setHasPendingClosure] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   const summaryRef = useRef(null);
 
   const handleDownloadSummary = async () => {
+    if (isDownloading) return;
+    setIsDownloading(true);
     try {
       const memberId = getCurrentMemberId();
 
@@ -43,68 +47,164 @@ const LoanDetails = () => {
       }
 
       const doc = new jsPDF();
-      
-      // Header
-      doc.setFontSize(11);
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const margin = 15;
+
+      // Load logo
+      const loadLogo = () => new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => resolve(null);
+        img.src = logoImg;
+      });
+      const logo = await loadLogo();
+
+      // === KOP SURAT / LETTERHEAD ===
+      const headerStartY = 12;
+      const logoSize = 18;
+
+      if (logo) {
+        doc.addImage(logo, 'PNG', margin, headerStartY - 2, logoSize, logoSize);
+      }
+
+      const textStartX = margin + logoSize + 5;
+
+      doc.setFontSize(13);
       doc.setFont("helvetica", "bold");
-      doc.text("KOPERASI PRODUSEN SANOH SINERGI BERSAMA", 105, 15, null, null, "center");
-      doc.text("PT SANOH INDONESIA", 105, 20, null, null, "center");
+      doc.setTextColor(27, 54, 93);
+      doc.text("KOPERASI PRODUSEN SANOH SINERGI BERSAMA", textStartX, headerStartY + 4);
+
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(60, 60, 60);
+      doc.text("PT SANOH INDONESIA", textStartX, headerStartY + 9);
+
+      doc.setFontSize(8);
+      doc.setTextColor(100, 100, 100);
+      doc.text("Jl. Inti II Blok C4 No.10, Kawasan Industri Hyundai – Cikarang, Bekasi 17550", textStartX, headerStartY + 14);
+      doc.text("Email: koperasi.sanoh@sanoh.co.id  |  Telp: (021) 8983-7320", textStartX, headerStartY + 18);
+
+      const lineY = headerStartY + 22;
+      doc.setDrawColor(27, 54, 93);
+      doc.setLineWidth(0.8);
+      doc.line(margin, lineY, pageWidth - margin, lineY);
+      doc.setLineWidth(0.3);
+      doc.line(margin, lineY + 1.5, pageWidth - margin, lineY + 1.5);
+
+      // === DOCUMENT TITLE ===
+      let currentY = lineY + 10;
+      doc.setFontSize(14);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(27, 54, 93);
+      doc.text("LOAN SUMMARY REPORT", pageWidth / 2, currentY, { align: 'center' });
+      currentY += 4;
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(120, 120, 120);
+      doc.text(`Generated on: ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`, pageWidth / 2, currentY, { align: 'center' });
+      currentY += 10;
+
+      // === MEMBER INFORMATION SECTION ===
+      doc.setFillColor(240, 245, 255);
+      doc.roundedRect(margin, currentY - 3, pageWidth - margin * 2, 28, 2, 2, 'F');
+
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(27, 54, 93);
+      doc.text("MEMBER INFORMATION", margin + 5, currentY + 3);
+      currentY += 8;
+
       doc.setFontSize(9);
       doc.setFont("helvetica", "normal");
-      doc.text("Jl. Inti II Blok C4 No.10. Kawasan Industri Hyundai – CIKARANG", 105, 25, null, null, "center");
-      
-      doc.line(15, 30, 195, 30);
-      
-      let currentY = 40;
-      
-      // Member Information
-      doc.setFontSize(11);
+      doc.setTextColor(50, 50, 50);
+      const col1X = margin + 5;
+      const col2X = pageWidth / 2 + 5;
+
       doc.setFont("helvetica", "bold");
-      doc.text("Member Information", 15, currentY);
-      currentY += 6;
-      
-      doc.setFontSize(10);
+      doc.text("Name:", col1X, currentY);
       doc.setFont("helvetica", "normal");
-      doc.text(`Name: ${memberData?.full_name || '-'}`, 15, currentY);
-      currentY += 6;
-      doc.text(`Member ID: ${memberData?.id || memberId || '-'}`, 15, currentY);
-      currentY += 6;
-      doc.text(`Member Since: ${formatDate(memberData?.join_date)}`, 15, currentY);
-      currentY += 12;
-      
-      // Loan Details
-      doc.setFontSize(11);
+      doc.text(memberData?.full_name || '-', col1X + 30, currentY);
+
       doc.setFont("helvetica", "bold");
-      doc.text("Loan Details", 15, currentY);
-      currentY += 6;
-      
-      doc.setFontSize(10);
+      doc.text("Member ID:", col2X, currentY);
       doc.setFont("helvetica", "normal");
-      doc.text(`Total Borrowed: ${formatRupiah(loanData?.principal_amount)}`, 15, currentY);
+      doc.text(String(memberData?.id || memberId || '-'), col2X + 30, currentY);
       currentY += 6;
-      doc.text(`Remaining: ${formatRupiah(loanData?.remaining_balance)}`, 15, currentY);
-      currentY += 6;
-      doc.text(`Interest (Flat): ${parseFloat(loanData?.bunga || 0).toFixed(1).replace('.', ',')}%`, 15, currentY);
-      currentY += 6;
-      doc.text(`Purpose: ${loanData?.purpose || '-'}`, 15, currentY);
-      currentY += 12;
-      
-      // Repayment Schedule
-      doc.setFontSize(11);
+
       doc.setFont("helvetica", "bold");
-      doc.text("Repayment Schedule", 15, currentY);
+      doc.text("Member Since:", col1X, currentY);
+      doc.setFont("helvetica", "normal");
+      doc.text(formatDate(memberData?.join_date), col1X + 30, currentY);
+
+      doc.setFont("helvetica", "bold");
+      doc.text("Loan ID:", col2X, currentY);
+      doc.setFont("helvetica", "normal");
+      doc.text(`#${id}`, col2X + 30, currentY);
+      currentY += 14;
+
+      // === LOAN DETAILS SECTION ===
+      doc.setFillColor(240, 245, 255);
+      doc.roundedRect(margin, currentY - 3, pageWidth - margin * 2, 34, 2, 2, 'F');
+
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(27, 54, 93);
+      doc.text("LOAN DETAILS", margin + 5, currentY + 3);
+      currentY += 8;
+
+      doc.setFontSize(9);
+      doc.setTextColor(50, 50, 50);
+
+      doc.setFont("helvetica", "bold");
+      doc.text("Total Borrowed:", col1X, currentY);
+      doc.setFont("helvetica", "normal");
+      doc.text(formatRupiah(loanData?.principal_amount), col1X + 35, currentY);
+
+      doc.setFont("helvetica", "bold");
+      doc.text("Remaining:", col2X, currentY);
+      doc.setFont("helvetica", "normal");
+      doc.text(formatRupiah(loanData?.remaining_balance), col2X + 30, currentY);
+      currentY += 6;
+
+      doc.setFont("helvetica", "bold");
+      doc.text("Interest (Flat):", col1X, currentY);
+      doc.setFont("helvetica", "normal");
+      doc.text(`${parseFloat(loanData?.bunga || 0).toFixed(1).replace('.', ',')}%`, col1X + 35, currentY);
+
+      doc.setFont("helvetica", "bold");
+      doc.text("Status:", col2X, currentY);
+      doc.setFont("helvetica", "normal");
+      doc.text(status || '-', col2X + 30, currentY);
+      currentY += 6;
+
+      doc.setFont("helvetica", "bold");
+      doc.text("Purpose:", col1X, currentY);
+      doc.setFont("helvetica", "normal");
+      doc.text(loanData?.purpose || '-', col1X + 35, currentY);
+
+      doc.setFont("helvetica", "bold");
+      doc.text("Progress:", col2X, currentY);
+      doc.setFont("helvetica", "normal");
+      const progressPct = loanData?.total_installment > 0 ? Math.round((loanData.paid_installment / loanData.total_installment) * 100) : 0;
+      doc.text(`${loanData?.paid_installment || 0}/${loanData?.total_installment || 0} (${progressPct}%)`, col2X + 30, currentY);
+      currentY += 14;
+
+      // === REPAYMENT SCHEDULE TABLE ===
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(27, 54, 93);
+      doc.text("REPAYMENT SCHEDULE", margin + 5, currentY);
       currentY += 4;
-      
-      const formatNum = (num) => new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(num || 0);
-      
-      const tableColumn = ["No", "Due Date", "Transaction Date", "Principal", "Interest", "Total Payment", "Status"];
+
+      const formatNum = (num) => new Intl.NumberFormat('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(num || 0);
+
+      const tableColumn = ["No", "Due Date", "Transaction Date", "Principal (Rp)", "Interest (Rp)", "Total (Rp)", "Status"];
       const tableRows = [];
-      
+
       schedule.forEach(s => {
-        // Fallback for transaction date if not available natively
         const isPaid = s.status_code === 'PAID' || s.status_code === 'PAID_OFF';
-        const txnDate = isPaid ? formatDate(s.due_date) : '';
-        
+        const txnDate = isPaid ? formatDate(s.due_date) : '-';
+
         tableRows.push([
           s.installment_number,
           formatDate(s.due_date),
@@ -115,21 +215,63 @@ const LoanDetails = () => {
           s.status_code
         ]);
       });
-      
+
       autoTable(doc, {
         startY: currentY,
         head: [tableColumn],
         body: tableRows,
         theme: 'grid',
-        headStyles: { fillColor: [255, 255, 255], textColor: [0, 0, 0], lineWidth: 0.1, lineColor: [0, 0, 0] },
-        bodyStyles: { textColor: [0, 0, 0], lineWidth: 0.1, lineColor: [0, 0, 0] },
-        styles: { fontSize: 9, cellPadding: 2, font: 'helvetica' },
+        headStyles: {
+          fillColor: [27, 54, 93],
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          fontSize: 8,
+          halign: 'center',
+          cellPadding: 3,
+        },
+        bodyStyles: {
+          textColor: [40, 40, 40],
+          fontSize: 8,
+          cellPadding: 2.5,
+        },
+        alternateRowStyles: {
+          fillColor: [245, 248, 255],
+        },
+        columnStyles: {
+          0: { halign: 'center', cellWidth: 12 },
+          1: { halign: 'center' },
+          2: { halign: 'center' },
+          3: { halign: 'right' },
+          4: { halign: 'right' },
+          5: { halign: 'right', fontStyle: 'bold' },
+          6: { halign: 'center' },
+        },
+        styles: {
+          font: 'helvetica',
+          lineWidth: 0.1,
+          lineColor: [200, 200, 200],
+        },
+        margin: { left: margin, right: margin },
       });
-      
+
+      // === FOOTER ===
+      const finalY = doc.lastAutoTable.finalY + 15;
+      doc.setDrawColor(200, 200, 200);
+      doc.setLineWidth(0.3);
+      doc.line(margin, finalY, pageWidth - margin, finalY);
+
+      doc.setFontSize(7);
+      doc.setFont("helvetica", "italic");
+      doc.setTextColor(150, 150, 150);
+      doc.text("This document is generated automatically by the Koperasi Sanoh Cooperative System.", pageWidth / 2, finalY + 5, { align: 'center' });
+      doc.text("This is a valid document and does not require a signature.", pageWidth / 2, finalY + 9, { align: 'center' });
+
       doc.save(`Loan_Summary_${id}.pdf`);
     } catch (err) {
       console.error("Failed to generate PDF", err);
       alert("Failed to generate PDF");
+    } finally {
+      setIsDownloading(false);
     }
   };
 
@@ -410,7 +552,9 @@ const LoanDetails = () => {
         {!isPendingOrRejected && (
           <div className="ld-actions">
             {/* <button className="ld-btn-outline"><FileText size={16} /> View Loan Agreement</button> */}
-            <button className="ld-btn-outline" onClick={handleDownloadSummary}><Printer size={16} /> Print Summary</button>
+            <button className="ld-btn-outline" onClick={handleDownloadSummary} disabled={isDownloading}>
+              {isDownloading ? <><Loader size={16} className="spinner" /> Generating...</> : <><Printer size={16} /> Print Summary</>}
+            </button>
           </div>
         )}
       </div>

@@ -1,8 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Info, ChevronRight } from 'lucide-react';
+import { Plus, Info, ChevronRight, Loader } from 'lucide-react';
 import { apiUrl } from '../../services/api';
 import './MyLoans.css';
+
+const ViewDetailsButton = ({ loanId, navigate }) => {
+  const [loading, setLoading] = useState(false);
+  return (
+    <button
+      className="btn-view-details"
+      disabled={loading}
+      onClick={() => {
+        if (loading) return;
+        setLoading(true);
+        navigate(`/dashboard/loans/${loanId}`);
+      }}
+    >
+      {loading ? <><Loader size={14} className="spinner" /> Loading...</> : 'View Details'}
+    </button>
+  );
+};
 
 const MyLoans = () => {
   const navigate = useNavigate();
@@ -19,6 +36,7 @@ const MyLoans = () => {
     rejected: []
   });
   const [hasPendingClosure, setHasPendingClosure] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -178,6 +196,7 @@ const MyLoans = () => {
   };
 
   const handleApplyLoan = () => {
+    if (isNavigating) return;
     if (hasPendingClosure) {
       alert('Anda tidak dapat mengajukan pinjaman baru karena akun Anda dalam proses penutupan.');
     } else if (hasPendingLoan) {
@@ -185,6 +204,7 @@ const MyLoans = () => {
     } else if (hasActiveLoan) {
       alert('Anda tidak dapat mengajukan pinjaman baru karena masih ada pinjaman yang aktif.');
     } else {
+      setIsNavigating(true);
       navigate('/dashboard/loans/application');
     }
   };
@@ -216,15 +236,14 @@ const MyLoans = () => {
         <button
           className="btn-apply-loan"
           onClick={handleApplyLoan}
-          disabled={hasActiveLoan || hasPendingLoan || hasPendingClosure}
-          style={(hasActiveLoan || hasPendingLoan || hasPendingClosure) ? { 
-            background: '#94a3b8', 
+          disabled={hasActiveLoan || hasPendingLoan || hasPendingClosure || isNavigating}
+          style={(hasActiveLoan || hasPendingLoan || hasPendingClosure) ? {
+            background: '#94a3b8',
             cursor: 'not-allowed',
             color: '#f1f5f9'
           } : {}}
         >
-          <Plus size={16} strokeWidth={2.5} />
-          Apply for a New Loan
+          {isNavigating ? <><Loader size={16} className="spinner" /> Loading...</> : <><Plus size={16} strokeWidth={2.5} /> Apply for a New Loan</>}
         </button>
       </div>
 
@@ -354,9 +373,7 @@ const MyLoans = () => {
                       <div className="val">{loan.nextDeduction}</div>
                     </div>
                   )}
-                  <button className="btn-view-details" onClick={() => navigate(`/dashboard/loans/${loan.id.replace('#', '')}`)}>
-                    View Details
-                  </button>
+                  <ViewDetailsButton loanId={loan.id.replace('#', '')} navigate={navigate} />
                 </div>
               </div>
             ))}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
-import { User, Printer, UploadCloud, Edit2, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
+import { User, Printer, UploadCloud, Edit2, AlertCircle, CheckCircle, XCircle, Loader, X, Eye, Download } from 'lucide-react';
 import { API_ORIGIN, apiUrl, getAuthHeaders } from '../../services/api';
 import './AdminLoanDetail.css';
 
@@ -92,6 +93,11 @@ const AdminLoanDetail = () => {
   };
 
   const [rejectReason, setRejectReason] = useState('');
+  const [isApproving, setIsApproving] = useState(false);
+  const [isRejecting, setIsRejecting] = useState(false);
+  const [previewDoc, setPreviewDoc] = useState(null);
+
+  const isImageFile = (url) => /\.(jpg|jpeg|png|gif|bmp|webp|svg)(\?|$)/i.test(url || '');
 
   const decisionNote = rejectReason.trim();
   const isDecisionLocked = decisionNote.length === 0;
@@ -101,6 +107,7 @@ const AdminLoanDetail = () => {
   const isOverLimit = remainingAllocation !== null && parsedAmount > remainingAllocation;
 
   const handleApprove = async () => {
+    if (isApproving) return;
     if (isOverLimit) {
       alert('Gagal: Jumlah pengajuan melebihi sisa alokasi bulan ini.');
       return;
@@ -121,7 +128,8 @@ const AdminLoanDetail = () => {
       variant: 'success',
     });
     if (!confirmed) return;
-    
+
+    setIsApproving(true);
     try {
       const userStr = localStorage.getItem('user');
       const user = userStr ? JSON.parse(userStr) : null;
@@ -137,10 +145,10 @@ const AdminLoanDetail = () => {
 
       const response = await fetch(apiUrl(`/loan/loan-applications/${id}/approve/`), {
         method: 'POST',
-        headers: getAuthHeaders(true), // passing true for FormData if your api.js supports it, else default headers without Content-Type
+        headers: getAuthHeaders(true),
         body: formData
       });
-      
+
       const data = await response.json();
       if (response.ok) {
         alert(data.message || 'Pinjaman berhasil disetujui');
@@ -151,10 +159,13 @@ const AdminLoanDetail = () => {
     } catch (err) {
       console.error(err);
       alert('Gagal menyetujui pinjaman');
+    } finally {
+      setIsApproving(false);
     }
   };
 
   const handleReject = async () => {
+    if (isRejecting) return;
     if (isDecisionLocked) {
       alert('Silakan isi catatan keputusan sebelum menolak pinjaman');
       return;
@@ -168,6 +179,7 @@ const AdminLoanDetail = () => {
     });
     if (!confirmed) return;
 
+    setIsRejecting(true);
     try {
       const userStr = localStorage.getItem('user');
       const user = userStr ? JSON.parse(userStr) : null;
@@ -181,7 +193,7 @@ const AdminLoanDetail = () => {
           admin_id: adminId
         })
       });
-      
+
       const data = await response.json();
       if (response.ok) {
         alert(data.message || 'Pinjaman berhasil ditolak');
@@ -192,6 +204,8 @@ const AdminLoanDetail = () => {
     } catch (err) {
       console.error(err);
       alert('Gagal menolak pinjaman');
+    } finally {
+      setIsRejecting(false);
     }
   };
 
@@ -265,15 +279,14 @@ const AdminLoanDetail = () => {
           <div className="aldet-m-card doc-card">
             <h2 className="aldet-m-card-title">Dokumen Pendukung</h2>
             {detail.salary_statement_file ? (
-              <a 
-                className="doc-preview-link" 
-                href={resolveDocumentUrl(detail.salary_statement_file)} 
-                target="_blank" 
-                rel="noopener noreferrer"
+              <button
+                className="doc-preview-link"
+                onClick={() => setPreviewDoc({ url: resolveDocumentUrl(detail.salary_statement_file), name: getDocumentName(detail.salary_statement_file) })}
+                style={{ background: 'none', border: '1px solid #e2e8f0', cursor: 'pointer', width: '100%', textAlign: 'left' }}
               >
-                <Printer size={20} color="#4f46e5" />
+                <Eye size={20} color="#4f46e5" />
                 <span>{getDocumentName(detail.salary_statement_file)}</span>
-              </a>
+              </button>
             ) : (
               <p className="doc-empty">Belum ada dokumen slip gaji.</p>
             )}
@@ -432,19 +445,19 @@ const AdminLoanDetail = () => {
             </div>
 
             <div className="action-buttons">
-              <button 
-                className="btn-reject" 
-                onClick={handleReject} 
-                disabled={isDecisionLocked}
+              <button
+                className="btn-reject"
+                onClick={handleReject}
+                disabled={isDecisionLocked || isRejecting || isApproving}
               >
-                Tolak Pengajuan
+                {isRejecting ? <><Loader size={14} className="spinner" /> Memproses...</> : 'Tolak Pengajuan'}
               </button>
-              <button 
-                className={`btn-approve ${isOverLimit ? 'disabled' : ''}`} 
-                onClick={handleApprove} 
-                disabled={isDecisionLocked || !proofFile || isOverLimit}
+              <button
+                className={`btn-approve ${isOverLimit ? 'disabled' : ''}`}
+                onClick={handleApprove}
+                disabled={isDecisionLocked || !proofFile || isOverLimit || isApproving || isRejecting}
               >
-                {isOverLimit ? 'Dana Kurang' : 'Setujui Pinjaman'}
+                {isApproving ? <><Loader size={14} className="spinner" /> Memproses...</> : isOverLimit ? 'Dana Kurang' : 'Setujui Pinjaman'}
               </button>
             </div>
             {(isDecisionLocked || (!proofFile && !isOverLimit)) && (
@@ -456,6 +469,31 @@ const AdminLoanDetail = () => {
           </div>
         </div>
       </div>
+
+      {previewDoc && createPortal(
+        <div style={{ position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999 }} onClick={() => setPreviewDoc(null)}>
+          <div style={{ background:'#fff',borderRadius:12,width:'90vw',maxWidth:900,height:'85vh',display:'flex',flexDirection:'column',overflow:'hidden',boxShadow:'0 25px 60px rgba(0,0,0,0.3)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',padding:'16px 20px',borderBottom:'1px solid #e2e8f0',background:'#f8fafc' }}>
+              <h3 style={{ margin:0,fontSize:16,fontWeight:700,color:'#0f172a' }}>{previewDoc.name}</h3>
+              <div style={{ display:'flex',gap:8,alignItems:'center' }}>
+                <button onClick={() => window.open(previewDoc.url,'_blank')} style={{ display:'flex',alignItems:'center',gap:6,padding:'8px 12px',border:'1px solid #e2e8f0',background:'#fff',borderRadius:8,fontSize:13,fontWeight:600,cursor:'pointer',color:'#334155' }}>
+                  <Download size={14} /> Unduh
+                </button>
+                <button onClick={() => setPreviewDoc(null)} style={{ display:'flex',alignItems:'center',justifyContent:'center',width:36,height:36,border:'none',background:'#f1f5f9',borderRadius:8,cursor:'pointer',color:'#64748b' }}>
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+            <div style={{ flex:1,overflow:'auto',display:'flex',alignItems:'center',justifyContent:'center',background:'#f1f5f9',padding:16 }}>
+              {isImageFile(previewDoc.url)
+                ? <img src={previewDoc.url} alt={previewDoc.name} style={{ maxWidth:'100%',maxHeight:'100%',objectFit:'contain',borderRadius:4,boxShadow:'0 2px 8px rgba(0,0,0,0.1)' }} />
+                : <iframe src={previewDoc.url} title={previewDoc.name} style={{ width:'100%',height:'100%',border:'none',borderRadius:4 }} />
+              }
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 };

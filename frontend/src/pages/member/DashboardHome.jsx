@@ -4,7 +4,7 @@ import {
   Download, Copy, HandCoins, ArrowUpRight, TrendingUp,
   PieChart, Calendar, Search, FileText, Filter,
   ArrowRightLeft, AlertCircle, Info, CheckCircle2,
-  ChevronDown, TrendingDown, X, Check, UserCircle
+  ChevronDown, TrendingDown, X, Check, UserCircle, Loader
 } from 'lucide-react';
 import {
   Chart as ChartJS,
@@ -15,6 +15,7 @@ import { Line } from 'react-chartjs-2';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { apiUrl } from '../../services/api';
+import logoImg from '../../assets/logo.png';
 import './DashboardHome.css';
 
 ChartJS.register(
@@ -108,6 +109,7 @@ const DashboardHome = () => {
   const [isInitiating, setIsInitiating] = useState(false);
   const [shuAnalytics, setShuAnalytics] = useState(null);
   const [showShuHistory, setShowShuHistory] = useState(false);
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
 
   const itemsPerPage = 5;
   const chartRef = useRef(null);
@@ -368,93 +370,322 @@ const DashboardHome = () => {
     }
   };
 
-  const handleDownloadReport = () => {
-    console.log('Generating report...');
+  const handleDownloadReport = async () => {
+    if (isGeneratingReport) return;
+    setIsGeneratingReport(true);
     try {
       const doc = new jsPDF();
-      const dateStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const margin = 15;
+      const contentWidth = pageWidth - margin * 2;
 
-      // Header
-      doc.setFontSize(18);
-      doc.setTextColor(15, 23, 42); // Navy
-      doc.text('KOPERASI SANOH SINERGI BERSAMA', 105, 20, { align: 'center' });
+      const loadLogo = () => new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => resolve(null);
+        img.src = logoImg;
+      });
+      const logo = await loadLogo();
+
+      // === KOP SURAT ===
+      const headerY = 12;
+      const logoW = 22;
+      const logoH = 22;
+
+      if (logo) {
+        doc.addImage(logo, 'PNG', margin, headerY - 3, logoW, logoH);
+      }
+
+      const textX = margin + logoW + 6;
 
       doc.setFontSize(14);
-      doc.setTextColor(100);
-      doc.text('FINANCIAL SUMMARY REPORT', 105, 30, { align: 'center' });
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(20, 60, 40);
+      doc.text("KOPERASI SANOH SINERGI BERSAMA", textX, headerY + 4);
 
-      doc.setLineWidth(0.5);
-      doc.line(20, 35, 190, 35);
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(60, 60, 60);
+      doc.text("JL. Inti II, Blok C-4 No. 10, Kawasan Industri Hyundai", textX, headerY + 10);
+      doc.text("Cikarang, Sukasari, Cikarang Selatan, Kab. Bekasi, Jawa Barat", textX, headerY + 15);
 
-      // Member Info
+      const lineY = headerY + 20;
+      doc.setDrawColor(20, 80, 50);
+      doc.setLineWidth(0.8);
+      doc.line(margin, lineY, pageWidth - margin, lineY);
+
+      // Report Date
+      let currentY = lineY + 10;
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(60, 60, 60);
+      const reportDate = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+      doc.text(`Report Date : ${reportDate}`, pageWidth - margin, currentY, { align: 'right' });
+      currentY += 10;
+
+      // === TITLE ===
+      doc.setFontSize(16);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(0, 0, 0);
+      doc.text("Financial Report", pageWidth / 2, currentY, { align: 'center' });
+      currentY += 12;
+
+      // === MEMBER NAME ===
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(0, 0, 0);
+      doc.text(`Member Name : ${summary?.full_name || user?.full_name || '-'}`, margin, currentY);
+      currentY += 10;
+
+      // === SAVING OVERVIEW ===
       doc.setFontSize(11);
-      doc.setTextColor(0);
-      doc.text(`Member Name : ${summary?.full_name || 'Member'}`, 20, 45);
-      doc.text(`Report Date   : ${dateStr}`, 20, 52);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(0, 0, 0);
+      doc.text("SAVING OVERVIEW", margin, currentY);
+      currentY += 4;
 
-      // Savings Section
-      doc.setFontSize(14);
-      doc.text('1. Savings Overview', 20, 70);
-      const savingsBody = [
-        ['Principal Savings', formatRupiah(summary?.principle_balance)],
-        ['Mandatory Savings', formatRupiah(summary?.mandatory_balance)],
-        ['Voluntary Savings', formatRupiah(summary?.voluntary_balance)],
-        ['Total Balance', formatRupiah(summary?.total_saving_balance)]
-      ];
       autoTable(doc, {
-        startY: 75,
+        startY: currentY,
         head: [['Account Type', 'Current Balance']],
-        body: savingsBody,
-        theme: 'striped',
-        headStyles: { fillColor: [15, 23, 42] }
+        body: [
+          ['Principal', formatRupiah(summary?.principle_balance)],
+          ['Mandatory', formatRupiah(summary?.mandatory_balance)],
+          ['Voluntary', formatRupiah(summary?.voluntary_balance)],
+          ['Total', formatRupiah(summary?.total_saving_balance)],
+        ],
+        theme: 'grid',
+        headStyles: {
+          fillColor: [255, 255, 255],
+          textColor: [0, 0, 0],
+          fontStyle: 'bold',
+          fontSize: 9,
+          lineWidth: 0.3,
+          lineColor: [0, 0, 0],
+        },
+        bodyStyles: {
+          textColor: [0, 0, 0],
+          fontSize: 9,
+          lineWidth: 0.3,
+          lineColor: [0, 0, 0],
+        },
+        styles: { cellPadding: 3, font: 'helvetica' },
+        columnStyles: {
+          0: { cellWidth: contentWidth * 0.5 },
+          1: { cellWidth: contentWidth * 0.5 },
+        },
+        margin: { left: margin, right: margin },
       });
 
-      // Loan Section
-      const finalY = doc.lastAutoTable.finalY + 15;
-      doc.text('2. Loan Status', 20, finalY);
-      const loanBody = [
-        ['Approved Principal', formatRupiah(summary?.principal_amount)],
-        ['Remaining Balance', formatRupiah(summary?.total_loan_remaining)],
-        ['Installments Paid', `${summary?.paid_installments} of ${summary?.total_installments}`],
-        ['Total Outstanding', formatRupiah(summary?.grand_total_outstanding)]
-      ];
+      currentY = doc.lastAutoTable.finalY + 12;
+
+      // === SHU ANALYTIC ===
+      if (shuAnalytics) {
+        doc.setFontSize(11);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(0, 0, 0);
+
+        doc.setFillColor(16, 185, 129);
+        doc.rect(margin, currentY - 4, 3, 8, 'F');
+        doc.text("SHU ANALYTIC", margin + 6, currentY + 1);
+        currentY += 6;
+
+        const shuSummaryRows = [
+          ['Total SHU Accumulated', formatRupiah(shuAnalytics.total_shu)],
+          [`SHU Tahun ${shuAnalytics.current_year?.year || new Date().getFullYear()}`, formatRupiah(shuAnalytics.current_year?.total_shu || 0)],
+        ];
+
+        
+
+        autoTable(doc, {
+          startY: currentY,
+          body: shuSummaryRows,
+          theme: 'grid',
+          bodyStyles: {
+            textColor: [0, 0, 0],
+            fontSize: 9,
+            lineWidth: 0.3,
+            lineColor: [0, 0, 0],
+          },
+          styles: { cellPadding: 3, font: 'helvetica' },
+          columnStyles: {
+            0: { cellWidth: contentWidth * 0.5, fontStyle: 'bold' },
+            1: { cellWidth: contentWidth * 0.5 },
+          },
+          margin: { left: margin, right: margin },
+        });
+
+        currentY = doc.lastAutoTable.finalY + 6;
+
+        // SHU monthly breakdown current year
+        if (shuAnalytics.current_year?.months?.length > 0) {
+          const shuMonthRows = shuAnalytics.current_year.months.map(m => {
+            const monthName = new Date(2026, m.month - 1, 1).toLocaleString('id-ID', { month: 'long' });
+            return [monthName, formatRupiah(m.total_savings), formatRupiah(m.total_shu)];
+          });
+
+          autoTable(doc, {
+            startY: currentY,
+            head: [['Bulan', 'Total Simpanan', 'SHU']],
+            body: shuMonthRows,
+            theme: 'grid',
+            headStyles: {
+              fillColor: [16, 185, 129],
+              textColor: [255, 255, 255],
+              fontStyle: 'bold',
+              fontSize: 8,
+              lineWidth: 0.3,
+              lineColor: [16, 185, 129],
+            },
+            bodyStyles: {
+              textColor: [0, 0, 0],
+              fontSize: 8,
+              lineWidth: 0.3,
+              lineColor: [0, 0, 0],
+            },
+            styles: { cellPadding: 2.5, font: 'helvetica' },
+            columnStyles: {
+              2: { halign: 'right', fontStyle: 'bold' },
+              1: { halign: 'right' },
+            },
+            margin: { left: margin, right: margin },
+          });
+        }
+
+        // SHU yearly history
+        if (shuAnalytics.yearly_history?.length > 0) {
+          currentY = doc.lastAutoTable.finalY + 4;
+
+          const shuYearRows = shuAnalytics.yearly_history.map(y => [
+            String(y.year),
+            formatRupiah(y.total_savings),
+            formatRupiah(y.total_shu),
+          ]);
+
+          autoTable(doc, {
+            startY: currentY,
+            head: [['Tahun', 'Total Simpanan', 'Total SHU']],
+            body: shuYearRows,
+            theme: 'grid',
+            headStyles: {
+              fillColor: [100, 116, 139],
+              textColor: [255, 255, 255],
+              fontStyle: 'bold',
+              fontSize: 8,
+              lineWidth: 0.3,
+              lineColor: [100, 116, 139],
+            },
+            bodyStyles: {
+              textColor: [0, 0, 0],
+              fontSize: 8,
+              lineWidth: 0.3,
+              lineColor: [0, 0, 0],
+            },
+            styles: { cellPadding: 2.5, font: 'helvetica' },
+            columnStyles: {
+              0: { fontStyle: 'bold' },
+              1: { halign: 'right' },
+              2: { halign: 'right', fontStyle: 'bold' },
+            },
+            margin: { left: margin, right: margin },
+          });
+        }
+
+        currentY = doc.lastAutoTable.finalY + 12;
+      }
+
+      // === LOAN STATUS ===
+      doc.setFontSize(11);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(0, 0, 0);
+
+      doc.setFillColor(59, 130, 246);
+      doc.rect(margin, currentY - 4, 3, 8, 'F');
+      doc.text("LOAN STATUS", margin + 6, currentY + 1);
+      currentY += 6;
+
       autoTable(doc, {
-        startY: finalY + 5,
-        body: loanBody,
-        theme: 'plain',
-        styles: { fontSize: 10 }
+        startY: currentY,
+        body: [
+          ['Loan Active', formatRupiah(summary?.principal_amount)],
+          ['Remaining Balance', formatRupiah(summary?.total_loan_remaining)],
+          ['Installment Paid', `${summary?.paid_installments || 0} / ${summary?.total_installments || 0}`],
+          ['Total Outstanding', formatRupiah(summary?.grand_total_outstanding)],
+        ],
+        theme: 'grid',
+        bodyStyles: {
+          textColor: [0, 0, 0],
+          fontSize: 9,
+          lineWidth: 0.3,
+          lineColor: [0, 0, 0],
+        },
+        styles: { cellPadding: 3, font: 'helvetica' },
+        columnStyles: {
+          0: { cellWidth: contentWidth * 0.5, fontStyle: 'bold' },
+          1: { cellWidth: contentWidth * 0.5 },
+        },
+        margin: { left: margin, right: margin },
       });
 
-      // Transaction Section
-      const txY = doc.lastAutoTable.finalY + 15;
-      doc.text('3. Recent Transactions', 20, txY);
-      const txBody = transactions.map(tx => [
-        new Date(tx.transaction_date).toLocaleDateString('id-ID'),
+      currentY = doc.lastAutoTable.finalY + 12;
+
+      // === RECENT TRANSACTION ===
+      doc.setFontSize(11);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(0, 0, 0);
+      doc.text("RECENT TRANSACTION", margin, currentY);
+      currentY += 4;
+
+      const txRows = transactions.slice(0, 15).map(tx => [
+        new Date(tx.transaction_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }),
         tx.transaction_type,
         formatRupiah(tx.amount),
         tx.status
       ]);
+
+      if (txRows.length === 0) {
+        txRows.push(['-', '-', '-', '-']);
+      }
+
       autoTable(doc, {
-        startY: txY + 5,
+        startY: currentY,
         head: [['Date', 'Type', 'Amount', 'Status']],
-        body: txBody,
-        styles: { fontSize: 9 }
+        body: txRows,
+        theme: 'grid',
+        headStyles: {
+          fillColor: [59, 130, 246],
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          fontSize: 9,
+          lineWidth: 0.3,
+          lineColor: [59, 130, 246],
+          halign: 'left',
+        },
+        bodyStyles: {
+          textColor: [0, 0, 0],
+          fontSize: 9,
+          lineWidth: 0.3,
+          lineColor: [0, 0, 0],
+        },
+        styles: { cellPadding: 3, font: 'helvetica' },
+        margin: { left: margin, right: margin },
       });
 
-      // Footer
+      // === FOOTER ===
       const pageCount = doc.internal.getNumberOfPages();
       for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i);
-        doc.setFontSize(9);
-        doc.setTextColor(150);
-        doc.text(`Koperasi Sanoh - Professional Financial Management System`, 105, 285, { align: 'center' });
+        doc.setFontSize(7);
+        doc.setFont("helvetica", "italic");
+        doc.setTextColor(150, 150, 150);
+        doc.text("Dokumen ini digenerate secara otomatis oleh Sistem Koperasi Sanoh Sinergi Bersama.", pageWidth / 2, 285, { align: 'center' });
       }
 
-      doc.save(`Financial_Report_${summary?.full_name}_${new Date().toISOString().split('T')[0]}.pdf`);
-      console.log('Report generated successfully.');
+      doc.save(`Financial_Report_${summary?.full_name || 'Member'}_${new Date().toISOString().split('T')[0]}.pdf`);
     } catch (error) {
       console.error('Failed to generate PDF report:', error);
-      alert('Failed to generate report. Please check if your browser allows downloads or try again later.');
+      alert('Failed to generate report.');
+    } finally {
+      setIsGeneratingReport(false);
     }
   };
 
@@ -624,9 +855,8 @@ const DashboardHome = () => {
           <h1>Welcome Back, {loading && !user ? '...' : (user?.full_name || summary?.full_name || 'Member')}!</h1>
           <p>Here is your financial overview for this period.</p>
         </div>
-        <button className="dh-report-btn hidden-mobile" onClick={handleDownloadReport}>
-          <Download size={14} />
-          Report Overview
+        <button className="dh-report-btn hidden-mobile" onClick={handleDownloadReport} disabled={isGeneratingReport}>
+          {isGeneratingReport ? <><Loader size={14} className="spinner" /> Generating...</> : <><Download size={14} /> Report Overview</>}
         </button>
       </div>
 

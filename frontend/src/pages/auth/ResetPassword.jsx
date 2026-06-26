@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Lock, Eye, EyeOff, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { Lock, Eye, EyeOff, ArrowLeft, CheckCircle2, Loader } from 'lucide-react';
 import { apiUrl } from '../../services/api';
 import './AuthPages.css';
 
@@ -16,8 +16,15 @@ const ResetPassword = () => {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
+  const hasMinLength = password.length >= 8;
+  const hasUpperCase = /[A-Z]/.test(password);
+  const hasNumber = /\d/.test(password);
+  const hasSymbol = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]+/.test(password);
+  const allCriteriaMet = hasMinLength && hasUpperCase && hasNumber && hasSymbol;
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isLoading) return;
     setError('');
     setMessage('');
 
@@ -26,13 +33,13 @@ const ResetPassword = () => {
       return;
     }
 
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters long.');
+    if (!allCriteriaMet) {
+      setError('Password harus memenuhi semua persyaratan keamanan.');
       return;
     }
 
     if (password !== confirmPassword) {
-      setError('Passwords do not match.');
+      setError('Password dan konfirmasi password tidak cocok.');
       return;
     }
 
@@ -97,6 +104,21 @@ const ResetPassword = () => {
           </div>
         </div>
 
+        <div className="pw-criteria-grid">
+          <div className={`pw-criteria-item ${hasMinLength ? 'pw-met' : ''}`}>
+            <span className="pw-check">{hasMinLength ? '☑' : '☐'}</span> At least 8 characters
+          </div>
+          <div className={`pw-criteria-item ${hasUpperCase ? 'pw-met' : ''}`}>
+            <span className="pw-check">{hasUpperCase ? '☑' : '☐'}</span> One uppercase letter
+          </div>
+          <div className={`pw-criteria-item ${hasNumber ? 'pw-met' : ''}`}>
+            <span className="pw-check">{hasNumber ? '☑' : '☐'}</span> One number
+          </div>
+          <div className={`pw-criteria-item ${hasSymbol ? 'pw-met' : ''}`}>
+            <span className="pw-check">{hasSymbol ? '☑' : '☐'}</span> One special symbol
+          </div>
+        </div>
+
         <div className="form-group">
           <label className="form-label" htmlFor="confirmPassword">Confirm Password</label>
           <div className="input-container">
@@ -121,8 +143,8 @@ const ResetPassword = () => {
           </div>
         </div>
 
-        <button type="submit" className="btn-primary" style={{ marginTop: '0.5rem' }} disabled={isLoading}>
-          {isLoading ? 'Updating...' : <><CheckCircle2 size={18} /> Update Password</>}
+        <button type="submit" className="btn-primary" style={{ marginTop: '0.5rem' }} disabled={isLoading || !allCriteriaMet}>
+          {isLoading ? <><Loader size={16} className="spinner" /> Updating...</> : <><CheckCircle2 size={18} /> Update Password</>}
         </button>
       </form>
 

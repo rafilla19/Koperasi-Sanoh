@@ -33,6 +33,21 @@ class RegisterMemberSerializer(serializers.Serializer):
     npwpPath = serializers.CharField(required=False, allow_blank=True)
     ktpPath = serializers.CharField(required=False, allow_blank=True)
 
+    def validate_password(self, value):
+        import re
+        errors = []
+        if len(value) < 8:
+            errors.append('Password minimal 8 karakter.')
+        if not re.search(r'[A-Z]', value):
+            errors.append('Password harus mengandung minimal 1 huruf kapital.')
+        if not re.search(r'\d', value):
+            errors.append('Password harus mengandung minimal 1 angka.')
+        if not re.search(r'[!@#$%^&*()_+\-=\[\]{};\':"\\|,.<>/?]', value):
+            errors.append('Password harus mengandung minimal 1 simbol.')
+        if errors:
+            raise serializers.ValidationError(' '.join(errors))
+        return value
+
 
 class MemberProfileUpdateSerializer(serializers.Serializer):
     member_id = serializers.IntegerField(required=False)

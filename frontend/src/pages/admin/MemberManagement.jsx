@@ -222,6 +222,7 @@ const MemberManagement = () => {
                   <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Tanggal Bergabung</th>
                   <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Nomor Telepon</th>
                   <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Total Tabungan</th>
+                  <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none', textAlign: 'center' }}>Status</th>
                   <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none', textAlign: 'center' }}>Aksi</th>
                 </tr>
               </thead>
@@ -253,6 +254,11 @@ const MemberManagement = () => {
                       <td>{formatDate(member.join_date)}</td>
                       <td>{member.phone_number || '-'}</td>
                       <td className="total font-semibold">{formatRupiah(member.total_saving)}</td>
+                      <td style={{ textAlign: 'center' }}>
+                        <span className={`mm-status-badge ${member.user_is_active ? 'mm-status-active' : 'mm-status-inactive'}`}>
+                          {member.user_is_active ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
                       <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
                         <button 
                           className="btn-icon-detail" 
@@ -266,7 +272,7 @@ const MemberManagement = () => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="7" className="mm-no-data">
+                    <td colSpan="8" className="mm-no-data">
                       Tidak ada anggota yang ditemukan
                     </td>
                   </tr>

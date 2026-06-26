@@ -312,6 +312,26 @@
   color: var(--color-primary);
 }
 
+.mm-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+.mm-status-active {
+  background-color: #D1FAE5;
+  color: #065F46;
+}
+
+.mm-status-inactive {
+  background-color: #FEE2E2;
+  color: #991B1B;
+}
+
 .mm-table td.total {
   font-size: 15px;
   color: var(--color-secondary);

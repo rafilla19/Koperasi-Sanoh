@@ -38,6 +38,7 @@ const ActivateMembership = () => {
   const [error, setError] = useState('');
   const [memberId, setMemberId] = useState(null);
   const [paymentChannels, setPaymentChannels] = useState([]);
+  const [alreadyPaid, setAlreadyPaid] = useState(false);
 
   const countdown = useCountdown(COUNTDOWN_SECONDS);
 
@@ -48,11 +49,11 @@ const ActivateMembership = () => {
     if (mid) setMemberId(mid);
   }, [location.search]);
 
-  /* Fetch principal amount */
+  /* Fetch principal amount + check if already paid */
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const res = await fetch(`${API_BASE}/members/saving_types_info/`);
+        const res = await fetch(`${API_BASE}/member/members/saving_types_info/`);
         if (res.ok) {
           const data = await res.json();
           const principalType = data.find(st => st.id === 3);
@@ -68,6 +69,27 @@ const ActivateMembership = () => {
     };
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (!memberId) return;
+    const checkPaid = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/members/${memberId}/principal_payment_status/`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.already_paid) {
+            setAlreadyPaid(true);
+            setError('Simpanan pokok sudah pernah dibayar. Silakan login untuk mengakses akun Anda.');
+          } else if (data.has_pending) {
+            setError('Anda memiliki transaksi pembayaran yang masih diproses. Silakan selesaikan atau tunggu hingga expired.');
+          }
+        }
+      } catch (err) {
+        console.error('Error checking payment status:', err);
+      }
+    };
+    checkPaid();
+  }, [memberId]);
 
   useEffect(() => {
     const fetchChannels = async () => {
@@ -102,6 +124,10 @@ const ActivateMembership = () => {
   const totalAmount = principalAmount + feeTotal;
 
   const handlePayment = async () => {
+    if (alreadyPaid) {
+      setError('Simpanan pokok sudah pernah dibayar. Silakan login untuk mengakses akun Anda.');
+      return;
+    }
     if (!selectedMethod) {
       setError('Silakan pilih metode pembayaran terlebih dahulu.');
       return;
@@ -235,7 +261,7 @@ const ActivateMembership = () => {
                           id={`pay-btn-${channel.channel_code}`}
                           className="activate-pay-btn"
                           onClick={(e) => { e.stopPropagation(); handlePayment(); }}
-                          disabled={processing || countdown.expired}
+                          disabled={processing || countdown.expired || alreadyPaid}
                         >
                           {processing ? (
                             <span className="activate-spinner" />
