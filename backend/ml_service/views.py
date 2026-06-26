@@ -82,23 +82,23 @@ def predict_loan_eligibility(request):
         # Get prediction
         prediction = get_prediction(principal, duration_months, member_id)
         
-        # Prepare response
+        suggested_rate = prediction['suggested_interest_rate']
+
         response_data = {
             'success': prediction['success'],
             'eligibility': prediction['eligibility'],
             'probability': prediction['probability'],
-            'suggested_interest_rate': prediction['suggested_interest_rate'],
+            'suggested_interest_rate': suggested_rate,
+            'risk_level': prediction.get('risk_level', 'TINGGI'),
             'recommendation': prediction['recommendation'],
             'risk_factors': prediction['risk_factors'],
             'member_info': {
                 'id': member_id,
                 'name': member.full_name,
-                'current_savings': prediction['member_features'].get('current_savings', 0),
-                'payment_history': {
-                    'on_time': prediction['member_features'].get('on_time_payments', 0),
-                    'late': prediction['member_features'].get('late_payments', 0),
-                },
-                'active_loans': prediction['member_features'].get('total_loans_active', 0),
+                'balance_voluntary': prediction['member_features'].get('balance_voluntary', 0),
+                'total_past_loans': prediction['member_features'].get('total_past_loans_count', 0),
+                'late_installments': prediction['member_features'].get('total_historical_late_installments', 0),
+                'max_delay_days': prediction['member_features'].get('absolute_max_delay_days', 0),
                 'tenure_months': prediction['member_features'].get('member_tenure_months', 0),
             }
         }

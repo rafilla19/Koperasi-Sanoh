@@ -526,14 +526,14 @@
   border-collapse: collapse;
 }
 .sv-table thead tr {
-  background: #0A1628;
+  background: #F1F5F9;
   border-radius: 8px;
 }
 .sv-table th {
   text-align: left;
   font-size: 10px;
   font-weight: 700;
-  color: #fff;
+  color: #0A1628;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   padding: 10px 12px;
@@ -563,6 +563,27 @@
 }
 .sv-trx-amount.credit { color: #059669; }
 .sv-trx-amount.debit  { color: #E11D48; }
+
+/* ── Show All Button ─────────────────────────────────── */
+.sv-show-all-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 20px;
+  border-radius: 8px;
+  border: 1px solid #E2E8F0;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.sv-show-all-btn:hover {
+  background: #0A1628;
+  color: #fff;
+  border-color: #0A1628;
+}
 
 /* ── Pagination ──────────────────────────────────────── */
 .sv-pagination {

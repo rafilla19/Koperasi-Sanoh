@@ -1,6 +1,6 @@
 """
-ML Service Utilities - Core modules for Data Loading, Validation, Preprocessing, and Model Management
-Unified and simplified from modular structure.
+ML Service Utilities - Data Loading, Validation, Preprocessing, and Model Management
+XGBoost + SMOTE pipeline with 16 behavioral features
 """
 import os
 import json
@@ -12,14 +12,14 @@ from datetime import datetime
 from django.db import connection
 from django.conf import settings
 
-from ml_service.config import DATA_QUALITY_CONFIG, IMBALANCE_CONFIG
+from ml_service.config import DATA_QUALITY_CONFIG, IMBALANCE_CONFIG, FEATURE_NAMES
 
 logger = logging.getLogger(__name__)
 
 
 class DataLoader:
     """Loader untuk mengambil data dari database."""
-    
+
     @staticmethod
     def fetch_training_data(query):
         """Mengambil data untuk training dari database."""
@@ -30,16 +30,16 @@ class DataLoader:
         except Exception as e:
             logger.error(f"Error fetching training data: {str(e)}")
             raise
-    
+
     @staticmethod
     def fetch_member_features(member_id, query):
         """Mengambil fitur member untuk prediksi real-time."""
         try:
-            df = pd.read_sql(query, connection, params=[member_id, member_id, member_id])
+            df = pd.read_sql(query, connection, params=[member_id, member_id, member_id, member_id])
             if df.empty:
                 logger.warning(f"No data found for member {member_id}")
                 return None
-            
+
             features_dict = df.iloc[0].to_dict()
             logger.info(f"Successfully fetched features for member {member_id}")
             return features_dict
@@ -50,7 +50,7 @@ class DataLoader:
 
 class DataValidator:
     """Validasi data quality untuk training."""
-    
+
     @staticmethod
     def validate_complete(df, stage='training'):
         """Comprehensive data validation."""
@@ -60,50 +60,48 @@ class DataValidator:
             'warnings': [],
             'statistics': {}
         }
-        
+
         if df is None or df.empty:
             result['is_valid'] = False
             result['issues'].append("DataFrame is empty")
             return result
-        
-        # 1. Check minimum samples
+
         min_samples = DATA_QUALITY_CONFIG['min_training_samples']
         if len(df) < min_samples:
             result['is_valid'] = False
             result['issues'].append(f"Insufficient samples: {len(df)} < {min_samples}")
-        
-        # 2. Check missing values
+
         missing_ratio = df.isnull().sum() / len(df)
         max_missing = DATA_QUALITY_CONFIG['max_missing_ratio']
-        
+
         bad_columns = missing_ratio[missing_ratio > max_missing]
         if len(bad_columns) > 0:
             result['is_valid'] = False
             for col, ratio in bad_columns.items():
                 result['issues'].append(f"Column '{col}' has {ratio*100:.1f}% missing values")
-        
-        # 3. Check target variable
-        if 'is_successful' in df.columns:
-            class_dist = df['is_successful'].value_counts()
+
+        target_col = 'is_eligible'
+        if target_col in df.columns:
+            class_dist = df[target_col].value_counts()
             if len(class_dist) < 2:
                 result['is_valid'] = False
                 result['issues'].append("Only one class in target variable")
             else:
-                success_ratio = class_dist.get(1, 0) / len(df)
+                eligible_ratio = class_dist.get(1, 0) / len(df)
                 threshold = IMBALANCE_CONFIG['sampling_ratio']
-                
-                if success_ratio < threshold or success_ratio > (1 - threshold):
+
+                if eligible_ratio < threshold or eligible_ratio > (1 - threshold):
                     result['warnings'].append(
-                        f"Class imbalance: {success_ratio*100:.1f}% successful. "
-                        f"Will use {IMBALANCE_CONFIG['strategy']} handling."
+                        f"Class imbalance: {eligible_ratio*100:.1f}% eligible. "
+                        f"Will use SMOTE for oversampling."
                     )
-                
+
                 result['statistics']['class_distribution'] = {
-                    'success_count': int(class_dist.get(1, 0)),
-                    'failure_count': int(class_dist.get(0, 0)),
-                    'success_ratio': float(success_ratio)
+                    'eligible_count': int(class_dist.get(1, 0)),
+                    'risky_count': int(class_dist.get(0, 0)),
+                    'eligible_ratio': float(eligible_ratio)
                 }
-        
+
         result['statistics'].update({
             'total_samples': len(df),
             'total_features': len(df.columns),
@@ -111,7 +109,7 @@ class DataValidator:
             'numeric_features': len(df.select_dtypes(include=[np.number]).columns),
         })
         return result
-    
+
     @staticmethod
     def check_data_leakage(df):
         """Check untuk potential data leakage."""
@@ -125,7 +123,7 @@ class DataValidator:
                     'severity': 'HIGH'
                 })
         return leakage_issues
-    
+
     @staticmethod
     def check_class_imbalance(y):
         """Analyze class imbalance."""
@@ -145,11 +143,11 @@ class DataValidator:
                 value_counts.get(1, 0) / total > (1 - IMBALANCE_CONFIG['sampling_ratio'])
             )
         }
-    
+
     @staticmethod
     def validate_prediction_input(member_features):
         """Validate features untuk prediksi real-time."""
-        required_fields = ['age', 'total_savings_amount', 'saving_payment_ratio']
+        required_fields = ['age', 'balance_voluntary', 'savings_to_total_obligation_ratio']
         missing_fields = [f for f in required_fields if f not in member_features]
         if missing_fields:
             return False, f"Missing required fields: {missing_fields}"
@@ -157,99 +155,54 @@ class DataValidator:
 
 
 class DataPreprocessor:
-    """Feature Engineering dan Scaling."""
-    
-    @staticmethod
-    def create_features(df):
-        """Membuat derived features dan risk scores berdasarkan data perilaku nyata."""
-        df = df.copy()
-        
-        # Ensure numeric types
-        for col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-            
-        # Reconstruct overall risk score for pricing layer based on user features
-        df['saving_payment_ratio'] = df['saving_payment_ratio'].clip(0, 1)
-        df['savings_loan_ratio'] = df['savings_loan_ratio'].clip(0, 10)
-        
-        # Risk Score (0-100)
-        # 0 = Very Safe, 100 = Very Risky
-        df['overall_risk_score'] = (
-            (1.0 - df['saving_payment_ratio']) * 50.0 + 
-            (1.0 - (np.minimum(df['savings_loan_ratio'], 1.0))) * 50.0
-        ).clip(0, 100)
-        
-        logger.info("Created behavioral features and risk scores (Refactored)")
-        return df
-    
+    """Feature Engineering dan data preparation."""
+
     @staticmethod
     def prepare_training_data(df):
-        """Prepare training data - select dan clean features."""
+        """Prepare training data - select and clean features."""
         df = df.copy()
-        
-        feature_columns = [
-            'age', 'member_tenure_months', 'employee_status_id', 
-            'amount_requested', 'duration_months', 'monthly_installment_estimation',
-            'total_savings_amount', 'savings_loan_ratio', 'saving_payment_ratio',
-            'overall_risk_score'
-        ]
-        
-        available_features = [col for col in feature_columns if col in df.columns]
-        logger.info(f"Using {len(available_features)} behavioral features for model training")
-        
+
+        available_features = [col for col in FEATURE_NAMES if col in df.columns]
+        logger.info(f"Using {len(available_features)} features for model training")
+
         X = df[available_features].copy()
-        y_clf = df['is_successful'].copy()
-        
-        y_reg = np.where(
-            df['principal_amount'] > 0,
-            (df['interest_amount'] / df['principal_amount']) * 100,
-            1.25
-        )
-        
-        # Handle missing values - gunakan median
+        y = df['is_eligible'].copy()
+
+        for col in X.columns:
+            X[col] = pd.to_numeric(X[col], errors='coerce')
+
         X = X.fillna(X.median())
-        
-        # Replace infinite values with NaN then fill with median again
         X = X.replace([np.inf, -np.inf], np.nan)
         X = X.fillna(X.median())
-        
-        # Remove outliers menggunakan IQR method
-        for col in X.select_dtypes(include=[np.number]).columns:
-            Q1 = X[col].quantile(0.1)
-            Q3 = X[col].quantile(0.9)
-            IQR = Q3 - Q1
-            lower_bound = Q1 - 2.0 * IQR
-            upper_bound = Q3 + 2.0 * IQR
-            X[col] = X[col].clip(lower_bound, upper_bound)
-        
-        logger.info(f"Prepared {len(X)} training samples")
-        return X, y_clf, y_reg, df
+
+        logger.info(f"Prepared {len(X)} training samples with {len(available_features)} features")
+        return X, y, df
 
 
 class ModelManager:
     """Manager untuk lifecycle model."""
-    
+
     def __init__(self, model_dir=None):
         self.model_dir = model_dir or os.path.join(settings.BASE_DIR, 'ml_service', 'models')
         os.makedirs(self.model_dir, exist_ok=True)
-    
+
     def save_model(self, model_data, version=None):
         """Menyimpan model dengan versioning."""
         if version is None:
             version = datetime.now().strftime("%Y%m%d_%H%M%S")
-        
+
         model_filename = f"loan_model_{version}.pkl"
         model_path = os.path.join(self.model_dir, model_filename)
-        
+
         try:
             joblib.dump(model_data, model_path)
             logger.info(f"Model saved to {model_path}")
         except Exception as e:
             logger.error(f"Error saving model: {str(e)}")
             raise
-        
+
         self._update_latest_model(model_path, version)
-        
+
         metadata = {
             'version': version,
             'model_file': model_filename,
@@ -260,7 +213,7 @@ class ModelManager:
         }
         self._save_metadata(metadata, version)
         return model_path
-    
+
     def load_model(self, version=None):
         """Load model dari file."""
         if version is None:
@@ -268,11 +221,11 @@ class ModelManager:
         else:
             model_filename = f"loan_model_{version}.pkl"
             model_path = os.path.join(self.model_dir, model_filename)
-        
+
         if not os.path.exists(model_path):
             logger.error(f"Model not found at {model_path}")
             raise FileNotFoundError(f"Model not found: {model_path}")
-        
+
         try:
             model_data = joblib.load(model_path)
             logger.info(f"Model loaded from {model_path}")
@@ -280,7 +233,7 @@ class ModelManager:
         except Exception as e:
             logger.error(f"Error loading model: {str(e)}")
             raise
-    
+
     def _get_latest_model_path(self):
         """Mendapatkan path dari latest model."""
         pkl_files = [f for f in os.listdir(self.model_dir) if f.endswith('.pkl')]
@@ -289,10 +242,10 @@ class ModelManager:
             if os.path.exists(default_path):
                 return default_path
             raise FileNotFoundError("No models found in model directory")
-        
+
         pkl_files.sort(key=lambda x: os.path.getmtime(os.path.join(self.model_dir, x)), reverse=True)
         return os.path.join(self.model_dir, pkl_files[0])
-    
+
     def _update_latest_model(self, model_path, version):
         """Update latest model reference."""
         latest_path = os.path.join(self.model_dir, 'loan_model_combined.pkl')
@@ -304,7 +257,7 @@ class ModelManager:
             logger.info("Updated latest model reference")
         except Exception as e:
             logger.warning(f"Could not update latest model reference: {str(e)}")
-    
+
     def _save_metadata(self, metadata, version):
         """Menyimpan metadata model."""
         metadata_filename = f"model_metadata_{version}.json"
@@ -315,11 +268,11 @@ class ModelManager:
             logger.info(f"Metadata saved to {metadata_path}")
         except Exception as e:
             logger.error(f"Error saving metadata: {str(e)}")
-    
+
     def get_model_info(self, version=None):
         """Mendapatkan informasi model."""
         if version is None:
-            metadata_files = [f for f in os.listdir(self.model_dir) 
+            metadata_files = [f for f in os.listdir(self.model_dir)
                             if f.startswith('model_metadata_') and f.endswith('.json')]
             if not metadata_files:
                 return None
@@ -327,7 +280,7 @@ class ModelManager:
             metadata_file = metadata_files[0]
         else:
             metadata_file = f"model_metadata_{version}.json"
-        
+
         metadata_path = os.path.join(self.model_dir, metadata_file)
         try:
             with open(metadata_path, 'r') as f:
@@ -336,14 +289,14 @@ class ModelManager:
         except Exception as e:
             logger.error(f"Error reading metadata: {str(e)}")
             return None
-    
+
     def list_models(self):
         """List semua available models."""
         pkl_files = [f for f in os.listdir(self.model_dir) if f.endswith('.pkl')]
         models = [f.replace('loan_model_', '').replace('.pkl', '') for f in pkl_files]
         models = [m for m in models if m != 'combined']
         return sorted(models, reverse=True)
-    
+
     def delete_model(self, version):
         """Hapus model tertentu."""
         model_filename = f"loan_model_{version}.pkl"
@@ -360,7 +313,7 @@ class ModelManager:
         except Exception as e:
             logger.error(f"Error deleting model: {str(e)}")
             return False
-    
+
     def cleanup_old_models(self, keep_latest=5):
         """Hapus model lama, keep only latest N versions."""
         models = self.list_models()
