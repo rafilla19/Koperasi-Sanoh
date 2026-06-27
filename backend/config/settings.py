@@ -163,7 +163,7 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = DEBUG
 try:
     from corsheaders.defaults import default_headers
     CORS_ALLOW_HEADERS = list(default_headers) + [
@@ -236,14 +236,6 @@ else:
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # Email Configuration (SMTP)
-# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-# EMAIL_HOST = os.getenv('EMAIL_HOST')
-# EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
-# EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'False') == 'True'
-# EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', 'False') == 'True'
-# EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
-# EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
-
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = os.getenv('EMAIL_HOST')
 EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
@@ -266,6 +258,4 @@ MIDTRANS_SERVER_KEY = os.getenv('MIDTRANS_SERVER_KEY')
 MIDTRANS_IS_PRODUCTION = os.getenv('MIDTRANS_IS_PRODUCTION', 'False') == 'True'
 
 # Supabase Storage — loaded from .env
-# Required keys: SUPABASE_URL, SUPABASE_SERVICE_KEY
 SUPABASE_URL = os.getenv('SUPABASE_URL', '')
-SUPABASE_SERVICE_KEY = os.getenv('SUPABASE_SERVICE_KEY', '')
