@@ -3154,10 +3154,10 @@ class LoanViewSet(viewsets.ModelViewSet):
                         ) ORDER BY due_date ASC
                     ), '[]'::json
                 ) as unpaid_bills_list
-            FROM monthly_saving_bills 
-            WHERE member_id = %s AND status_id = 38 
+            FROM monthly_saving_bills
+            WHERE member_id = %s AND status_id IN (38, 40)
               AND saving_type_id IN (1, 2, 3)
-              AND date_trunc('month', due_date) <= date_trunc('month', current_date)
+              AND deleted_at IS NULL
         )
         SELECT 
             mi.full_name,

@@ -800,23 +800,19 @@ const MySaving = () => {
               </div>
               {loadingSchedule ? (
                 <p style={{ color: '#94A3B8', fontSize: 13, padding: '16px 0' }}>Memuat...</p>
-              ) : (paymentSchedule.paid.length === 0 && paymentSchedule.upcoming.length === 0) ? (
+              ) : paymentSchedule.upcoming.length === 0 ? (
                 <p style={{ color: '#94A3B8', fontSize: 13, padding: '16px 0' }}>
-                  Belum ada jadwal pembayaran
+                  Semua pembayaran sudah lunas
                 </p>
               ) : (
-                <div className="sv-timeline">
+                <div className="sv-timeline" style={{ maxHeight: showAllSchedule ? 'none' : 400, overflowY: showAllSchedule ? 'visible' : 'auto' }}>
                   {(() => {
-                    const combined = [
-                      ...paymentSchedule.paid.map((bill) => ({ ...bill, schedule_status: 'Lunas' })),
-                      ...paymentSchedule.upcoming.map((bill) => ({ ...bill, schedule_status: 'Akan Datang' })),
-                    ];
-                    const sorted = combined.sort((a, b) => {
-                      const aDate = new Date(a.bill_period_start || a.due_date || a.paid_at);
-                      const bDate = new Date(b.bill_period_start || b.due_date || b.paid_at);
-                      return bDate - aDate;
+                    const upcoming = [...paymentSchedule.upcoming].sort((a, b) => {
+                      const aDate = new Date(a.due_date || a.bill_period_start);
+                      const bDate = new Date(b.due_date || b.bill_period_start);
+                      return aDate - bDate;
                     });
-                    const displayItems = showAllSchedule ? sorted : sorted.slice(0, 5);
+                    const displayItems = showAllSchedule ? upcoming : upcoming.slice(0, 5);
                     return (
                       <>
                         {displayItems.map((bill) => {
@@ -824,31 +820,28 @@ const MySaving = () => {
                           const label = period
                             ? period.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
                             : 'Tanpa Periode';
-                          const dueDate = bill.paid_at || bill.due_date;
+                          const dueDate = bill.due_date;
                           const dueLabel = dueDate
                             ? new Date(dueDate).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })
                             : '-';
-                          const isPaid = bill.schedule_status === 'Lunas';
                           return (
-                            <div key={`${bill.id}-${bill.schedule_status}`} className={`sv-tl-item ${isPaid ? 'paid' : 'upcoming'}`}>
-                              <div className="sv-tl-icon">
-                                {isPaid ? <Check size={12} strokeWidth={3} /> : null}
-                              </div>
+                            <div key={bill.id} className="sv-tl-item upcoming">
+                              <div className="sv-tl-icon" />
                               <div className="sv-tl-content">
-                                <span className="sv-tl-status">{bill.schedule_status}</span>
+                                <span className="sv-tl-status">Akan Datang</span>
                                 <h4 className="sv-tl-title">{label}</h4>
                                 <p className="sv-tl-desc">{dueLabel} — Rp {formatRp(bill.amount_due)}</p>
                               </div>
                             </div>
                           );
                         })}
-                        {combined.length > 5 && (
+                        {upcoming.length > 5 && (
                           <div style={{ textAlign: 'center', marginTop: 12 }}>
                             <button
                               className="sv-show-all-btn"
                               onClick={() => setShowAllSchedule(prev => !prev)}
                             >
-                              {showAllSchedule ? 'Tampilkan Lebih Sedikit' : `Tampilkan Semua (${combined.length})`}
+                              {showAllSchedule ? 'Tampilkan Lebih Sedikit' : `Tampilkan Semua (${upcoming.length})`}
                             </button>
                           </div>
                         )}
