@@ -1151,7 +1151,7 @@ class LoanViewSet(viewsets.ModelViewSet):
         
         with connection.cursor() as cursor:
             cursor.execute("""
-                SELECT m.full_name, u.email, 
+                SELECT m.full_name, u.email
                 FROM loans l
                 inner join members m on l.member_id = m.id
                 inner join users u on m.user_id = u.id
@@ -1736,7 +1736,11 @@ class LoanViewSet(viewsets.ModelViewSet):
             cursor.execute(query, [period_str])
             columns = [col[0] for col in cursor.description]
             results = [dict(zip(columns, row)) for row in cursor.fetchall()]
-            
+
+        for r in results:
+            if r.get('salary_statement_file'):
+                r['salary_statement_file'] = get_absolute_media_url(request, r['salary_statement_file'])
+
         return Response(results)
 
     @action(detail=False, methods=['get'])
@@ -1874,6 +1878,7 @@ class LoanViewSet(viewsets.ModelViewSet):
         WHERE EXTRACT(YEAR FROM msb.bill_period_start) = %s
           AND EXTRACT(MONTH FROM msb.bill_period_start) = %s
           AND u.is_active = true
+          AND m.employee_status_id IN (1,2)
           AND NOT EXISTS (SELECT 1 FROM close_account_requests car WHERE car.member_id = m.id AND car.status_id = 44 AND car.deleted_at IS NULL)
         GROUP BY
             m.id,
@@ -2374,22 +2379,16 @@ class LoanViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'])
     def send_auto_all_reminders(self, request):
         """
-        Automatically find and send reminders to ALL members with overdue installments.
+        Automatically find and send reminders to ALL members with overdue or upcoming installments.
         """
-        from django.core.mail import send_mail
-        from django.conf import settings
-        
+        from api.utils.email import send_styled_email
+
         try:
-            # Find all members with overdue installments (Unpaid or Macet)
-            query = """
+            overdue_query = """
             SELECT DISTINCT
-                m.id as member_id,
-                m.full_name,
-                u.email,
-                l.id as loan_id,
-                li.installment_number,
-                li.due_date,
-                li.amount_total
+                m.id as member_id, m.full_name, u.email,
+                li.installment_number, li.due_date, li.amount_total,
+                'OVERDUE' as reminder_type
             FROM loans l
             INNER JOIN members m ON l.member_id = m.id
             INNER JOIN users u ON m.user_id = u.id
@@ -2398,60 +2397,111 @@ class LoanViewSet(viewsets.ModelViewSet):
               AND li.due_date <= CURRENT_DATE
               AND u.is_active = true
             """
-            
+
+            upcoming_query = """
+            SELECT DISTINCT
+                m.id as member_id, m.full_name, u.email,
+                li.installment_number, li.due_date, li.amount_total,
+                'UPCOMING' as reminder_type
+            FROM loans l
+            INNER JOIN members m ON l.member_id = m.id
+            INNER JOIN users u ON m.user_id = u.id
+            INNER JOIN loan_installments li ON li.loan_id = l.id
+            WHERE li.status_id = 28
+              AND li.due_date > CURRENT_DATE
+              AND li.due_date <= CURRENT_DATE + INTERVAL '30 days'
+              AND u.is_active = true
+            ORDER BY li.due_date ASC
+            """
+
             with connection.cursor() as cursor:
-                cursor.execute(query)
+                cursor.execute(overdue_query)
                 columns = [col[0] for col in cursor.description]
-                results = [dict(zip(columns, row)) for row in cursor.fetchall()]
-            
-            if not results:
+                overdue_results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+                cursor.execute(upcoming_query)
+                columns = [col[0] for col in cursor.description]
+                upcoming_results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+            all_results = overdue_results + upcoming_results
+
+            if not all_results:
                 return Response({
-                    'message': 'No overdue installments found',
+                    'message': 'Tidak ada angsuran jatuh tempo atau akan datang',
                     'success_count': 0
                 })
-            
-            # Group by member
+
             members_map = {}
-            for row in results:
+            for row in all_results:
                 mid = row['member_id']
                 if mid not in members_map:
                     members_map[mid] = {
                         'email': row['email'],
                         'full_name': row['full_name'],
-                        'installments': []
+                        'overdue': [],
+                        'upcoming': [],
                     }
-                members_map[mid]['installments'].append(row)
-            
+                if row['reminder_type'] == 'OVERDUE':
+                    members_map[mid]['overdue'].append(row)
+                else:
+                    members_map[mid]['upcoming'].append(row)
+
             success_count = 0
-            for mid, data in members_map.items():
-                email = data['email']
-                full_name = data['full_name']
-                installments = data['installments']
-                
-                subject = "PENGINGAT OTOMATIS - Angsuran Pinjaman Jatuh Tempo"
-
-                # Group installments
-                details = []
-                for inst in installments:
-                    details.append((f"Angsuran #{inst['installment_number']} ({inst['due_date']})", f"Rp {inst['amount_total']:,.0f}"))
-
+            failed_count = 0
+            errors = []
+            for mid, mdata in members_map.items():
                 try:
-                    from api.utils.email import send_styled_email
+                    details = []
+                    has_overdue = len(mdata['overdue']) > 0
+                    has_upcoming = len(mdata['upcoming']) > 0
+
+                    if has_overdue:
+                        details.append(('--- JATUH TEMPO ---', ''))
+                        for inst in mdata['overdue']:
+                            details.append((
+                                f"Angsuran #{inst['installment_number']} (Jatuh tempo: {inst['due_date']})",
+                                f"Rp {inst['amount_total']:,.0f}"
+                            ))
+
+                    if has_upcoming:
+                        details.append(('--- AKAN DATANG ---', ''))
+                        for inst in mdata['upcoming']:
+                            details.append((
+                                f"Angsuran #{inst['installment_number']} (Jatuh tempo: {inst['due_date']})",
+                                f"Rp {inst['amount_total']:,.0f}"
+                            ))
+
+                    if has_overdue and has_upcoming:
+                        subject = "PENGINGAT OTOMATIS - Angsuran Jatuh Tempo & Akan Datang"
+                        intro = f"Halo {mdata['full_name']}, Anda memiliki angsuran yang telah jatuh tempo dan angsuran yang akan datang."
+                        highlight = ("Perhatian", "Segera lunasi angsuran yang telah jatuh tempo dan persiapkan pembayaran berikutnya.")
+                    elif has_overdue:
+                        subject = "PENGINGAT OTOMATIS - Angsuran Jatuh Tempo"
+                        intro = f"Halo {mdata['full_name']}, ini adalah pengingat otomatis mengenai angsuran pinjaman Anda yang belum dibayar."
+                        highlight = ("Angsuran Jatuh Tempo", "Segera lunasi pembayaran ini.")
+                    else:
+                        subject = "PENGINGAT OTOMATIS - Angsuran Akan Datang"
+                        intro = f"Halo {mdata['full_name']}, ini adalah pengingat untuk angsuran Anda yang akan datang."
+                        highlight = ("Pengingat", "Pastikan saldo Anda mencukupi untuk pembayaran berikutnya.")
+
                     send_styled_email(
                         subject=subject,
-                        recipient=email,
-                        intro=f"Halo {full_name}, ini adalah pengingat otomatis mengenai angsuran pinjaman Anda yang belum dibayar.",
+                        recipient=mdata['email'],
+                        intro=intro,
                         details=details,
-                        highlight=("Angsuran Jatuh Tempo", "Segera lunasi pembayaran ini."),
+                        highlight=highlight,
                         footer_note="Jika Anda memiliki pertanyaan, hubungi pengurus koperasi."
                     )
                     success_count += 1
-                except:
-                    pass
-            
+                except Exception as e:
+                    failed_count += 1
+                    errors.append(f"Member {mid}: {str(e)}")
+
             return Response({
                 'message': f'Auto-reminders sent to {success_count} member(s)',
-                'success_count': success_count
+                'success_count': success_count,
+                'failed_count': failed_count,
+                'errors': errors,
             })
         except Exception as e:
             return Response({'error': str(e)}, status=400)
@@ -2582,25 +2632,16 @@ class LoanViewSet(viewsets.ModelViewSet):
         year_param = request.query_params.get('year')
         today = datetime.date.today()
 
-        if month_param and year_param:
-            try:
-                sel_month = int(month_param)
-                sel_year = int(year_param)
-                # Billing cycle: 25th of previous month → 25th of selected month
-                end_date = datetime.date(sel_year, sel_month, 25)
-                start_date = add_months(end_date, -1)
-            except (ValueError, TypeError):
-                # Fallback to current period
-                end_date = today.replace(day=25)
-                start_date = add_months(end_date, -1)
-        else:
-            # Default: current billing period based on today
-            if today.day >= 25:
-                start_date = today.replace(day=25)
-                end_date = add_months(start_date, 1)
-            else:
-                end_date = today.replace(day=25)
-                start_date = add_months(end_date, -1)
+        try:
+            sel_month = int(month_param) if month_param else today.month
+            sel_year = int(year_param) if year_param else today.year
+        except (ValueError, TypeError):
+            sel_month = today.month
+            sel_year = today.year
+
+        ref_date = datetime.date(sel_year, sel_month, 1)
+        start_date = ref_date
+        end_date = add_months(ref_date, 1)
 
         query = f"""
         WITH params AS (

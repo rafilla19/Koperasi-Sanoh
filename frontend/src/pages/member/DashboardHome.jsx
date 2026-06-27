@@ -1316,7 +1316,7 @@ const DashboardHome = () => {
                           {selectedPayments.savingIds.includes(b.id) && <Check size={14} />}
                         </div>
                         <div>
-                          <span className="option-label">{b.saving_type_id === 1 ? 'Simpanan Wajib' : 'Simpanan Sukarela'}</span>
+                          <span className="option-label">{b.saving_type_id === 1 ? 'Simpanan Wajib' : b.saving_type_id === 3 ? 'Simpanan Pokok' : 'Simpanan Sukarela'}</span>
                           <span className="option-desc">Tanggal Tagihan: {new Date(b.bill_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                         </div>
                       </div>

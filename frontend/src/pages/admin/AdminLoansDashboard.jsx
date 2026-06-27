@@ -373,9 +373,10 @@ const AdminLoansDashboard = () => {
 
       if (response.ok) {
         const data = await response.json();
-        alert(`Proses pengingat otomatis selesai!\nEmail Terkirim: ${data.success_count}`);
+        alert(`Proses pengingat otomatis selesai!\nBerhasil: ${data.success_count}\nGagal: ${data.failed_count || 0}`);
       } else {
-        alert('Gagal memicu pengingat otomatis');
+        const error = await response.json().catch(() => ({}));
+        alert(`Gagal memicu pengingat otomatis: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error(error);

@@ -12,6 +12,7 @@ urlpatterns = [
     path('api/', include('api.saving.urls')),
     path('api/', include('api.shu.urls')),
     path('api/', include('api.master.urls')),
+    path('api/v1/', include('api.master.urls')),
     path('api/', include('api.member.urls')),
 ]
 

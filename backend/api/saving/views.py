@@ -792,6 +792,19 @@ def admin_reject_voluntary_request(request, pk):
     except Exception:
         pass
 
+    send_member_notification_email(
+        req.member_id,
+        'Perubahan Simpanan Sukarela Ditolak',
+        (
+            f'Halo {req.member.full_name},\n\n'
+            f'Permintaan perubahan simpanan sukarela Anda dari '
+            f'Rp {int(req.current_amount):,} menjadi Rp {int(req.requested_amount):,} '
+            f'telah ditolak oleh admin.\n\n'
+            f'Alasan: {reject_reason or "Tidak ada alasan."}\n\n'
+            'Jika Anda memiliki pertanyaan, silakan hubungi pengurus koperasi.'
+        )
+    )
+
     return Response({'message': 'Pengajuan berhasil ditolak'})
 
 

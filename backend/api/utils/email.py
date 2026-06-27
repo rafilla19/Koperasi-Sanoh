@@ -77,4 +77,7 @@ def send_styled_email(subject, recipient, intro, details=None, highlight=None, c
         reply_to=reply_to if reply_to else None
     )
     msg.attach_alternative(html_message, "text/html")
-    msg.send(fail_silently=True)
+    sent = msg.send(fail_silently=True)
+    if not sent:
+        raise RuntimeError(f'Email gagal terkirim ke {recipient}. Periksa konfigurasi SMTP.')
+    return True

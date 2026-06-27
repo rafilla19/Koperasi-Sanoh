@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Wallet, UploadCloud, X } from 'lucide-react';
+import { ArrowLeft, Wallet, UploadCloud, X, Banknote } from 'lucide-react';
 import { apiUrl, getAuthHeaders } from '../../services/api';
 import './LoanApplication.css';
 
@@ -92,12 +93,12 @@ const LoanApplication = () => {
         setBankComplete(!!data?.is_complete);
         if (!data?.is_complete) {
           setBankFormData({
-            bank_id: data?.bank_id || '',
+            bank_id: data?.bank_id ? String(data.bank_id) : '',
             account_number: data?.account_number || '',
             account_holder_name: data?.account_holder_name || '',
           });
           setShowBankPopup(true);
-          const banksRes = await fetch(apiUrl('/banks/'), { headers: getAuthHeaders() });
+          const banksRes = await fetch(apiUrl('/master/banks/'), { headers: getAuthHeaders() });
           const banksData = await banksRes.json();
           setBanksList(Array.isArray(banksData) ? banksData : []);
         }
@@ -110,6 +111,17 @@ const LoanApplication = () => {
     fetchLoanTypes();
     checkBankAccount();
   }, []);
+
+  useEffect(() => {
+    if (showBankPopup) {
+      document.body.classList.add('has-global-modal');
+    } else {
+      document.body.classList.remove('has-global-modal');
+    }
+    return () => {
+      document.body.classList.remove('has-global-modal');
+    };
+  }, [showBankPopup]);
 
   const handleContinue = async (e) => {
     e.preventDefault();
@@ -202,10 +214,19 @@ const LoanApplication = () => {
     }
     setBankFormLoading(true);
     try {
-      const res = await fetch(apiUrl('/my-savings/bank-account-status/'), {
+      const userStr = localStorage.getItem('user');
+      const user = userStr ? JSON.parse(userStr) : null;
+      const memberId = user?.member_id || 1;
+
+      const res = await fetch(apiUrl('/member/members/update_profile/'), {
         method: 'POST',
         headers: Object.assign({ 'Content-Type': 'application/json' }, getAuthHeaders()),
-        body: JSON.stringify(bankFormData),
+        body: JSON.stringify({
+          member_id: memberId,
+          bank_id: parseInt(bankFormData.bank_id, 10),
+          acc_name: bankFormData.account_holder_name,
+          acc_no: bankFormData.account_number,
+        }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -369,55 +390,89 @@ const LoanApplication = () => {
         )}
       </div>
 
-      {showBankPopup && (
-        <div className="la-bank-overlay" onClick={() => {}}>
-          <div className="la-bank-popup" onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <h3 style={{ margin: 0, fontSize: 16 }}>Lengkapi Data Rekening Bank</h3>
-            </div>
-            <p style={{ color: '#64748b', fontSize: 13, marginBottom: 16 }}>
-              Data rekening bank wajib diisi sebelum mengajukan pinjaman.
-            </p>
-            {bankFormError && <p style={{ color: '#dc2626', fontSize: 13, marginBottom: 10 }}>{bankFormError}</p>}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <select
-                value={bankFormData.bank_id}
-                onChange={(e) => setBankFormData({ ...bankFormData, bank_id: e.target.value })}
-                style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 14 }}
-              >
-                <option value="">Pilih Bank...</option>
-                {banksList.map((b) => (
-                  <option key={b.id} value={b.id}>{b.bank_name}</option>
-                ))}
-              </select>
-              <input
-                type="text"
-                placeholder="Nomor Rekening"
-                value={bankFormData.account_number}
-                onChange={(e) => setBankFormData({ ...bankFormData, account_number: e.target.value })}
-                style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 14 }}
-              />
-              <input
-                type="text"
-                placeholder="Nama Pemilik Rekening"
-                value={bankFormData.account_holder_name}
-                onChange={(e) => setBankFormData({ ...bankFormData, account_holder_name: e.target.value })}
-                style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 14 }}
-              />
+      {showBankPopup && createPortal(
+        <div className="modal-overlay global-modal-overlay">
+          <div className="sv-bank-popup">
+            <div className="sv-bank-popup-header">
+              <div className="sv-bank-popup-icon">
+                <Banknote size={22} />
+              </div>
+              <div className="sv-bank-popup-heading">
+                <p className="sv-bank-popup-kicker">Rekening pencairan belum lengkap</p>
+                <h3 className="sv-bank-popup-title">Isi Rekening Bank Tujuan</h3>
+                <p className="sv-bank-popup-subtitle">
+                  Data rekening bank wajib diisi sebelum mengajukan pinjaman. Informasi ini digunakan untuk proses pencairan dana.
+                </p>
+              </div>
               <button
+                className="sv-bank-popup-close"
+                onClick={() => setShowBankPopup(false)}
+                aria-label="Close"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="sv-bank-form">
+              <div className="inp-group">
+                <label className="inp-label">Bank Tujuan</label>
+                <select
+                  className="prof-input"
+                  value={bankFormData.bank_id}
+                  onChange={e => setBankFormData({ ...bankFormData, bank_id: e.target.value })}
+                >
+                  <option value="">— Pilih Bank —</option>
+                  {banksList.map(b => (
+                    <option key={b.id} value={b.id}>{b.bank_name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="inp-group">
+                <label className="inp-label">Nomor Rekening</label>
+                <input
+                  className="prof-input"
+                  type="text"
+                  placeholder="Contoh: 1234567890"
+                  value={bankFormData.account_number}
+                  onChange={e => setBankFormData({ ...bankFormData, account_number: e.target.value })}
+                />
+              </div>
+
+              <div className="inp-group">
+                <label className="inp-label">Nama Pemilik Rekening</label>
+                <input
+                  className="prof-input"
+                  type="text"
+                  placeholder="Sesuai buku tabungan"
+                  value={bankFormData.account_holder_name}
+                  onChange={e => setBankFormData({ ...bankFormData, account_holder_name: e.target.value })}
+                />
+              </div>
+
+              {bankFormError && (
+                <p style={{ color: '#E11D48', fontSize: 12, margin: '0 0 12px' }}>{bankFormError}</p>
+              )}
+            </div>
+
+            <div className="sv-bank-popup-actions">
+              <button
+                className="btn btn-navy"
                 onClick={handleBankFormSubmit}
                 disabled={bankFormLoading}
-                style={{
-                  padding: '10px 16px', borderRadius: 8, border: 'none',
-                  background: '#1d4ed8', color: '#fff', fontWeight: 600, fontSize: 14, cursor: 'pointer',
-                  opacity: bankFormLoading ? 0.6 : 1,
-                }}
               >
                 {bankFormLoading ? 'Menyimpan...' : 'Simpan & Lanjutkan'}
               </button>
+              <button
+                className="sv-bank-popup-secondary"
+                onClick={() => setShowBankPopup(false)}
+              >
+                Batal
+              </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
