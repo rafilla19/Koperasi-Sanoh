@@ -75,7 +75,7 @@ const MyProfile = () => {
           loanBal: data.loan_balance || data.current_loan || 0,
           accruedShu: data.accrued_shu || data.current_shu || 0,
           outstandingMonthlySavingDue: data.outstanding_monthly_saving_due || 0,
-          hasPendingClosure: data.has_pending_closure || false
+          hasPendingClosure: (data.pending_closure_count || 0) > 0
         });
         setPendingVoluntaryAmount(pendingRequestAmount);
         setIsValidated(true);
@@ -110,7 +110,8 @@ const MyProfile = () => {
   const netBalance = (parseFloat(profile.mandatoryBal) + parseFloat(profile.voluntaryBal) + parseFloat(profile.accruedShu)) - parseFloat(profile.loanBal) - parseFloat(profile.outstandingMonthlySavingDue);
   const hasOutstandingMonthlySavingDue = parseFloat(profile.outstandingMonthlySavingDue) > 0;
   const isNotMinus = netBalance >= 0;
-  const canProcess = isNotMinus && !hasOutstandingMonthlySavingDue && isAgreed;
+  const hasNoBankAccount = !profile.bankId || !profile.accNo;
+  const canProcess = isNotMinus && !hasOutstandingMonthlySavingDue && !hasNoBankAccount && isAgreed;
 
   const handleProcessClosure = async () => {
     if (!canProcess || isProcessingClosure) return;
@@ -509,7 +510,7 @@ const MyProfile = () => {
             </div>
           </div>
           {profile.hasPendingClosure ? (
-            <button className="btn-close-account" style={{ background: '#e11d48', color: 'white', borderColor: '#e11d48', cursor: 'pointer' }} onClick={() => setShowClosureModal(true)}>
+            <button className="btn-close-account" style={{ background: '#94a3b8', color: '#f1f5f9', borderColor: '#94a3b8', cursor: 'not-allowed' }} disabled>
               Menunggu Persetujuan
               <ChevronRight size={16} />
             </button>
@@ -645,6 +646,13 @@ const MyProfile = () => {
                 <div style={{ display: 'flex', gap: '10px', alignItems: 'center', backgroundColor: '#fff1f2', border: '1px solid #fecaca', padding: '12px 16px', borderRadius: '8px', color: '#be123c', fontSize: '13px', fontWeight: '500', marginBottom: '15px' }}>
                   <AlertTriangle size={18} strokeWidth={2.5} style={{ flexShrink: 0 }} />
                   <span>Penutupan diblokir sampai pinjaman dan tagihan simpanan bulanan dilunasi.</span>
+                </div>
+              )}
+
+              {hasNoBankAccount && (
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center', backgroundColor: '#fff7ed', border: '1px solid #fed7aa', padding: '12px 16px', borderRadius: '8px', color: '#c2410c', fontSize: '13px', fontWeight: '500', marginBottom: '15px' }}>
+                  <AlertTriangle size={18} strokeWidth={2.5} style={{ flexShrink: 0 }} />
+                  <span>Lengkapi data rekening bank Anda terlebih dahulu sebelum mengajukan penutupan akun.</span>
                 </div>
               )}
 

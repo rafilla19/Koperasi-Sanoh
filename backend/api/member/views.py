@@ -586,6 +586,16 @@ class MemberViewSet(viewsets.ViewSet):
                 [member_id],
             )
 
+            bank_row = _try_fetchone(
+                """
+                SELECT mba.bank_id, mba.account_number, mba.account_holder_name
+                FROM member_bank_accounts mba WHERE mba.member_id = %s LIMIT 1
+                """,
+                [member_id],
+            )
+            if not bank_row or not all(bank_row.values()):
+                return Response({'error': 'Lengkapi data rekening bank Anda terlebih dahulu sebelum mengajukan penutupan akun.'}, status=status.HTTP_400_BAD_REQUEST)
+
             with connection.cursor() as cursor:
                 cursor.execute(
                     """

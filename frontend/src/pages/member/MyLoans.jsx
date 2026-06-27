@@ -36,6 +36,7 @@ const MyLoans = () => {
     rejected: []
   });
   const [hasPendingClosure, setHasPendingClosure] = useState(false);
+  const [hasNoBankAccount, setHasNoBankAccount] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
 
   useEffect(() => {
@@ -178,6 +179,7 @@ const MyLoans = () => {
         if (profileResponse.ok) {
           const profileData = await profileResponse.json();
           setHasPendingClosure((profileData.pending_closure_count || 0) > 0);
+          setHasNoBankAccount(!profileData.bank_id || !profileData.account_number);
         }
       } catch (error) {
         console.error('Failed to fetch data:', error);
@@ -199,6 +201,8 @@ const MyLoans = () => {
     if (isNavigating) return;
     if (hasPendingClosure) {
       alert('Anda tidak dapat mengajukan pinjaman baru karena akun Anda dalam proses penutupan.');
+    } else if (hasNoBankAccount) {
+      alert('Lengkapi data rekening bank Anda terlebih dahulu sebelum mengajukan pinjaman.');
     } else if (hasPendingLoan) {
       alert('Anda tidak dapat mengajukan pinjaman baru karena masih ada pengajuan pinjaman yang menunggu persetujuan.');
     } else if (hasActiveLoan) {
@@ -236,8 +240,8 @@ const MyLoans = () => {
         <button
           className="btn-apply-loan"
           onClick={handleApplyLoan}
-          disabled={hasActiveLoan || hasPendingLoan || hasPendingClosure || isNavigating}
-          style={(hasActiveLoan || hasPendingLoan || hasPendingClosure) ? {
+          disabled={hasActiveLoan || hasPendingLoan || hasPendingClosure || hasNoBankAccount || isNavigating}
+          style={(hasActiveLoan || hasPendingLoan || hasPendingClosure || hasNoBankAccount) ? {
             background: '#94a3b8',
             cursor: 'not-allowed',
             color: '#f1f5f9'
