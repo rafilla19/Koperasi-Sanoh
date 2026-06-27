@@ -48,6 +48,7 @@ const ManualPayment = () => {
   const [proofFile, setProofFile] = useState(null);
   const [fileError, setFileError] = useState('');
   const [formError, setFormError] = useState('');
+  const [popup, setPopup] = useState({ show: false, title: '', message: '' });
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -210,6 +211,24 @@ const ManualPayment = () => {
       return;
     }
 
+    const withdrawalPayment = activePayments.find(p => p.type === 'withdrawal');
+    if (withdrawalPayment && memberDetail) {
+      const withdrawalAmount = Number(withdrawalPayment.amount);
+      const voluntaryBalance = Number(memberDetail.voluntary_saving_balance) || 0;
+      if (withdrawalAmount <= 0) {
+        setPopup({ show: true, title: 'Jumlah Tidak Valid', message: 'Jumlah penarikan harus lebih dari 0.' });
+        return;
+      }
+      if (withdrawalAmount > voluntaryBalance) {
+        setPopup({
+          show: true,
+          title: 'Saldo Tidak Mencukupi',
+          message: `Jumlah penarikan ${formatRupiah(withdrawalAmount)} melebihi saldo simpanan sukarela yang tersedia ${formatRupiah(voluntaryBalance)}.`,
+        });
+        return;
+      }
+    }
+
     setLoading(true);
     const formData = new FormData();
     formData.append('member_id', selectedMemberId);
@@ -230,15 +249,13 @@ const ManualPayment = () => {
 
       if (res.ok || res.status === 207) {
         if (result.errors && result.errors.length > 0) {
-          setFormError(`Sebagian berhasil. Kesalahan: ${result.errors.join(', ')}`);
+          setPopup({ show: true, title: 'Sebagian Gagal', message: result.errors.join('\n') });
         } else {
           setSubmitSuccess(true);
-          // Refresh data member untuk melihat saldo terbaru
           if (selectedMemberId) {
             fetchMemberDetail(selectedMemberId);
           }
-          
-          // Simpan ringkasan hasil untuk ditampilkan
+
           const summary = result.results ? result.results.join(' | ') : 'Semua pembayaran berhasil diproses';
           setSuccessMessage(summary);
 
@@ -246,16 +263,23 @@ const ManualPayment = () => {
             setSubmitSuccess(false);
             setSuccessMessage('');
             handleClear();
-          }, 5000); // Beri waktu lebih lama agar admin bisa baca ringkasan
+          }, 5000);
         }
       } else {
-        const errorMsg = result.error || 'Gagal memproses pembayaran.';
-        const detailedErrors = result.details ? `: ${result.details.join(', ')}` : '';
-        setFormError(errorMsg + detailedErrors);
+        let popupMsg = result.error || 'Gagal memproses pembayaran.';
+        if (result.details && result.details.length > 0) {
+          const detail = result.details.join(', ');
+          if (detail.includes('INSUFFICIENT BALANCE')) {
+            popupMsg = 'Saldo simpanan sukarela tidak mencukupi untuk penarikan ini.';
+          } else {
+            popupMsg += `\n${detail}`;
+          }
+        }
+        setPopup({ show: true, title: 'Pembayaran Gagal', message: popupMsg });
       }
     } catch (err) {
       console.error('Submit error:', err);
-      setFormError('Kesalahan jaringan. Silakan coba lagi.');
+      setPopup({ show: true, title: 'Kesalahan Jaringan', message: 'Tidak dapat terhubung ke server. Silakan coba lagi.' });
     } finally {
       setLoading(false);
     }
@@ -541,6 +565,22 @@ const ManualPayment = () => {
           <button className="mp-btn" onClick={handleClear}>Hapus</button>
         </div>
       </div>
+
+      {/* ── Popup Modal ── */}
+      {popup.show && (
+        <div className="mp-popup-overlay" onClick={() => setPopup({ show: false, title: '', message: '' })}>
+          <div className="mp-popup" onClick={e => e.stopPropagation()}>
+            <div className="mp-popup-icon">
+              <AlertCircle size={40} color="#ef4444" />
+            </div>
+            <h3 className="mp-popup-title">{popup.title}</h3>
+            <p className="mp-popup-message">{popup.message}</p>
+            <button className="mp-popup-btn" onClick={() => setPopup({ show: false, title: '', message: '' })}>
+              Tutup
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

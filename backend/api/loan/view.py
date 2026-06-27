@@ -2696,7 +2696,7 @@ class LoanViewSet(viewsets.ModelViewSet):
                         CROSS JOIN params p
                         WHERE msb2.member_id = m.id and msb2.status_id=38
                           AND msb2.saving_type_id = st.id
-                          AND msb2.bill_period_start <= p.end_date
+                          AND msb2.bill_period_start < p.end_date
                           AND msb2.bill_period_end >= p.start_date
                           AND (
                                 msb2.amount_due - COALESCE(msb2.amount_paid, 0)
@@ -2721,7 +2721,7 @@ class LoanViewSet(viewsets.ModelViewSet):
                         CROSS JOIN params p
                         WHERE msb2.member_id = m.id and msb2.status_id=38
                           AND msb2.saving_type_id = st.id
-                          AND msb2.bill_period_start <= p.end_date
+                          AND msb2.bill_period_start < p.end_date
                           AND msb2.bill_period_end >= p.start_date
                           AND (
                                 msb2.amount_due - COALESCE(msb2.amount_paid, 0)
@@ -2733,6 +2733,9 @@ class LoanViewSet(viewsets.ModelViewSet):
 
             -- Total Saving Balance (Independent Subquery for accuracy)
             (SELECT COALESCE(SUM(balance), 0) FROM saving_wallets WHERE member_id = m.id) AS amount_saving_balance,
+
+            -- Voluntary Saving Balance (for withdrawal validation)
+            (SELECT COALESCE(SUM(balance), 0) FROM saving_wallets WHERE member_id = m.id AND saving_type_id = 2) AS voluntary_saving_balance,
 
             -- Loan Deduction
             CASE
