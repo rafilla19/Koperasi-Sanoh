@@ -129,6 +129,9 @@ const AdminLoanDetail = () => {
   const parsedAmount = parseFloat(amountRequested) || 0;
   const isOverLimit = remainingAllocation !== null && parsedAmount > remainingAllocation;
 
+  const parsedInterestRate = parseFloat(interestRate) || 0;
+  const totalRepayment = parsedAmount + (parsedAmount * parsedInterestRate) / 100;
+
   const handleApprove = async () => {
     if (isApproving) return;
     if (isOverLimit) {
@@ -456,6 +459,15 @@ const AdminLoanDetail = () => {
                   <div className="config-value">{interestRate}% flat</div>
                 )}
               </div>
+
+              {isVerifyingStage && (
+                <div className="config-item">
+                  <div className="config-label">
+                    Total Repayment
+                  </div>
+                  <div className="config-value highlight-val">{formatRupiah(totalRepayment)}</div>
+                </div>
+              )}
             </div>
 
             {/* Allocation Checking Panel */}

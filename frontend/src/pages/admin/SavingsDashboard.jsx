@@ -31,7 +31,7 @@ export default function SavingsDashboard() {
   const approveGuard = useRef(false);
   const rejectGuard  = useRef(false);
 
-  const formatRupiah = (value) => "Rp " + Number(value).toLocaleString("id-ID");
+  const formatRupiah = (value) => "Rp " + Math.round(Number(value) || 0).toLocaleString("id-ID");
 
   // Fetch current mandatory amount
   useEffect(() => {

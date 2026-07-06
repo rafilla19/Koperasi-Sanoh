@@ -1,7 +1,7 @@
 {
-  "version": "20260705_195722",
-  "model_file": "loan_model_20260705_195722.pkl",
-  "saved_at": "2026-07-05T19:57:22.203273",
+  "version": "20260706_152514",
+  "model_file": "loan_model_20260706_152514.pkl",
+  "saved_at": "2026-07-06T15:25:14.372809",
   "feature_names": [
     "age",
     "member_tenure_months",
@@ -20,15 +20,15 @@
     "monthly_installment_estimation",
     "voluntary_to_installment_ratio"
   ],
-  "training_date": "2026-07-05T19:57:22.073093",
+  "training_date": "2026-07-06T15:25:14.232737",
   "model_info": {
     "algorithm": "XGBoost + SMOTE",
-    "cv_accuracy": 0.8355555555555556,
-    "cv_f1_macro": 0.6571732026143791,
-    "holdout_roc_auc": 0.875,
+    "cv_accuracy": 0.8600000000000001,
+    "cv_f1_macro": 0.7699019607843137,
+    "holdout_roc_auc": 0.9375,
     "holdout_f1_macro": 0.803921568627451,
-    "training_samples_original": 49,
-    "training_samples_smote": 80,
+    "training_samples_original": 50,
+    "training_samples_smote": 82,
     "test_samples": 10,
     "n_features": 16,
     "feature_names": [

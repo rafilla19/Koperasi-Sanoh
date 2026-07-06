@@ -364,7 +364,7 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
                         details=[
                             ('Jumlah', f'Rp {updated_amount:,.0f}'),
                             ('Jangka Waktu', f'{repayment_term} bulan'),
-                            ('Suku Bunga', f'{interest_rate_percent}% / bulan'),
+                            ('Suku Bunga', f'{interest_rate_percent}%'),
                             ('Total Pembayaran', f'Rp {total_amount:,.0f}'),
                         ],
                         highlight=('Status', 'Diverifikasi'),
@@ -450,9 +450,7 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
             safe_name = safe_name.replace(' ', '_')
             storage_path = f"loan/verifikasi/{timezone.now():%Y%m%d_%H%M%S}_{uuid4().hex}_{safe_name}"
             saved_path = default_storage.save(storage_path, proof_image)
-            proof_url = default_storage.url(saved_path)
-            if not str(proof_url).startswith('http'):
-                proof_url = get_absolute_media_url(request, saved_path)
+            proof_url = get_absolute_media_url(request, saved_path)
 
             with transaction.atomic():
                 with connection.cursor() as cursor:
@@ -1360,16 +1358,29 @@ class LoanViewSet(viewsets.ModelViewSet):
         """
         
         loans_query = """
-        SELECT 
-            SUM(l.remaining_balance) AS total_outstanding,
-            SUM(l.principal_amount) AS active_borrowers,
-            SUM(CASE 
+        SELECT
+            SUM(amount_principal) AS active_borrowers
+        FROM loan_installments
+        WHERE status_id = 28;
+        """
+
+        outstanding_query = """
+        SELECT
+            SUM(li.amount_total) AS total_outstanding
+        FROM loan_installments li
+        INNER JOIN loans l ON l.id = li.loan_id
+        WHERE l.status_id = 25 AND li.status_id = 28 AND li.due_date < CURRENT_DATE;
+        """
+
+        interest_query = """
+        SELECT
+            SUM(CASE
                 WHEN li.status_id = 29 THEN li.amount_interest
                 ELSE 0
             END) AS interest_achieved
         FROM loans l
-        INNER JOIN loan_installments li 
-            ON li.loan_id = l.id 
+        INNER JOIN loan_installments li
+            ON li.loan_id = l.id
         WHERE l.status_id = 25;
         """
         
@@ -1380,17 +1391,23 @@ class LoanViewSet(viewsets.ModelViewSet):
             (SELECT COALESCE(SUM(amount_interest), 0) FROM loan_installments WHERE status_id = 29 AND DATE_TRUNC('month', updated_at) = DATE_TRUNC('month', CURRENT_DATE)) as int_curr,
             (SELECT COALESCE(SUM(amount_interest), 0) FROM loan_installments WHERE status_id = 29 AND DATE_TRUNC('month', updated_at) = DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')) as int_prev,
             
-            -- Outstanding Trends
-            (SELECT COALESCE(SUM(remaining_balance), 0) FROM loans WHERE status_id = 25) as out_curr,
-            (
-                (SELECT COALESCE(SUM(remaining_balance), 0) FROM loans WHERE status_id = 25) + 
-                (SELECT COALESCE(SUM(amount_paid), 0) FROM loan_payments WHERE DATE_TRUNC('month', payment_date) = DATE_TRUNC('month', CURRENT_DATE)) - 
-                (SELECT COALESCE(SUM(principal_amount), 0) FROM loans WHERE DATE_TRUNC('month', created_at) = DATE_TRUNC('month', CURRENT_DATE))
-            ) as out_prev,
-            
-            -- Borrowers Trends (Principal sum)
-            (SELECT COALESCE(SUM(principal_amount), 0) FROM loans WHERE status_id = 25) as bor_curr,
-            (SELECT COALESCE(SUM(principal_amount), 0) FROM loans WHERE status_id = 25 AND created_at < DATE_TRUNC('month', CURRENT_DATE)) as bor_prev
+            -- Outstanding Trends (overdue unpaid installments of active loans, same basis as Total Tertunggak)
+            (SELECT COALESCE(SUM(li.amount_total), 0)
+                FROM loan_installments li
+                JOIN loans l ON l.id = li.loan_id
+                WHERE l.status_id = 25 AND li.status_id = 28 AND li.due_date < CURRENT_DATE) as out_curr,
+            (SELECT COALESCE(SUM(li.amount_total), 0)
+                FROM loan_installments li
+                JOIN loans l ON l.id = li.loan_id
+                WHERE l.status_id = 25 AND li.status_id = 28
+                  AND li.due_date < (CURRENT_DATE - INTERVAL '1 month')) as out_prev,
+
+            -- Borrowers Trends (unpaid installment principal, same basis as Peminjam Aktif)
+            (SELECT COALESCE(SUM(amount_principal), 0) FROM loan_installments WHERE status_id = 28) as bor_curr,
+            (SELECT COALESCE(SUM(li.amount_principal), 0)
+                FROM loan_installments li
+                JOIN loans l ON l.id = li.loan_id
+                WHERE li.status_id = 28 AND l.created_at < DATE_TRUNC('month', CURRENT_DATE)) as bor_prev
         """
 
         # Current month installment query
@@ -1423,9 +1440,15 @@ class LoanViewSet(viewsets.ModelViewSet):
             
             cursor.execute(loans_query)
             loans_row = cursor.fetchone()
-            total_outstanding = loans_row[0] if loans_row and loans_row[0] else 0
-            active_borrowers = loans_row[1] if loans_row and loans_row[1] else 0
-            interest_achieved = loans_row[2] if loans_row and loans_row[2] else 0
+            active_borrowers = loans_row[0] if loans_row and loans_row[0] else 0
+
+            cursor.execute(outstanding_query)
+            outstanding_row = cursor.fetchone()
+            total_outstanding = outstanding_row[0] if outstanding_row and outstanding_row[0] else 0
+
+            cursor.execute(interest_query)
+            interest_row = cursor.fetchone()
+            interest_achieved = interest_row[0] if interest_row and interest_row[0] else 0
 
             cursor.execute(trend_query)
             trend_row = cursor.fetchone()
@@ -2166,11 +2189,11 @@ class LoanViewSet(viewsets.ModelViewSet):
             sel_month = today.month
             sel_year = today.year
 
-        # Due date is always the 25th of the selected month
+        # Due date is always the 27th of the selected month
         try:
-            period_due_date = datetime.date(sel_year, sel_month, 25)
+            period_due_date = datetime.date(sel_year, sel_month, 27)
         except ValueError:
-            period_due_date = datetime.date(today.year, today.month, 25)
+            period_due_date = datetime.date(today.year, today.month, 27)
 
         member_query = """
         SELECT 
@@ -2187,7 +2210,7 @@ class LoanViewSet(viewsets.ModelViewSet):
         """
         
         overdue_query = """
-        SELECT SUM(amount_total) FROM loan_installments WHERE status_id = 28 AND due_date = %s
+        SELECT SUM(amount_total) FROM loan_installments WHERE status_id = 28 AND due_date < CURRENT_DATE
         """
                 
         with connection.cursor() as cursor:
@@ -2200,7 +2223,7 @@ class LoanViewSet(viewsets.ModelViewSet):
             collected_row = cursor.fetchone()
             collected = collected_row[0] if collected_row and collected_row[0] else 0
             
-            cursor.execute(overdue_query, [period_due_date])
+            cursor.execute(overdue_query)
             overdue_row = cursor.fetchone()
             overdue = overdue_row[0] if overdue_row and overdue_row[0] else 0
 
