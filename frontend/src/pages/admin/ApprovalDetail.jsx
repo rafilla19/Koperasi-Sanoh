@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Download, FileText, Loader2, Upload, CheckCircle, XCircle, X, Eye } from 'lucide-react';
-import { apiUrl, API_ORIGIN } from '../../services/api';
+import { apiUrl, API_ORIGIN, getAuthHeaders } from '../../services/api';
 import './ApprovalDetail.css';
 
 const ApprovalDetail = () => {
@@ -160,8 +160,9 @@ const ApprovalDetail = () => {
       const fetchOpts = { method: 'POST' };
       if (body instanceof FormData) {
         fetchOpts.body = body;
+        fetchOpts.headers = { ...getAuthHeaders() };
       } else {
-        fetchOpts.headers = { 'Content-Type': 'application/json' };
+        fetchOpts.headers = { 'Content-Type': 'application/json', ...getAuthHeaders() };
         fetchOpts.body = body;
       }
       const res = await fetch(endpoint, fetchOpts);
@@ -211,8 +212,9 @@ const ApprovalDetail = () => {
       const fetchOpts2 = { method: 'POST' };
       if (body instanceof FormData) {
         fetchOpts2.body = body;
+        fetchOpts2.headers = { ...getAuthHeaders() };
       } else {
-        fetchOpts2.headers = { 'Content-Type': 'application/json' };
+        fetchOpts2.headers = { 'Content-Type': 'application/json', ...getAuthHeaders() };
         fetchOpts2.body = body;
       }
       const res = await fetch(endpoint, fetchOpts2);

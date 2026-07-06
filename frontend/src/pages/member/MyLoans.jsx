@@ -128,12 +128,10 @@ const MyLoans = () => {
           const pendingLoansFormatted = pendingSummary.map(item => ({
             id: `#${item.id}`,
             type: item.type_name || 'Pinjaman',
-            status: item.status_code || 'Pending',
+            status: item.status_code || 'SUBMITTED',
             totalBorrowed: formatRupiah(item.amount_requested),
             remaining: formatRupiah(item.amount_requested),
-            interestEstimate: formatRupiah(item.amount_requested * 0.005),
             purpose: item.purpose,
-            bunga: '0,5%',
             progress: 0,
             installmentsPaid: 0,
             totalInstallments: item.duration_months || 0,
@@ -225,10 +223,18 @@ const MyLoans = () => {
       case 'active': return 'status-active';
       case 'completed': return 'status-completed';
       case 'submitted': return 'status-pending';
+      case 'verifying': return 'status-verifying';
       case 'rejected': return 'status-rejected';
       default: return '';
     }
   };
+
+  const STATUS_LABELS = {
+    submitted: 'Menunggu',
+    verifying: 'Diverifikasi',
+  };
+
+  const getStatusLabel = (status) => STATUS_LABELS[status.toLowerCase()] || status;
 
   return (
     <div className="ml-page">
@@ -306,7 +312,7 @@ const MyLoans = () => {
                     <span>ID: {loan.id}</span>
                   </div>
                   <div className={`ml-status-pill ${getStatusColor(loan.status)}`}>
-                    <span className="dot"></span> {loan.status}
+                    <span className="dot"></span> {getStatusLabel(loan.status)}
                   </div>
                 </div>
 
@@ -315,32 +321,30 @@ const MyLoans = () => {
                     <span className="lbl">TOTAL PINJAMAN</span>
                     <span className="val">{loan.totalBorrowed}</span>
                   </div>
-                  <div className="ml-lc-col">
-                    <span className="lbl">
-                      {activeTab === 'pending' ? 'ESTIMASI JUMLAH BUNGA'
-                        : activeTab === 'rejected' ? 'TANGGAL PENGAJUAN'
-                          : 'SISA'}
-                    </span>
-                    <span className="val">
-                      {activeTab === 'pending' ? loan.interestEstimate
-                        : activeTab === 'rejected' ? loan.appliedAt
-                          : loan.remaining}
-                    </span>
-                  </div>
+                  {activeTab !== 'pending' && (
+                    <div className="ml-lc-col">
+                      <span className="lbl">
+                        {activeTab === 'rejected' ? 'TANGGAL PENGAJUAN' : 'SISA'}
+                      </span>
+                      <span className="val">
+                        {activeTab === 'rejected' ? loan.appliedAt : loan.remaining}
+                      </span>
+                    </div>
+                  )}
                   <div className="ml-lc-col">
                     <span className="lbl">TUJUAN</span>
                     <span className="val">{loan.purpose}</span>
                   </div>
-                  <div className="ml-lc-col">
-                    <span className="lbl">
-                      {activeTab === 'pending' ? 'ESTIMASI BUNGA'
-                        : activeTab === 'rejected' ? 'TANGGAL DITOLAK'
-                          : 'BUNGA (FLAT)'}
-                    </span>
-                    <span className="val">
-                      {activeTab === 'rejected' ? loan.dateRejected : loan.bunga}
-                    </span>
-                  </div>
+                  {activeTab !== 'pending' && (
+                    <div className="ml-lc-col">
+                      <span className="lbl">
+                        {activeTab === 'rejected' ? 'TANGGAL DITOLAK' : 'BUNGA (FLAT)'}
+                      </span>
+                      <span className="val">
+                        {activeTab === 'rejected' ? loan.dateRejected : loan.bunga}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="ml-lc-progress">

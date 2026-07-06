@@ -35,6 +35,7 @@ from .serializers import (
     WithdrawalSerializer,
 )
 from .email_utils import send_member_notification_email, send_withdrawal_paid_email
+from api.utils.auth import get_verified_admin
 
 TEMP_MEMBER_ID = 5
 _MEMBER_SAVINGS_CONFIG_TABLE_EXISTS = None
@@ -693,6 +694,7 @@ def admin_approve_voluntary_request(request, pk):
     Approve pengajuan perubahan simpanan sukarela.
     Otomatis update jumlah sukarela member dan kirim notifikasi.
     """
+    get_verified_admin(request)
     try:
         req = VoluntarySavingsRequests.objects.get(pk=pk, status_id=41)
     except VoluntarySavingsRequests.DoesNotExist:
@@ -764,6 +766,7 @@ def admin_reject_voluntary_request(request, pk):
     Tolak pengajuan perubahan simpanan sukarela.
     Body: { "reject_reason": "..." }  (opsional)
     """
+    get_verified_admin(request)
     try:
         req = VoluntarySavingsRequests.objects.get(pk=pk, status_id=41)
     except VoluntarySavingsRequests.DoesNotExist:
@@ -1656,6 +1659,7 @@ def admin_withdrawal_detail(request, pk):
 @api_view(['POST'])
 def admin_approve_withdrawal(request, pk):
     """Approve a withdrawal — calls sp_process_withdrawal_status with status_id=17."""
+    get_verified_admin(request)
     try:
         with connection.cursor() as cursor:
             cursor.execute(
@@ -1675,6 +1679,7 @@ def admin_approve_withdrawal(request, pk):
 @api_view(['POST'])
 def admin_reject_withdrawal(request, pk):
     """Reject a withdrawal — calls sp_process_withdrawal_status with status_id=18."""
+    get_verified_admin(request)
     reject_reason = request.data.get('reject_reason', '')
 
     try:
@@ -1696,6 +1701,7 @@ def admin_reject_withdrawal(request, pk):
 @api_view(['POST'])
 def admin_upload_transfer(request, pk):
     """Upload transfer proof (PNG/JPG) to Supabase Storage and mark withdrawal as PAID."""
+    get_verified_admin(request)
     if 'proof_file' not in request.FILES:
         return Response({'error': 'File bukti transfer wajib diupload'}, status=400)
 

@@ -17,6 +17,7 @@ export const getAuthHeaders = () => {
     const headers = {};
     if (user.member_id) headers['X-MEMBER-ID'] = String(user.member_id);
     if (user.email) headers['X-USER-EMAIL'] = String(user.email);
+    if (user.token) headers['Authorization'] = `Bearer ${user.token}`;
     return headers;
   } catch (e) {
     return {};

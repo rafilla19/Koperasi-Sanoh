@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { apiUrl } from "../../services/api";
+import { apiUrl, getAuthHeaders } from "../../services/api";
 import "./WithdrawalRequests.css";
 
 const formatRupiah = (num) => "Rp " + Number(num || 0).toLocaleString("id-ID");
@@ -56,7 +56,7 @@ export default function WithdrawalRequestsDetail() {
     try {
       const res = await fetch(apiUrl(`/admin/savings/withdrawals/${id}/approve/`), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
       }).then((r) => r.json());
 
       if (res.message) {
@@ -84,7 +84,7 @@ export default function WithdrawalRequestsDetail() {
     try {
       const res = await fetch(apiUrl(`/admin/savings/withdrawals/${id}/reject/`), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({ reject_reason: rejectReason }),
       }).then((r) => r.json());
       if (res.message) {
@@ -111,6 +111,7 @@ export default function WithdrawalRequestsDetail() {
     try {
       const res = await fetch(apiUrl(`/admin/savings/withdrawals/${id}/upload-transfer/`), {
         method: "POST",
+        headers: { ...getAuthHeaders() },
         body: formData,
       }).then((r) => r.json());
       if (res.message) {

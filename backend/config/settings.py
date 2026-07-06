@@ -29,7 +29,7 @@ SECRET_KEY = os.getenv('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG') == 'True'
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [h.strip() for h in os.getenv('ALLOWED_HOSTS').split(',') if h.strip()]
 
 
 # Application definition
@@ -68,13 +68,11 @@ MIDDLEWARE = [
 # CORS Settings
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
+    os.getenv('FRONTEND_BASE_URL'),
 ]
 
 CSRF_TRUSTED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
+    os.getenv('FRONTEND_BASE_URL'),
 ]
 
 # Session & Cookie Settings for Cross-Origin

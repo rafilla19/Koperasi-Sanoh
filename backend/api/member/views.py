@@ -128,6 +128,7 @@ def _persist_member_document(document, prefix):
 
 
 from api.utils.email import build_email_html, send_styled_email
+from api.utils.auth import get_verified_admin
 
 
 def _member_profile_query(member_id):
@@ -1376,6 +1377,7 @@ class MemberViewSet(viewsets.ViewSet):
 
     @action(detail=True, methods=['post'])
     def approve_registration(self, request, pk=None):
+        get_verified_admin(request)
         comment = (request.data.get('comment') or '').strip()
         # Require comment when approving registration
         if not comment:
@@ -1490,6 +1492,7 @@ class MemberViewSet(viewsets.ViewSet):
 
     @action(detail=True, methods=['post'])
     def reject_registration(self, request, pk=None):
+        get_verified_admin(request)
         comment = (request.data.get('comment') or '').strip()
         # Require comment when rejecting registration
         if not comment:

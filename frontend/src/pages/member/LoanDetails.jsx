@@ -5,7 +5,7 @@ import autoTable from 'jspdf-autotable';
 import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, FileText, Printer, CheckCircle, AlertTriangle, X, Download, CreditCard, Copy, Loader } from 'lucide-react';
-import { apiUrl } from '../../services/api';
+import { apiUrl, getAuthHeaders } from '../../services/api';
 import logoImg from '../../assets/logo.png';
 import './LoanDetails.css';
 
@@ -32,7 +32,10 @@ const LoanDetails = () => {
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(null);
   const [hasPendingClosure, setHasPendingClosure] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [previewDoc, setPreviewDoc] = useState(null);
   const summaryRef = useRef(null);
+
+  const isImageFile = (url) => /\.(jpg|jpeg|png|gif|bmp|webp|svg)(\?|$)/i.test(url || '');
 
   const handleDownloadSummary = async () => {
     if (isDownloading) return;
@@ -337,7 +340,7 @@ const LoanDetails = () => {
             const match = pendingData.find(item => String(item.id) === id);
             if (match) {
               foundLoan = match;
-              foundStatus = 'Pending';
+              foundStatus = match.status_code === 'VERIFYING' ? 'Verifying' : 'Pending';
             }
           }
         }
@@ -427,7 +430,8 @@ const LoanDetails = () => {
       const response = await fetch(apiUrl(`/loan/loans/${id}/create_payment_token/?member_id=${memberId}`), {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
         },
         body: JSON.stringify({ payment_type: selectedPaymentMethod })
       });
@@ -511,6 +515,7 @@ const LoanDetails = () => {
       case 'active': return 'status-active';
       case 'completed': return 'status-completed';
       case 'pending': return 'status-pending';
+      case 'verifying': return 'status-verifying';
       case 'rejected': return 'status-rejected';
       default: return '';
     }
@@ -523,7 +528,7 @@ const LoanDetails = () => {
     return '';
   };
 
-  const isPendingOrRejected = status === 'Pending' || status === 'Rejected';
+  const isPendingOrRejected = status === 'Pending' || status === 'Verifying' || status === 'Rejected';
 
   return (
     <div className="ld-page" ref={summaryRef}>
@@ -544,7 +549,7 @@ const LoanDetails = () => {
           <span className="ld-date">
             {status === 'Completed' ?
               `Mulai ${formatDate(loanData?.start_date || loanData?.admin_update)} - Selesai ${formatDate(loanData?.last_payment_date)}` :
-              status === 'Pending' ?
+              (status === 'Pending' || status === 'Verifying') ?
               `Diajukan pada ${formatDateTime(loanData?.applied_at)}` :
               `Mulai ${formatDate(loanData?.start_date || loanData?.admin_update)}`}
           </span>
@@ -579,16 +584,8 @@ const LoanDetails = () => {
               <span className="val">{formatRupiah(loanData?.amount_requested)}</span>
             </div>
             <div className="ld-g-col">
-              <span className="lbl">ESTIMASI JUMLAH BUNGA</span>
-              <span className="val">{formatRupiah((loanData?.amount_requested || 0) * 0.005)}</span>
-            </div>
-            <div className="ld-g-col">
               <span className="lbl">TUJUAN</span>
               <span className="val">{loanData?.purpose}</span>
-            </div>
-            <div className="ld-g-col">
-              <span className="lbl">ESTIMASI BUNGA</span>
-              <span className="val">0,5%</span>
             </div>
             <div className="ld-g-col">
               <span className="lbl">PERMINTAAN CICILAN</span>
@@ -598,15 +595,14 @@ const LoanDetails = () => {
               <div className="ld-g-col">
                 <span className="lbl">SLIP GAJI</span>
                 <span className="val">
-                  <a
-                    href={loanData.salary_statement_file}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    type="button"
+                    onClick={() => setPreviewDoc({ url: loanData.salary_statement_file, name: 'Slip Gaji' })}
                     className="ld-document-link"
-                    style={{ color: '#0284c7', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 500 }}
+                    style={{ color: '#0284c7', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 500, background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit' }}
                   >
                     <FileText size={16} /> Lihat Dokumen
-                  </a>
+                  </button>
                 </span>
               </div>
             )}
@@ -678,15 +674,14 @@ const LoanDetails = () => {
               <div className="ld-g-col">
                 <span className="lbl">SLIP GAJI</span>
                 <span className="val">
-                  <a
-                    href={loanData.salary_statement_file}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    type="button"
+                    onClick={() => setPreviewDoc({ url: loanData.salary_statement_file, name: 'Slip Gaji' })}
                     className="ld-document-link"
-                    style={{ color: '#0284c7', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 500 }}
+                    style={{ color: '#0284c7', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 500, background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit' }}
                   >
                     <FileText size={16} /> Lihat Dokumen
-                  </a>
+                  </button>
                 </span>
               </div>
             )}
@@ -965,13 +960,52 @@ const LoanDetails = () => {
             </div>
 
             {empStatus === 3 && (
-              <div className="ld-modal-actions">
-                <button className="btn-modal-outline" disabled={isInitiating} onClick={() => setShowPaymentInvoice(false)}>Batal</button>
-                <button className="btn-modal-blue" disabled={isInitiating} onClick={handleInitiatePayment}>
-                  {isInitiating ? 'Memproses...' : ((invoiceData && invoiceData.snap_token) ? 'Lanjutkan Pembayaran' : 'Bayar Sekarang')}
+              <>
+                <div className="ld-modal-actions">
+                  <button className="btn-modal-outline" disabled={isInitiating} onClick={() => setShowPaymentInvoice(false)}>Batal</button>
+                  <button className="btn-modal-blue" disabled={isInitiating} onClick={handleInitiatePayment}>
+                    {isInitiating ? 'Memproses...' : ((invoiceData && invoiceData.snap_token) ? 'Lanjutkan Pembayaran' : 'Bayar Sekarang')}
+                  </button>
+                </div>
+                {invoiceData && invoiceData.snap_token && (
+                  <p style={{ textAlign: 'center', fontSize: 12, color: '#94a3b8', marginTop: 10 }}>
+                    Jendela pembayaran tidak muncul?{' '}
+                    <button
+                      type="button"
+                      onClick={() => window.open(`https://app.sandbox.midtrans.com/snap/v2/vtweb/${invoiceData.snap_token}`, '_blank')}
+                      style={{ background: 'none', border: 'none', padding: 0, color: '#2563eb', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline', font: 'inherit' }}
+                    >
+                      Buka di tab baru
+                    </button>
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {previewDoc && createPortal(
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={() => setPreviewDoc(null)}>
+          <div style={{ background: '#fff', borderRadius: 12, width: '90vw', maxWidth: 900, height: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 25px 60px rgba(0,0,0,0.3)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a' }}>{previewDoc.name}</h3>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button onClick={() => window.open(previewDoc.url, '_blank')} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', border: '1px solid #e2e8f0', background: '#fff', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', color: '#334155' }}>
+                  <Download size={14} /> Unduh
+                </button>
+                <button onClick={() => setPreviewDoc(null)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, border: 'none', background: '#f1f5f9', borderRadius: 8, cursor: 'pointer', color: '#64748b' }}>
+                  <X size={20} />
                 </button>
               </div>
-            )}
+            </div>
+            <div style={{ flex: 1, overflow: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f1f5f9', padding: 16 }}>
+              {isImageFile(previewDoc.url)
+                ? <img src={previewDoc.url} alt={previewDoc.name} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: 4, boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }} />
+                : <iframe src={previewDoc.url} title={previewDoc.name} style={{ width: '100%', height: '100%', border: 'none', borderRadius: 4 }} />
+              }
+            </div>
           </div>
         </div>,
         document.body

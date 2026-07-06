@@ -112,7 +112,7 @@ export default function SavingsDashboard() {
     try {
       const res = await fetch(apiUrl(`/admin/savings/voluntary-requests/${id}/approve/`), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
       }).then(r => r.json());
       setFeedbackMsg({ type: 'success', text: res.message || 'Pengajuan berhasil disetujui' });
       fetchPendingRequests();
@@ -134,7 +134,7 @@ export default function SavingsDashboard() {
     try {
       const res = await fetch(apiUrl(`/admin/savings/voluntary-requests/${id}/reject/`), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({ reject_reason: rejectReason }),
       }).then(r => r.json());
       setFeedbackMsg({ type: 'success', text: res.message || 'Pengajuan berhasil ditolak' });

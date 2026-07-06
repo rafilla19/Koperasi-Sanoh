@@ -13,6 +13,7 @@ from rest_framework.response import Response
 from api.models import Members, MemberBankAccounts
 from api.saving.models import MemberSavingObligations, SavingTransactions, SavingWallets
 from api.models import IncomeExpenseCategories, IncomeExpenses  # noqa: F401 — IncomeExpenseCategories used for TYPE constants
+from api.utils.auth import get_verified_admin
 from .models import (
     AccountingPeriods, MasterConfiguration,
     ShuPeriods, ShuMemberDistributions, ShuMemberDistributionsMonthly,
@@ -474,6 +475,7 @@ def admin_shu_distribution_update(request, pk):
 @api_view(['POST'])
 def admin_shu_bulk_approve(request, period_pk):
     """Approve semua distribusi SHU yang masih pending untuk satu periode."""
+    get_verified_admin(request)
     try:
         year = ShuResults.objects.get(pk=period_pk).period_year
     except ShuResults.DoesNotExist:
@@ -488,6 +490,7 @@ def admin_shu_bulk_approve(request, period_pk):
 @api_view(['POST'])
 def admin_shu_bulk_pay(request, period_pk):
     """Tandai semua distribusi SHU yang sudah approved menjadi paid."""
+    get_verified_admin(request)
     now = timezone.now()
     try:
         year = ShuResults.objects.get(pk=period_pk).period_year
@@ -791,6 +794,7 @@ def admin_shu_member_bases_distribute(request):
     into the `shu_member_bases` table linked to a `shu_result` (by year/month).
     Body: { year: <yyyy>, month?: <1-12> }
     """
+    get_verified_admin(request)
     from api.models import Departments
 
     now = timezone.now()
@@ -1513,6 +1517,7 @@ def admin_shu_jasa_modal_distribute(request):
     Mengambil data dari shu_member_distributions_monthly (sum per tahun) lalu disimpan ke shu_member_distributions.
     Body: { year: <yyyy> }
     """
+    get_verified_admin(request)
     now = timezone.now()
     try:
         year = int(request.data.get('year', 0))
@@ -1773,6 +1778,7 @@ def admin_shu_monthly_distribute(request):
       total_savings → total simpanan (wajib + sukarela) per anggota bulan itu
       total_shu     → SHU jasa modal per anggota
     """
+    get_verified_admin(request)
     now = timezone.now()
     try:
         year = int(request.data.get('year', now.year))

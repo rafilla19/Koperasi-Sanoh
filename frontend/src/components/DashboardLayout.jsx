@@ -4,7 +4,7 @@ import { LayoutDashboard, Wallet, CreditCard, FileText, UserCircle, LogOut, Menu
 import logoImg from '../assets/logo.png';
 import './DashboardLayout.css';
 import { fetchWASettings } from '../services/waApi';
-import { apiUrl } from '../services/api';
+import { apiUrl, getAuthHeaders } from '../services/api';
 
 const DashboardLayout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -36,12 +36,15 @@ const DashboardLayout = () => {
       try {
         const res = await fetch(apiUrl('/auth/check_active/'), {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
           body: JSON.stringify({ email: user.email }),
         });
         const data = await res.json();
         if (!data.is_active) {
           localStorage.removeItem('user');
+          if (data.session_expired) {
+            alert('Sesi Anda telah berakhir. Silakan login kembali.');
+          }
           navigate('/login');
           return;
         }
@@ -53,6 +56,8 @@ const DashboardLayout = () => {
       }
     };
     checkActive();
+    const interval = setInterval(checkActive, 5 * 60 * 1000);
+    return () => clearInterval(interval);
   }, [user, navigate, location.pathname]);
 
   useEffect(() => {

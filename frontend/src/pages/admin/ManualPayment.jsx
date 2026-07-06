@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { User, Plus, Trash2, Calendar, Search, Upload, FileText, AlertCircle, CheckCircle, Loader } from 'lucide-react';
-import { apiUrl } from '../../services/api';
+import { apiUrl, getAuthHeaders } from '../../services/api';
 import './ManualPayment.css';
 
 const MONTHS = [
@@ -241,6 +241,7 @@ const ManualPayment = () => {
     try {
       const res = await fetch(apiUrl('/loan/loans/process_manual_payments/'), {
         method: 'POST',
+        headers: { ...getAuthHeaders() },
         body: formData,
         // Don't set Content-Type header when using FormData
       });

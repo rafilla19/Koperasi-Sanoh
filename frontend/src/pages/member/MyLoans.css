@@ -244,6 +244,9 @@
 .status-pending { background: #FFFBEB; color: #D97706; }
 .status-pending .dot { background: #D97706; }
 
+.status-verifying { background: #DCFCE7; color: #059669; }
+.status-verifying .dot { background: #059669; }
+
 .status-rejected { background: #FEE2E2; color: #DC2626; }
 .status-rejected .dot { background: #DC2626; }
 

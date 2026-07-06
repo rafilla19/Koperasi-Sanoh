@@ -14,7 +14,7 @@ import {
 import { Line } from 'react-chartjs-2';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { apiUrl } from '../../services/api';
+import { apiUrl, getAuthHeaders } from '../../services/api';
 import logoImg from '../../assets/logo.png';
 import './DashboardHome.css';
 
@@ -319,7 +319,8 @@ const DashboardHome = () => {
       const res = await fetch(apiUrl('/loan/loans/create_bulk_payment_token/'), {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
         },
         body: JSON.stringify({
           member_id: memberId,

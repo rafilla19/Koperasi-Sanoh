@@ -22,11 +22,35 @@
 }
 
 .apa-breadcrumb {
-  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
   font-weight: 500;
-  letter-spacing: 0.02em;
-  color: #64748b;
+  letter-spacing: 0.01em;
+  color: #94a3b8;
   margin-bottom: 24px;
+}
+
+.apa-breadcrumb a {
+  color: #4f7df3;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.apa-breadcrumb a:hover {
+  color: #3b63d6;
+  text-decoration: underline;
+}
+
+.apa-breadcrumb-sep {
+  color: #cbd5e1;
+  flex-shrink: 0;
+}
+
+.apa-breadcrumb-current {
+  color: #334155;
+  font-weight: 700;
 }
 
 .apa-tabs {

@@ -1,9 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
-import { User, Printer, UploadCloud, Edit2, AlertCircle, CheckCircle, XCircle, Loader, X, Eye, Download } from 'lucide-react';
+import { User, Printer, UploadCloud, Edit2, AlertCircle, CheckCircle, XCircle, Loader, X, Eye, Download, ArrowLeft } from 'lucide-react';
 import { API_ORIGIN, apiUrl, getAuthHeaders } from '../../services/api';
 import './AdminLoanDetail.css';
+
+const STATUS_META = {
+  21: { label: 'Menunggu Keputusan', className: 'pending' },
+  22: { label: 'Diverifikasi', className: 'verifying' },
+  23: { label: 'Disetujui', className: 'approved' },
+  24: { label: 'Ditolak', className: 'rejected' },
+};
 
 const AdminLoanDetail = () => {
   const navigate = useNavigate();
@@ -19,7 +26,9 @@ const AdminLoanDetail = () => {
   const [isEditingAmount, setIsEditingAmount] = useState(false);
   const [proofFile, setProofFile] = useState(null);
   const [proofFileName, setProofFileName] = useState('');
-  
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [installments, setInstallments] = useState([]);
+
   // State for Allocation Block
   const [remainingAllocation, setRemainingAllocation] = useState(null);
   const [allocationLoading, setAllocationLoading] = useState(true);
@@ -53,6 +62,9 @@ const AdminLoanDetail = () => {
           setDetail(data);
           setRepaymentTerm(data.duration_months);
           setAmountRequested(data.amount_requested);
+          if (data.interest_rate_percent !== null && data.interest_rate_percent !== undefined) {
+            setInterestRate(String(data.interest_rate_percent));
+          }
         }
       })
       .catch(err => console.error(err));
@@ -86,6 +98,17 @@ const AdminLoanDetail = () => {
 
   }, [id]);
 
+  useEffect(() => {
+    if (!detail?.loan_id) {
+      setInstallments([]);
+      return;
+    }
+    fetch(apiUrl(`/loan/loans/${detail.loan_id}/schedule/`), { headers: getAuthHeaders() })
+      .then(res => res.json())
+      .then(data => setInstallments(Array.isArray(data) ? data : []))
+      .catch(err => console.error('Installments fetch error:', err));
+  }, [detail?.loan_id]);
+
   const handleProfileClick = () => {
     if (detail && detail.member_id) {
       navigate(`/dashboard/admin/members/${detail.member_id}`);
@@ -116,10 +139,6 @@ const AdminLoanDetail = () => {
       alert('Silakan isi catatan keputusan sebelum menyetujui pinjaman.');
       return;
     }
-    if (!proofFile) {
-      alert('Silakan unggah bukti transfer sebelum menyetujui pinjaman.');
-      return;
-    }
     const confirmed = await window.appConfirm({
       title: 'Setujui pinjaman?',
       message: 'Apakah Anda yakin ingin menyetujui pinjaman ini?',
@@ -135,23 +154,21 @@ const AdminLoanDetail = () => {
       const user = userStr ? JSON.parse(userStr) : null;
       const adminId = user?.id || 1;
 
-      const formData = new FormData();
-      formData.append('repayment_term', repaymentTerm);
-      formData.append('interest_rate', interestRate);
-      formData.append('amount_requested', amountRequested);
-      formData.append('admin_id', adminId);
-      formData.append('reason', rejectReason.trim());
-      formData.append('proof_of_transfer', proofFile);
-
       const response = await fetch(apiUrl(`/loan/loan-applications/${id}/approve/`), {
         method: 'POST',
-        headers: getAuthHeaders(true),
-        body: formData
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          repayment_term: repaymentTerm,
+          interest_rate: interestRate,
+          amount_requested: amountRequested,
+          admin_id: adminId,
+          reason: rejectReason.trim(),
+        })
       });
 
       const data = await response.json();
       if (response.ok) {
-        alert(data.message || 'Pinjaman berhasil disetujui');
+        alert(data.message || 'Pinjaman berhasil disetujui, menunggu verifikasi transfer dana');
         navigate('/dashboard/admin/ls-loans');
       } else {
         alert(data.error || 'Gagal menyetujui pinjaman');
@@ -161,6 +178,47 @@ const AdminLoanDetail = () => {
       alert('Gagal menyetujui pinjaman');
     } finally {
       setIsApproving(false);
+    }
+  };
+
+  const handleVerify = async () => {
+    if (isVerifying) return;
+    if (!proofFile) {
+      alert('Silakan unggah gambar bukti transfer sebelum verifikasi.');
+      return;
+    }
+    const confirmed = await window.appConfirm({
+      title: 'Verifikasi transfer?',
+      message: 'Konfirmasi bahwa dana telah ditransfer. Pinjaman akan disetujui sepenuhnya.',
+      confirmText: 'Verifikasi',
+      cancelText: 'Batal',
+      variant: 'success',
+    });
+    if (!confirmed) return;
+
+    setIsVerifying(true);
+    try {
+      const formData = new FormData();
+      formData.append('proof_image', proofFile);
+
+      const response = await fetch(apiUrl(`/loan/loan-applications/${id}/verify/`), {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: formData
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        alert(data.message || 'Verifikasi berhasil, pinjaman telah disetujui sepenuhnya');
+        navigate('/dashboard/admin/ls-loans');
+      } else {
+        alert(data.error || 'Gagal melakukan verifikasi');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Gagal melakukan verifikasi');
+    } finally {
+      setIsVerifying(false);
     }
   };
 
@@ -225,12 +283,22 @@ const AdminLoanDetail = () => {
     return date.toLocaleString('id-ID', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
+  const statusId = detail.status_id;
+  const statusMeta = STATUS_META[statusId] || STATUS_META[21];
+  const isPending = statusId === 21;
+  const isVerifyingStage = statusId === 22;
+  const isApproved = statusId === 23;
+  const isRejected = statusId === 24;
+
   return (
     <div className="admin-loan-detail-modern">
       <div className="aldet-m-header">
         <div className="aldet-m-header-left">
+          <button className="aldet-m-back-btn" onClick={() => navigate(-1)}>
+            <ArrowLeft size={16} /> Kembali
+          </button>
           <h1>Tinjauan Pengajuan Pinjaman</h1>
-          <span className="aldet-m-badge-pending">Menunggu Keputusan</span>
+          <span className={`aldet-m-badge aldet-m-badge-${statusMeta.className}`}>{statusMeta.label}</span>
         </div>
         <p className="aldet-m-date">Diajukan pada {formatDate(detail.applied_at)}</p>
       </div>
@@ -257,24 +325,26 @@ const AdminLoanDetail = () => {
             </button>
           </div>
 
-          <div className="aldet-m-card ai-card">
-            <h2 className="aldet-m-card-title">Sistem Analisa Risiko (AI)</h2>
-            <div className="ai-risk-status">
-              <span className="ai-risk-label">Kelayakan:</span>
-              <span className={`ai-risk-badge ${aiSuggestion?.eligibility?.toLowerCase() || 'low'}`}>
-                {aiSuggestion?.eligibility || 'Menghitung...'}
-              </span>
-            </div>
-            {aiSuggestion && (
-              <div className="ai-risk-confidence">
-                Tingkat Keyakinan: <strong>{aiSuggestion.confidence_score}%</strong>
+          {isPending && (
+            <div className="aldet-m-card ai-card">
+              <h2 className="aldet-m-card-title">Sistem Analisa Risiko (AI)</h2>
+              <div className="ai-risk-status">
+                <span className="ai-risk-label">Kelayakan:</span>
+                <span className={`ai-risk-badge ${aiSuggestion?.eligibility?.toLowerCase() || 'low'}`}>
+                  {aiSuggestion?.eligibility || 'Menghitung...'}
+                </span>
               </div>
-            )}
-            <div className="ai-risk-suggestion">
-              Rekomendasi Bunga: <strong>{aiSuggestion?.suggested_interest_rate || '0.5'}%</strong> flat
+              {aiSuggestion && (
+                <div className="ai-risk-confidence">
+                  Tingkat Keyakinan: <strong>{aiSuggestion.confidence_score}%</strong>
+                </div>
+              )}
+              <div className="ai-risk-suggestion">
+                Rekomendasi Bunga: <strong>{aiSuggestion?.suggested_interest_rate || '0.5'}%</strong> flat
+              </div>
             </div>
-          </div>
-          
+          )}
+
           {/* Document Preview */}
           <div className="aldet-m-card doc-card">
             <h2 className="aldet-m-card-title">Dokumen Pendukung</h2>
@@ -317,11 +387,13 @@ const AdminLoanDetail = () => {
               <div className="config-item">
                 <div className="config-label">
                   Jumlah Pengajuan
-                  <button className="icon-btn" onClick={() => setIsEditingAmount(!isEditingAmount)}>
-                    <Edit2 size={14} />
-                  </button>
+                  {isPending && (
+                    <button className="icon-btn" onClick={() => setIsEditingAmount(!isEditingAmount)}>
+                      <Edit2 size={14} />
+                    </button>
+                  )}
                 </div>
-                {isEditingAmount ? (
+                {isPending && isEditingAmount ? (
                   <div className="input-with-prefix">
                     <span>Rp</span>
                     <input
@@ -335,15 +407,17 @@ const AdminLoanDetail = () => {
                   <div className="config-value highlight-val">{formatRupiah(amountRequested)}</div>
                 )}
               </div>
-              
+
               <div className="config-item">
                 <div className="config-label">
                   Jangka Waktu
-                  <button className="icon-btn" onClick={() => setIsEditingTerm(!isEditingTerm)}>
-                    <Edit2 size={14} />
-                  </button>
+                  {isPending && (
+                    <button className="icon-btn" onClick={() => setIsEditingTerm(!isEditingTerm)}>
+                      <Edit2 size={14} />
+                    </button>
+                  )}
                 </div>
-                {isEditingTerm ? (
+                {isPending && isEditingTerm ? (
                   <div className="input-with-suffix">
                     <input
                       type="number"
@@ -357,15 +431,17 @@ const AdminLoanDetail = () => {
                   <div className="config-value">{repaymentTerm} bulan</div>
                 )}
               </div>
-              
+
               <div className="config-item">
                 <div className="config-label">
                   Bunga
-                  <button className="icon-btn" onClick={() => setIsEditingInterest(!isEditingInterest)}>
-                    <Edit2 size={14} />
-                  </button>
+                  {isPending && (
+                    <button className="icon-btn" onClick={() => setIsEditingInterest(!isEditingInterest)}>
+                      <Edit2 size={14} />
+                    </button>
+                  )}
                 </div>
-                {isEditingInterest ? (
+                {isPending && isEditingInterest ? (
                   <div className="input-with-suffix">
                     <input
                       type="number"
@@ -383,90 +459,201 @@ const AdminLoanDetail = () => {
             </div>
 
             {/* Allocation Checking Panel */}
-            <div className={`allocation-panel ${isOverLimit ? 'over-limit' : 'safe'}`}>
-              <h3 className="alloc-title">Pengecekan Kuota Dana (Bulan Ini)</h3>
-              {allocationLoading ? (
-                <p className="alloc-loader">Menghitung sisa alokasi...</p>
-              ) : (
-                <div className="alloc-details">
-                  <div className="alloc-row">
-                    <span>Sisa Kuota Sistem:</span>
-                    <strong>{formatRupiah(remainingAllocation)}</strong>
+            {isPending && (
+              <div className={`allocation-panel ${isOverLimit ? 'over-limit' : 'safe'}`}>
+                <h3 className="alloc-title">Pengecekan Kuota Dana (Bulan Ini)</h3>
+                {allocationLoading ? (
+                  <p className="alloc-loader">Menghitung sisa alokasi...</p>
+                ) : (
+                  <div className="alloc-details">
+                    <div className="alloc-row">
+                      <span>Sisa Kuota Sistem:</span>
+                      <strong>{formatRupiah(remainingAllocation)}</strong>
+                    </div>
+                    <div className="alloc-row">
+                      <span>Dibutuhkan:</span>
+                      <strong>{formatRupiah(parsedAmount)}</strong>
+                    </div>
+                    <div className={`alloc-status ${isOverLimit ? 'error' : 'success'}`}>
+                      {isOverLimit ? (
+                        <><XCircle size={18} /> Dana tidak mencukupi untuk persetujuan</>
+                      ) : (
+                        <><CheckCircle size={18} /> Kuota dana mencukupi</>
+                      )}
+                    </div>
                   </div>
-                  <div className="alloc-row">
-                    <span>Dibutuhkan:</span>
-                    <strong>{formatRupiah(parsedAmount)}</strong>
-                  </div>
-                  <div className={`alloc-status ${isOverLimit ? 'error' : 'success'}`}>
-                    {isOverLimit ? (
-                      <><XCircle size={18} /> Dana tidak mencukupi untuk persetujuan</>
-                    ) : (
-                      <><CheckCircle size={18} /> Kuota dana mencukupi</>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="aldet-m-card decision-card">
-            <h2 className="aldet-m-card-title">Tindak Lanjut & Keputusan</h2>
-            
-            <div className="upload-section">
-              <label className="upload-label" htmlFor="proof_upload">
-                <UploadCloud size={24} color="#6366f1" />
-                <div className="upload-text">
-                  <span className="upload-title">Unggah Bukti Transfer (Wajib untuk Setuju)</span>
-                  <span className="upload-sub">Format: JPG, PNG, PDF.</span>
-                </div>
-              </label>
-              <input
-                id="proof_upload"
-                type="file"
-                accept="image/*,.pdf"
-                onChange={(e) => {
-                  const file = e.target.files?.[0] || null;
-                  setProofFile(file);
-                  setProofFileName(file ? file.name : '');
-                }}
-                style={{ display: 'none' }}
-              />
-              {proofFileName && <div className="file-selected">✓ {proofFileName} terpilih</div>}
-            </div>
-
-            <div className="note-section">
-              <label>Catatan Admin (Wajib)</label>
-              <textarea 
-                className="m-textarea"
-                placeholder="Tuliskan catatan alasan persetujuan atau penolakan..."
-                value={rejectReason}
-                onChange={(e) => setRejectReason(e.target.value)}
-              />
-            </div>
-
-            <div className="action-buttons">
-              <button
-                className="btn-reject"
-                onClick={handleReject}
-                disabled={isDecisionLocked || isRejecting || isApproving}
-              >
-                {isRejecting ? <><Loader size={14} className="spinner" /> Memproses...</> : 'Tolak Pengajuan'}
-              </button>
-              <button
-                className={`btn-approve ${isOverLimit ? 'disabled' : ''}`}
-                onClick={handleApprove}
-                disabled={isDecisionLocked || !proofFile || isOverLimit || isApproving || isRejecting}
-              >
-                {isApproving ? <><Loader size={14} className="spinner" /> Memproses...</> : isOverLimit ? 'Dana Kurang' : 'Setujui Pinjaman'}
-              </button>
-            </div>
-            {(isDecisionLocked || (!proofFile && !isOverLimit)) && (
-              <div className="validation-msg">
-                <AlertCircle size={14} />
-                <span>Harap lengkapi catatan keputusan dan bukti transfer.</span>
+                )}
               </div>
             )}
           </div>
+
+          {isPending && (
+            <div className="aldet-m-card decision-card">
+              <h2 className="aldet-m-card-title">Tindak Lanjut & Keputusan</h2>
+
+              <div className="note-section">
+                <label>Catatan Admin (Wajib)</label>
+                <textarea
+                  className="m-textarea"
+                  placeholder="Tuliskan catatan alasan persetujuan atau penolakan..."
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                />
+              </div>
+
+              <div className="action-buttons">
+                <button
+                  className="btn-reject"
+                  onClick={handleReject}
+                  disabled={isDecisionLocked || isRejecting || isApproving}
+                >
+                  {isRejecting ? <><Loader size={14} className="spinner" /> Memproses...</> : 'Tolak Pengajuan'}
+                </button>
+                <button
+                  className={`btn-approve ${isOverLimit ? 'disabled' : ''}`}
+                  onClick={handleApprove}
+                  disabled={isDecisionLocked || isOverLimit || isApproving || isRejecting}
+                >
+                  {isApproving ? <><Loader size={14} className="spinner" /> Memproses...</> : isOverLimit ? 'Dana Kurang' : 'Setujui Pinjaman'}
+                </button>
+              </div>
+              {isDecisionLocked && (
+                <div className="validation-msg">
+                  <AlertCircle size={14} />
+                  <span>Harap lengkapi catatan keputusan.</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {isVerifyingStage && (
+            <div className="aldet-m-card decision-card">
+              <h2 className="aldet-m-card-title">Verifikasi Transfer Dana</h2>
+              <p className="verify-hint">Pinjaman telah disetujui dan cicilan telah dibuat. Setelah dana ditransfer ke anggota, unggah gambar bukti transfer untuk menyelesaikan proses persetujuan.</p>
+
+              <div className="upload-section">
+                <label className="upload-label" htmlFor="proof_upload">
+                  <UploadCloud size={24} color="#6366f1" />
+                  <div className="upload-text">
+                    <span className="upload-title">Unggah Gambar Bukti Transfer</span>
+                    <span className="upload-sub">Format: JPG, PNG.</span>
+                  </div>
+                </label>
+                <input
+                  id="proof_upload"
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] || null;
+                    setProofFile(file);
+                    setProofFileName(file ? file.name : '');
+                  }}
+                  style={{ display: 'none' }}
+                />
+                {proofFileName && <div className="file-selected">✓ {proofFileName} terpilih</div>}
+              </div>
+
+              <div className="action-buttons">
+                <button
+                  className="btn-approve"
+                  onClick={handleVerify}
+                  disabled={!proofFile || isVerifying}
+                  style={{ flex: 1 }}
+                >
+                  {isVerifying ? <><Loader size={14} className="spinner" /> Memproses...</> : 'Verifikasi & Setujui Pinjaman'}
+                </button>
+              </div>
+              {!proofFile && (
+                <div className="validation-msg">
+                  <AlertCircle size={14} />
+                  <span>Harap unggah gambar bukti transfer terlebih dahulu.</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {isApproved && (
+            <div className="aldet-m-card decision-card">
+              <h2 className="aldet-m-card-title">Informasi Persetujuan</h2>
+              <div className="config-grid">
+                <div className="config-item">
+                  <div className="config-label">Pokok Pinjaman</div>
+                  <div className="config-value">{formatRupiah(detail.principal_amount)}</div>
+                </div>
+                <div className="config-item">
+                  <div className="config-label">Total Bunga</div>
+                  <div className="config-value">{formatRupiah(detail.interest_amount)}</div>
+                </div>
+                <div className="config-item">
+                  <div className="config-label">Total Pembayaran</div>
+                  <div className="config-value highlight-val">{formatRupiah(detail.total_amount)}</div>
+                </div>
+                <div className="config-item">
+                  <div className="config-label">Tanggal Mulai</div>
+                  <div className="config-value">{detail.start_date ? new Date(detail.start_date).toLocaleDateString('id-ID') : '-'}</div>
+                </div>
+              </div>
+              {detail.proof_of_transfer && (
+                <button
+                  className="doc-preview-link"
+                  onClick={() => setPreviewDoc({ url: detail.proof_of_transfer, name: 'Bukti Transfer' })}
+                  style={{ background: 'none', border: '1px solid #e2e8f0', cursor: 'pointer', width: '100%', textAlign: 'left', marginTop: 16 }}
+                >
+                  <Eye size={20} color="#4f46e5" />
+                  <span>Lihat Bukti Transfer</span>
+                </button>
+              )}
+            </div>
+          )}
+
+          {isRejected && (
+            <div className="aldet-m-card decision-card">
+              <h2 className="aldet-m-card-title">Informasi Penolakan</h2>
+              <div className="note-section">
+                <label>Alasan Penolakan</label>
+                <div className="reject-reason-box">{detail.reject_reason || '-'}</div>
+              </div>
+              <p className="aldet-m-date" style={{ marginTop: 12 }}>
+                Ditolak oleh {detail.admin_email || 'admin'} pada {formatDate(detail.updated_at)}
+              </p>
+            </div>
+          )}
+
+          {(isVerifyingStage || isApproved) && installments.length > 0 && (
+            <div className="aldet-m-card installments-card">
+              <h2 className="aldet-m-card-title">Jadwal Cicilan Pinjaman</h2>
+              <div className="installment-table-wrapper">
+                <table className="installment-table">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Jatuh Tempo</th>
+                      <th>Pokok</th>
+                      <th>Bunga</th>
+                      <th>Total</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {installments.map((inst) => (
+                      <tr key={inst.id}>
+                        <td>{inst.installment_number}</td>
+                        <td>{inst.due_date ? new Date(inst.due_date).toLocaleDateString('id-ID') : '-'}</td>
+                        <td>{formatRupiah(inst.amount_principal)}</td>
+                        <td>{formatRupiah(inst.amount_interest)}</td>
+                        <td>{formatRupiah(inst.amount_total)}</td>
+                        <td>
+                          <span className={`installment-status ${String(inst.status_code).toLowerCase()}`}>
+                            {inst.status_code}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

@@ -14,6 +14,12 @@ from api.master.models import Status, Member, SHUComponent, Department, PaymentC
 from rest_framework import serializers
 from django.utils import timezone
 from django.core.files.storage import default_storage
+from api.utils.auth import (
+    build_auth_token as _build_auth_token,
+    read_auth_token as _read_auth_token,
+    AUTH_TOKEN_MAX_AGE,
+    get_verified_admin,
+)
 
 class SHUComponentSerializer(serializers.ModelSerializer):
     class Meta:
@@ -99,6 +105,7 @@ def _build_reset_token(email):
 def _read_reset_token(token, max_age_seconds=3600):
     signer = TimestampSigner(salt='password-reset')
     return signer.unsign(token, max_age=max_age_seconds)
+
 
 class StatusViewSet(viewsets.ViewSet):
     def list(self, request):
@@ -238,6 +245,8 @@ class AuthViewSet(viewsets.ViewSet):
                     # Add flags to response
                     user_data['password_was_plain_text'] = password_was_plain_text
                     user_data['last_login'] = timezone.now().isoformat()
+                    user_data['token'] = _build_auth_token(user_data['email'])
+                    user_data['token_expires_in'] = AUTH_TOKEN_MAX_AGE
 
                     return Response(user_data)
 
@@ -251,6 +260,18 @@ class AuthViewSet(viewsets.ViewSet):
         email = (request.data.get('email') or '').strip().lower()
         if not email:
             return Response({'is_active': False, 'has_pending_close_account': False})
+
+        auth_header = request.headers.get('Authorization', '')
+        token = auth_header[7:].strip() if auth_header.lower().startswith('bearer ') else ''
+        if not token:
+            return Response({'is_active': False, 'has_pending_close_account': False, 'session_expired': True})
+        try:
+            token_email = _read_auth_token(token)
+        except (SignatureExpired, BadSignature):
+            return Response({'is_active': False, 'has_pending_close_account': False, 'session_expired': True})
+        if token_email.strip().lower() != email:
+            return Response({'is_active': False, 'has_pending_close_account': False, 'session_expired': True})
+
         try:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -449,9 +470,9 @@ class AuthViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['post'])
     def approve_close_account(self, request):
         """Approve close account request via stored procedure"""
+        admin_id, _ = get_verified_admin(request)
         close_account_id = request.data.get('id')
         notes = request.data.get('comment', '')
-        admin_id = request.data.get('admin_id')
         transfer_file = request.data.get('transfer_file', '')
         # If an actual uploaded file is sent in multipart, persist it to storage now
         uploaded_transfer = request.FILES.get('transfer_file')
@@ -520,9 +541,9 @@ class AuthViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['post'])
     def reject_close_account(self, request):
         """Reject close account request via stored procedure"""
+        admin_id, _ = get_verified_admin(request)
         close_account_id = request.data.get('id')
         notes = request.data.get('comment', '')
-        admin_id = request.data.get('admin_id')
         # allow optional transfer file upload on rejection as well
         uploaded_transfer = request.FILES.get('transfer_file')
         transfer_link = ''

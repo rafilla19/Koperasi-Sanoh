@@ -34,6 +34,7 @@ from .models import LoanApplication, LoanType, Loan, LoanInstallment
 from api.master.models import Status
 from .serializers import LoanApplicationSerializer, LoanTypeSerializer, LoanSerializer, LoanInstallmentSerializer
 from ml_service.trainer import get_prediction, trigger_model_training
+from api.utils.auth import get_verified_admin, get_verified_member
 
 def add_months(sourcedate, months):
     month = sourcedate.month - 1 + months
@@ -163,37 +164,54 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def admin_pending_list(self, request):
+        status_map = {
+            'pending': 21,
+            'verifying': 22,
+            'approved': 23,
+            'rejected': 24,
+        }
+        status_id = status_map.get(request.query_params.get('status'), 21)
+
         query = """
-        SELECT m.full_name, m.id AS employee_id, 
-        d.department_name, la.purpose, la.duration_months, la.amount_requested, la.id as application_id
-        FROM loan_applications la 
+        SELECT m.full_name, m.id AS employee_id,
+        d.department_name, la.purpose, la.duration_months, la.amount_requested, la.id as application_id,
+        la.applied_at, la.status_id, s.status_code, s.status_name
+        FROM loan_applications la
         INNER JOIN members m ON la.member_id = m.id
         INNER JOIN departments d ON m.department_id = d.id
         INNER JOIN users u ON m.user_id = u.id
-        WHERE la.status_id = 21 AND u.is_active IS TRUE
+        INNER JOIN statuses s ON s.id = la.status_id
+        WHERE la.status_id = %s AND u.is_active IS TRUE
+        ORDER BY la.applied_at DESC
         """
-        
+
         with connection.cursor() as cursor:
-            cursor.execute(query)
+            cursor.execute(query, [status_id])
             columns = [col[0] for col in cursor.description]
             results = [dict(zip(columns, row)) for row in cursor.fetchall()]
-            
+
         return Response(results)
 
     @action(detail=True, methods=['get'])
     def admin_application_detail(self, request, pk=None):
         query = """
-        SELECT m.full_name, m.id as member_id, 
-        d.department_name, la.purpose, la.duration_months, la.amount_requested, 
-        m.nik_employee, m.phone_number, u.email, la.applied_at, la.reject_reason, 
+        SELECT m.full_name, m.id as member_id,
+        d.department_name, la.purpose, la.duration_months, la.amount_requested,
+        m.nik_employee, m.phone_number, u.email, la.applied_at, la.reject_reason, la.updated_at,
         la.salary_statement_file, lt.name as loan_type_name,
-        adm.email as admin_email
-        FROM loan_applications la 
+        adm.email as admin_email,
+        la.status_id, s.status_code, s.status_name,
+        l.id as loan_id, l.principal_amount, l.interest_amount, l.total_amount,
+        l.proof_of_transfer, l.start_date, l.due_date,
+        ROUND((l.interest_amount / NULLIF(l.principal_amount, 0)) * 100, 2) AS interest_rate_percent
+        FROM loan_applications la
         JOIN members m ON la.member_id = m.id
         JOIN departments d ON m.department_id = d.id
         JOIN users u ON m.user_id = u.id
         LEFT JOIN loan_types lt ON la.loan_type_id = lt.id
         LEFT JOIN users adm ON la.admin_id = adm.id
+        LEFT JOIN statuses s ON s.id = la.status_id
+        LEFT JOIN loans l ON l.application_id = la.id
         WHERE la.id = %s AND u.is_active IS TRUE
         """
         with connection.cursor() as cursor:
@@ -204,6 +222,8 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
                 result = dict(zip(columns, row))
                 if result.get('salary_statement_file'):
                     result['salary_statement_file'] = get_absolute_media_url(request, result['salary_statement_file'])
+                if result.get('proof_of_transfer'):
+                    result['proof_of_transfer'] = get_absolute_media_url(request, result['proof_of_transfer'])
                 return Response(result)
             return Response({'error': 'Application not found'}, status=404)
 
@@ -266,17 +286,14 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response({'error': str(e)}, status=400)
 
-    @action(detail=True, methods=['post'], parser_classes=[MultiPartParser, FormParser])
+    @action(detail=True, methods=['post'])
     def approve(self, request, pk=None):
+        admin_user_id, _ = get_verified_admin(request)
         try:
             application = self.get_object()
             repayment_term = int(request.data.get('repayment_term', application.duration_months))
             interest_rate_percent = Decimal(str(request.data.get('interest_rate', '0.5')))
             updated_amount = Decimal(str(request.data.get('amount_requested', application.amount_requested)))
-            proof_file = request.FILES.get('proof_of_transfer')
-
-            if not proof_file:
-                return Response({'error': 'Bukti transfer wajib diunggah untuk menyetujui pinjaman.'}, status=400)
 
             # Check Remaining Allocation
             import datetime
@@ -305,18 +322,7 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
                 rupiah_format = "Rp " + "{:,.0f}".format(remaining_allocation).replace(',', '.')
                 return Response({'error': f'Sisa alokasi dana pinjaman bulan ini tidak mencukupi (Sisa: {rupiah_format}).'}, status=400)
 
-            safe_name = os.path.basename(proof_file.name or 'proof_of_transfer')
-            safe_name = safe_name.replace(' ', '_')
-            storage_path = f"loan/bukti_transfer/{timezone.now():%Y%m%d_%H%M%S}_{uuid4().hex}_{safe_name}"
-            saved_path = default_storage.save(storage_path, proof_file)
-            proof_of_transfer = default_storage.url(saved_path)
-            if not str(proof_of_transfer).startswith('http'):
-                proof_of_transfer = get_absolute_media_url(request, saved_path)
-            
             with transaction.atomic():
-                # 1. Update Application, Create Loan, and Generate Installments via Stored Procedure
-                admin_user_id = request.data.get('admin_id', request.user.id or 1)
-                
                 # allow passing an optional admin reason/ note to the stored procedure
                 reason = (
                     request.data.get('reason') or
@@ -327,7 +333,7 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
 
                 with connection.cursor() as cursor:
                     cursor.execute(
-                        "CALL public.sp_loan_approve(%s, %s, %s, %s, %s, %s, %s)",
+                        "CALL public.sp_loan_approve(%s, %s, %s, %s, %s, %s)",
                         [
                             application.id,
                             repayment_term,
@@ -335,7 +341,6 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
                             updated_amount,
                             admin_user_id,
                             reason,
-                            proof_of_transfer,
                         ]
                     )
                 
@@ -347,24 +352,23 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
                 interest_amount = principal * (interest_rate_percent / 100)
                 total_amount = principal + interest_amount
                 
-                # Notify Member about approval
+                # Notify Member: application approved, awaiting transfer verification
                 try:
                     member_email = application.member.user.email
                     member_name = application.member.full_name
-                    
-                    subject = "Pengajuan Pinjaman Disetujui"
+
+                    subject = "Pengajuan Pinjaman Disetujui - Menunggu Verifikasi Transfer"
                     html_message = _build_email_html(
                         'Pinjaman Disetujui!',
-                        f'Halo {member_name}, pengajuan pinjaman Anda telah disetujui.',
+                        f'Halo {member_name}, pengajuan pinjaman Anda telah disetujui dan sedang menunggu proses verifikasi transfer dana.',
                         details=[
                             ('Jumlah', f'Rp {updated_amount:,.0f}'),
                             ('Jangka Waktu', f'{repayment_term} bulan'),
                             ('Suku Bunga', f'{interest_rate_percent}% / bulan'),
                             ('Total Pembayaran', f'Rp {total_amount:,.0f}'),
-                            ('Bukti Transfer', 'Terlampir dalam email ini' if saved_path else 'Tidak terlampir'),
                         ],
-                        highlight=('Status', 'Disetujui'),
-                        footer_note='Anda sekarang dapat melihat jadwal pembayaran di dashboard.'
+                        highlight=('Status', 'Diverifikasi'),
+                        footer_note='Anda akan menerima notifikasi lanjutan setelah dana selesai ditransfer.'
                     )
                     msg = EmailMultiAlternatives(
                         subject,
@@ -373,52 +377,27 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
                         [member_email]
                     )
                     msg.attach_alternative(html_message, 'text/html')
-                    
-                    # Attach proof file from default storage (supports S3/Supabase/local)
-                    if saved_path:
-                        attached = False
-                        try:
-                            with default_storage.open(saved_path, 'rb') as stored_file:
-                                file_bytes = stored_file.read()
-                            filename_only = os.path.basename(saved_path) or 'proof_of_transfer'
-                            mime_type = mimetypes.guess_type(filename_only)[0] or 'application/octet-stream'
-                            msg.attach(filename_only, file_bytes, mime_type)
-                            attached = True
-                        except Exception as attach_err:
-                            print(f"Failed to attach loan approval proof file: {str(attach_err)}")
-                        if not attached and proof_of_transfer:
-                            try:
-                                with urlopen(proof_of_transfer) as response:
-                                    remote_bytes = response.read()
-                                remote_name = os.path.basename(saved_path) or 'proof_of_transfer'
-                                remote_mime = mimetypes.guess_type(remote_name)[0] or 'application/octet-stream'
-                                msg.attach(remote_name, remote_bytes, remote_mime)
-                                attached = True
-                            except Exception as url_attach_err:
-                                print(f"Failed to attach loan approval proof file from URL: {str(url_attach_err)}")
-
                     msg.send(fail_silently=True)
                 except Exception as e:
                     print(f"Failed to send member approval notification: {str(e)}")
-                
+
                 # Trigger ML Training in background (optional, but requested 'every data masuk')
                 try:
                     trigger_model_training()
                 except Exception as e:
                     print(f"ML Training failed: {str(e)}")
-                
-            return Response({'message': 'Pinjaman berhasil disetujui dan cicilan berhasil dibuat'})
+
+            return Response({'message': 'Pinjaman berhasil disetujui, menunggu verifikasi transfer dana'})
         except Exception as e:
             return Response({'error': str(e)}, status=400)
 
     @action(detail=True, methods=['post'])
     def reject(self, request, pk=None):
+        admin_user_id, _ = get_verified_admin(request)
         try:
             application = self.get_object()
             reject_reason = request.data.get('reject_reason', 'No reason provided')
-            
-            admin_user_id = request.data.get('admin_id', request.user.id or 1)
-            
+
             with connection.cursor() as cursor:
                 cursor.execute(
                     "UPDATE loan_applications SET status_id = %s, reject_reason = %s, admin_id = %s WHERE id = %s",
@@ -455,12 +434,92 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response({'error': str(e)}, status=400)
 
+    @action(detail=True, methods=['post'], parser_classes=[MultiPartParser, FormParser])
+    def verify(self, request, pk=None):
+        get_verified_admin(request)
+        try:
+            application = self.get_object()
+            if application.status_id != 22:
+                return Response({'error': 'Pengajuan ini tidak dalam status verifikasi.'}, status=400)
+
+            proof_image = request.FILES.get('proof_image')
+            if not proof_image:
+                return Response({'error': 'Silakan unggah gambar bukti transfer.'}, status=400)
+
+            safe_name = os.path.basename(proof_image.name or 'bukti_verifikasi')
+            safe_name = safe_name.replace(' ', '_')
+            storage_path = f"loan/verifikasi/{timezone.now():%Y%m%d_%H%M%S}_{uuid4().hex}_{safe_name}"
+            saved_path = default_storage.save(storage_path, proof_image)
+            proof_url = default_storage.url(saved_path)
+            if not str(proof_url).startswith('http'):
+                proof_url = get_absolute_media_url(request, saved_path)
+
+            with transaction.atomic():
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        "CALL public.sp_loan_activate(%s, %s)",
+                        [application.id, proof_url]
+                    )
+
+            # Notify Member that the loan is fully approved and funds transferred
+            try:
+                member_email = application.member.user.email
+                member_name = application.member.full_name
+
+                subject = "Dana Pinjaman Telah Ditransfer"
+                html_message = _build_email_html(
+                    'Dana Pinjaman Cair!',
+                    f'Halo {member_name}, dana pinjaman Anda telah berhasil ditransfer dan pengajuan disetujui sepenuhnya.',
+                    details=[
+                        ('Bukti Transfer', 'Terlampir dalam email ini'),
+                    ],
+                    highlight=('Status', 'Disetujui'),
+                    footer_note='Anda sekarang dapat melihat jadwal pembayaran di dashboard.'
+                )
+                msg = EmailMultiAlternatives(
+                    subject,
+                    strip_tags(html_message),
+                    settings.DEFAULT_FROM_EMAIL,
+                    [member_email]
+                )
+                msg.attach_alternative(html_message, 'text/html')
+
+                # Attach the uploaded transfer proof image
+                attached = False
+                try:
+                    with default_storage.open(saved_path, 'rb') as stored_file:
+                        file_bytes = stored_file.read()
+                    filename_only = os.path.basename(saved_path) or 'bukti_transfer'
+                    mime_type = mimetypes.guess_type(filename_only)[0] or 'application/octet-stream'
+                    msg.attach(filename_only, file_bytes, mime_type)
+                    attached = True
+                except Exception as attach_err:
+                    print(f"Failed to attach loan verification proof file: {str(attach_err)}")
+                if not attached and proof_url:
+                    try:
+                        with urlopen(proof_url) as response:
+                            remote_bytes = response.read()
+                        remote_name = os.path.basename(saved_path) or 'bukti_transfer'
+                        remote_mime = mimetypes.guess_type(remote_name)[0] or 'application/octet-stream'
+                        msg.attach(remote_name, remote_bytes, remote_mime)
+                        attached = True
+                    except Exception as url_attach_err:
+                        print(f"Failed to attach loan verification proof file from URL: {str(url_attach_err)}")
+
+                msg.send(fail_silently=True)
+            except Exception as e:
+                print(f"Failed to send member verification notification: {str(e)}")
+
+            return Response({'message': 'Verifikasi berhasil, pinjaman telah disetujui sepenuhnya.', 'proof_of_transfer': proof_url})
+        except Exception as e:
+            return Response({'error': str(e)}, status=400)
+
     @action(detail=False, methods=['get'])
     def pending_summary(self, request):
         member_id = request.query_params.get('member_id', 1)
 
         query = """
-        SELECT 
+        SELECT
             la.id,
             lt.name AS type_name,
             la.amount_requested,
@@ -468,13 +527,15 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
             la.applied_at,
             la.duration_months,
             la.salary_statement_file,
-            s.status_code
+            la.status_id,
+            s.status_code,
+            s.status_name
         FROM loan_applications la
         INNER JOIN loan_types lt
             ON la.loan_type_id = lt.id
-        INNER JOIN statuses s 
-            ON s.id = la.status_id 
-        WHERE la.status_id = 21 
+        INNER JOIN statuses s
+            ON s.id = la.status_id
+        WHERE la.status_id IN (21, 22)
           AND la.member_id = %s;
         """
         
@@ -1004,13 +1065,17 @@ class LoanViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def create_payment_token(self, request, pk=None):
+        _, _, member_id, _ = get_verified_member(request)
+        if not member_id:
+            return Response({'error': 'Akun ini tidak terhubung ke data anggota.'}, status=403)
+
         import requests
         import base64
         import json
-        
+
         server_key = settings.MIDTRANS_SERVER_KEY
         is_production = settings.MIDTRANS_IS_PRODUCTION
-        
+
         auth_str = f"{server_key}:"
         auth_bytes = auth_str.encode('utf-8')
         auth_base64 = base64.b64encode(auth_bytes).decode('utf-8')
@@ -1019,28 +1084,22 @@ class LoanViewSet(viewsets.ModelViewSet):
             "Accept": "application/json",
             "Authorization": f"Basic {auth_base64}"
         }
-        
-        # Block if member has pending close account request
-        if not is_user_admin(request.user):
-            member_id = request.query_params.get('member_id', 1)
-            with connection.cursor() as cursor:
-                cursor.execute("SELECT COUNT(*) FROM close_account_requests WHERE member_id = %s AND status_id = 44 AND deleted_at IS NULL", [member_id])
-                if cursor.fetchone()[0] > 0:
-                    return Response({'error': 'Akun Anda sedang dalam proses penutupan. Pembayaran tidak dapat dilakukan.'}, status=400)
 
-        # 1. Get the earliest unpaid installment for this loan
+        # Block if member has pending close account request
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) FROM close_account_requests WHERE member_id = %s AND status_id = 44 AND deleted_at IS NULL", [member_id])
+            if cursor.fetchone()[0] > 0:
+                return Response({'error': 'Akun Anda sedang dalam proses penutupan. Pembayaran tidak dapat dilakukan.'}, status=400)
+
+        # 1. Get the earliest unpaid installment for this loan (must belong to the verified member)
         query_installment = """
         SELECT li.id, li.amount_total, li.installment_number
         FROM loan_installments li
         JOIN loans l ON l.id = li.loan_id
-        WHERE l.id = %s AND li.status_id IN (28, 30)
+        WHERE l.id = %s AND li.status_id IN (28, 30) AND l.member_id = %s
         """
-        params = [pk]
-        if not is_user_admin(request.user):
-            member_id = request.query_params.get('member_id', 1)
-            query_installment += " AND l.member_id = %s"
-            params.append(member_id)
-            
+        params = [pk, member_id]
+
         query_installment += " ORDER BY li.installment_number ASC LIMIT 1"
         
         with connection.cursor() as cursor:
@@ -2804,12 +2863,12 @@ class LoanViewSet(viewsets.ModelViewSet):
     def process_manual_payments(self, request):
         """
         Process multiple manual payments (Savings, Loans) or a single Withdrawal.
-        Invokes stored procedures: manual_loan_installment, manual_savings_transaction, 
+        Invokes stored procedures: manual_loan_installment, manual_savings_transaction,
         or manual_withdrawal_transaction.
         """
+        admin_id, _ = get_verified_admin(request)
         member_id = request.data.get('member_id')
         notes = request.data.get('notes', '')
-        admin_id = request.user.id if request.user.is_authenticated else 1 # Fallback for dev
 
         if member_id:
             with connection.cursor() as cursor:
@@ -3208,14 +3267,18 @@ class LoanViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def create_bulk_payment_token(self, request):
+        _, _, member_id, _ = get_verified_member(request)
+        if not member_id:
+            return Response({'error': 'Akun ini tidak terhubung ke data anggota.'}, status=403)
+
         import requests
         import base64
         import json
         from django.utils import timezone
-        
+
         server_key = settings.MIDTRANS_SERVER_KEY
         is_production = settings.MIDTRANS_IS_PRODUCTION
-        
+
         auth_str = f"{server_key}:"
         auth_bytes = auth_str.encode('utf-8')
         auth_base64 = base64.b64encode(auth_bytes).decode('utf-8')
@@ -3224,13 +3287,6 @@ class LoanViewSet(viewsets.ModelViewSet):
             "Accept": "application/json",
             "Authorization": f"Basic {auth_base64}"
         }
-        
-        if not request.user.is_authenticated or not hasattr(request.user, 'member'):
-            member_id = request.data.get('member_id') or request.query_params.get('member_id')
-            if not member_id:
-                return Response({'error': 'Authentication required or member_id missing'}, status=401)
-        else:
-            member_id = request.user.member.id
 
         with connection.cursor() as cursor:
             cursor.execute("SELECT COUNT(*) FROM close_account_requests WHERE member_id = %s AND status_id = 44 AND deleted_at IS NULL", [member_id])

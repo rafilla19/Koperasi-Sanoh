@@ -1,4 +1,4 @@
-import { apiUrl } from '../services/api'
+import { apiUrl, getAuthHeaders } from '../services/api'
 
 const fetchJson = async (url, options) => {
   const response = await fetch(url, options)
@@ -109,7 +109,7 @@ export const shuApi = {
   distributeMonthlyJasaModal: ({ year, month }) =>
     fetch(apiUrl('/admin/shu/jasa-modal-monthly/distribute/'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
       body: JSON.stringify({ year, month }),
     }).then(r => {
       if (!r.ok) return r.json().then(err => Promise.reject(err))
@@ -119,7 +119,7 @@ export const shuApi = {
   distributeAnnualJasaModal: ({ year, member_ids }) =>
     fetch(apiUrl('/admin/shu/jasa-modal-annual/distribute/'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
       body: JSON.stringify(member_ids ? { year, member_ids } : { year }),
     }).then(r => {
       if (!r.ok) return r.json().then(err => Promise.reject(err))
@@ -183,7 +183,7 @@ export const shuApi = {
   distributeMemberBases: (data) =>
     fetch(apiUrl('/admin/shu/member-bases/distribute/'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
       body: JSON.stringify(data),
     }).then(r => {
       if (!r.ok) return r.text().then(t => Promise.reject(new Error(`${r.status}: ${t.slice(0, 200)}`)))
