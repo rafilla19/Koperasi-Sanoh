@@ -13,6 +13,7 @@ const MemberManagement = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('all');
   const [activeFilter, setActiveFilter] = useState('all');
+  const [employeeStatusFilter, setEmployeeStatusFilter] = useState('all');
   const [departments, setDepartments] = useState([]);
 
   useEffect(() => {
@@ -22,10 +23,7 @@ const MemberManagement = () => {
 
   useEffect(() => {
     filterMembers();
-  }, [searchTerm, departmentFilter, members]);
-  useEffect(() => {
-    filterMembers();
-  }, [activeFilter]);
+  }, [searchTerm, departmentFilter, activeFilter, employeeStatusFilter, members]);
 
   const fetchDepartments = async () => {
     try {
@@ -75,6 +73,10 @@ const MemberManagement = () => {
       } else if (activeFilter === 'inactive') {
         filtered = filtered.filter(m => m.user_is_active === false || m.user_is_active === 'f' || m.user_is_active === 0);
       }
+    }
+
+    if (employeeStatusFilter !== 'all') {
+      filtered = filtered.filter(m => m.employee_status?.toUpperCase() === employeeStatusFilter);
     }
 
     setFilteredMembers(filtered);
@@ -202,6 +204,17 @@ const MemberManagement = () => {
               <option value="all">Semua Status</option>
               <option value="active">Aktif</option>
               <option value="inactive">Tidak Aktif</option>
+            </select>
+            <select
+              className="mm-filter mm-filter-employee-status"
+              value={employeeStatusFilter}
+              onChange={(e) => setEmployeeStatusFilter(e.target.value)}
+              style={{ marginLeft: 12 }}
+            >
+              <option value="all">Semua Tipe Karyawan</option>
+              <option value="FULLTIME">Fulltime</option>
+              <option value="CONTRACT">Contract</option>
+              <option value="OUTSOURCE">Outsource</option>
             </select>
           </div>
         </div>

@@ -527,7 +527,10 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
             la.salary_statement_file,
             la.status_id,
             s.status_code,
-            s.status_name
+            s.status_name,
+            la.reject_reason AS admin_note,
+            la.interest_rate,
+            (la.amount_requested + (la.amount_requested * la.interest_rate / 100)) AS total_repayment
         FROM loan_applications la
         INNER JOIN loan_types lt
             ON la.loan_type_id = lt.id

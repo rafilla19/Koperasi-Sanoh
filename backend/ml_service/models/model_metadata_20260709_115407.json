@@ -1,7 +1,7 @@
 {
-  "version": "20260706_152514",
-  "model_file": "loan_model_20260706_152514.pkl",
-  "saved_at": "2026-07-06T15:25:14.372809",
+  "version": "20260709_115407",
+  "model_file": "loan_model_20260709_115407.pkl",
+  "saved_at": "2026-07-09T11:54:07.485481",
   "feature_names": [
     "age",
     "member_tenure_months",
@@ -20,16 +20,16 @@
     "monthly_installment_estimation",
     "voluntary_to_installment_ratio"
   ],
-  "training_date": "2026-07-06T15:25:14.232737",
+  "training_date": "2026-07-09T11:54:07.404254",
   "model_info": {
     "algorithm": "XGBoost + SMOTE",
-    "cv_accuracy": 0.8600000000000001,
-    "cv_f1_macro": 0.7699019607843137,
-    "holdout_roc_auc": 0.9375,
-    "holdout_f1_macro": 0.803921568627451,
-    "training_samples_original": 50,
-    "training_samples_smote": 82,
-    "test_samples": 10,
+    "cv_accuracy": 0.8236363636363636,
+    "cv_f1_macro": 0.6295541549953315,
+    "holdout_roc_auc": 0.8333333333333333,
+    "holdout_f1_macro": 0.6944444444444444,
+    "training_samples_original": 51,
+    "training_samples_smote": 84,
+    "test_samples": 11,
     "n_features": 16,
     "feature_names": [
       "age",

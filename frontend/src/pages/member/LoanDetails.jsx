@@ -591,6 +591,24 @@ const LoanDetails = () => {
               <span className="lbl">PERMINTAAN CICILAN</span>
               <span className="val">{loanData?.duration_months} Bulan Permintaan Angsuran</span>
             </div>
+            {status === 'Verifying' && (
+              <>
+                <div className="ld-g-col">
+                  <span className="lbl">BUNGA (FLAT)</span>
+                  <span className="val">{parseFloat(loanData?.interest_rate || 0).toFixed(1).replace('.', ',')}%</span>
+                </div>
+                <div className="ld-g-col">
+                  <span className="lbl">TOTAL REPAYMENT</span>
+                  <span className="val">{formatRupiah(loanData?.total_repayment)}</span>
+                </div>
+                {loanData?.admin_note && (
+                  <div className="ld-g-col" style={{gridColumn: '1 / -1'}}>
+                    <span className="lbl">CATATAN ADMIN</span>
+                    <span className="val">{loanData.admin_note}</span>
+                  </div>
+                )}
+              </>
+            )}
             {loanData?.salary_statement_file && (
               <div className="ld-g-col">
                 <span className="lbl">SLIP GAJI</span>

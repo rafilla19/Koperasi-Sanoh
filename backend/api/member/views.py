@@ -261,10 +261,13 @@ class MemberViewSet(viewsets.ViewSet):
                 u.email,
                 u.is_active AS user_is_active,
                 m.phone_number,
+                m.employee_status_id,
+                es.status_name AS employee_status,
                 COALESCE(sw.total_saving, 0) AS total_saving
             FROM members m
             INNER JOIN users u ON u.id = m.user_id
             LEFT JOIN departments d ON d.id = m.department_id
+            LEFT JOIN employee_statuses es ON es.id = m.employee_status_id
             LEFT JOIN (
                 SELECT member_id, SUM(balance) AS total_saving
                 FROM saving_wallets

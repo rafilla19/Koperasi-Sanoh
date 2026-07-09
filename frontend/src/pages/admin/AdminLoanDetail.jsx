@@ -543,6 +543,18 @@ const AdminLoanDetail = () => {
               <h2 className="aldet-m-card-title">Verifikasi Transfer Dana</h2>
               <p className="verify-hint">Pinjaman telah disetujui dan cicilan telah dibuat. Setelah dana ditransfer ke anggota, unggah gambar bukti transfer untuk menyelesaikan proses persetujuan.</p>
 
+              {detail.reject_reason && (
+                <div className="note-section">
+                  <label>Catatan Admin (saat persetujuan)</label>
+                  <div
+                    className="reject-reason-box"
+                    style={{ background: '#eef2ff', border: '1px solid #c7d2fe', color: '#3730a3' }}
+                  >
+                    {detail.reject_reason}
+                  </div>
+                </div>
+              )}
+
               <div className="upload-section">
                 <label className="upload-label" htmlFor="proof_upload">
                   <UploadCloud size={24} color="#6366f1" />

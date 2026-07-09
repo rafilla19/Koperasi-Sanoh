@@ -338,10 +338,22 @@ def generate_recommendation(status, prob_eligible, prob_risky, risk_level,
 
 
 def trigger_model_training():
-    """Memicu retraining model."""
+    """Memicu retraining model secara asynchronous (tidak memblokir request)."""
+    import threading
+    from django.core.management import call_command
+    from django.db import connections
+
+    def _run_training():
+        try:
+            call_command('train_loan_model')
+        except Exception as e:
+            logger.error(f"Error running background model training: {str(e)}")
+        finally:
+            connections.close_all()
+
     try:
-        from django.core.management import call_command
-        call_command('train_loan_model')
+        thread = threading.Thread(target=_run_training, daemon=True)
+        thread.start()
         return True
     except Exception as e:
         logger.error(f"Error triggering model training: {str(e)}")
