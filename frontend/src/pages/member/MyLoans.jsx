@@ -268,7 +268,7 @@ const MyLoans = () => {
         </div>
         <div className="ml-ov-card">
           <div className="ml-ov-label">POTONGAN GAJI BERIKUTNYA</div>
-          <div className="ml-ov-value">{nextDeduction}</div>
+          <div className="ml-ov-value">{showAutoDeductBanner ? nextDeduction : '-'}</div>
           <div className="ml-ov-badge info">
             <span className="dot"></span>
             Dijadwalkan Otomatis
@@ -281,7 +281,7 @@ const MyLoans = () => {
           </div>
           <div>
             <h4>Potongan Pembayaran Otomatis</h4>
-            <p>Pembayaran dipotong otomatis oleh HRD pada tanggal 25 setiap bulan</p>
+            <p>Pembayaran dipotong otomatis oleh HRD pada tanggal 27 setiap bulan</p>
           </div>
         </div>
       )}

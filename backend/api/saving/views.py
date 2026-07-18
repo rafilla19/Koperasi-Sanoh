@@ -1745,6 +1745,19 @@ def admin_upload_transfer(request, pk):
                 [pk, 19, None, public_url]
             )
             cursor.fetchone()
+
+            # Generate a payment reference for withdrawals processed through the
+            # normal approve/pay flow (sp_process_withdrawal_status never sets one).
+            cursor.execute(
+                "SELECT 'WDR-' || TO_CHAR(NOW(), 'YYYYMMDD') || '-' || "
+                "LPAD(NEXTVAL('wdr_payment_ref_seq')::TEXT, 5, '0')"
+            )
+            reference_code = cursor.fetchone()[0]
+            cursor.execute(
+                "UPDATE withdrawals SET payment_reference_id = %s "
+                "WHERE id = %s AND payment_reference_id IS NULL",
+                [reference_code, pk]
+            )
     except Exception as exc:
         msg = str(exc)
         if 'tidak ditemukan' in msg.lower():

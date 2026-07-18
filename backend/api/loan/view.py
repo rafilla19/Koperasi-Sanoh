@@ -33,7 +33,7 @@ from html import escape
 from .models import LoanApplication, LoanType, Loan, LoanInstallment
 from api.master.models import Status
 from .serializers import LoanApplicationSerializer, LoanTypeSerializer, LoanSerializer, LoanInstallmentSerializer
-from ml_service.trainer import get_prediction, trigger_model_training
+from ml_service.trainer import get_prediction
 from api.utils.auth import get_verified_admin, get_verified_member
 
 def add_months(sourcedate, months):
@@ -380,12 +380,6 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
                     msg.send(fail_silently=True)
                 except Exception as e:
                     print(f"Failed to send member approval notification: {str(e)}")
-
-                # Trigger ML Training in background (optional, but requested 'every data masuk')
-                try:
-                    trigger_model_training()
-                except Exception as e:
-                    print(f"ML Training failed: {str(e)}")
 
             return Response({'message': 'Pinjaman berhasil disetujui, menunggu verifikasi transfer dana'})
         except Exception as e:

@@ -19,13 +19,10 @@ const MyProfile = () => {
 
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [isRequestingVoluntary, setIsRequestingVoluntary] = useState(false);
   const [isProcessingClosure, setIsProcessingClosure] = useState(false);
   const [banks, setBanks] = useState([]);
   const [isValidated, setIsValidated] = useState(true);
   const [isValidating, setIsValidating] = useState(false);
-  const [demoBypass, setDemoBypass] = useState(false);
-  const [pendingVoluntaryAmount, setPendingVoluntaryAmount] = useState(0);
   const [profile, setProfile] = useState({
     fullName: '',
     nik: '',
@@ -37,8 +34,6 @@ const MyProfile = () => {
     bankId: '',
     accName: '',
     accNo: '',
-    volSaving: '',
-    volRequestSaving: '',
     mandatoryBal: 0,
     voluntaryBal: 0,
     loanBal: 0,
@@ -54,8 +49,6 @@ const MyProfile = () => {
       const response = await fetch(apiUrl(`/member/members/profile_detail/?member_id=${memberId}`));
       if (response.ok) {
         const data = await response.json();
-        const currentVoluntaryAmount = String(data.voluntary_amount ?? data.monthly_amount ?? 0);
-        const pendingRequestAmount = Number(data.pending_voluntary_amount || 0);
 
         setProfile({
           fullName: data.full_name,
@@ -68,8 +61,6 @@ const MyProfile = () => {
           bankId: data.bank_id || '',
           accName: data.account_holder_name || '',
           accNo: data.account_number || '',
-          volSaving: currentVoluntaryAmount,
-          volRequestSaving: pendingRequestAmount > 0 ? String(pendingRequestAmount) : currentVoluntaryAmount,
           mandatoryBal: data.mandatory_balance || 0,
           voluntaryBal: data.voluntary_balance || 0,
           loanBal: data.loan_balance || data.current_loan || 0,
@@ -77,7 +68,6 @@ const MyProfile = () => {
           outstandingMonthlySavingDue: data.outstanding_monthly_saving_due || 0,
           hasPendingClosure: (data.pending_closure_count || 0) > 0
         });
-        setPendingVoluntaryAmount(pendingRequestAmount);
         setIsValidated(true);
       }
     } catch (error) {
@@ -226,42 +216,6 @@ const MyProfile = () => {
     }
   };
 
-  const handleSubmitVoluntaryRequest = async () => {
-    if (isRequestingVoluntary) return;
-    if (!profile.volRequestSaving) {
-      alert("Silakan masukkan jumlah simpanan sukarela terlebih dahulu.");
-      return;
-    }
-
-    setIsRequestingVoluntary(true);
-    try {
-      const response = await fetch(apiUrl('/member/members/request_voluntary_saving/'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          member_id: memberId,
-          requested_amount: Number(profile.volRequestSaving),
-          demo_bypass: demoBypass
-        })
-      });
-
-      const resData = await response.json();
-      if (response.ok) {
-        await fetchProfile();
-        alert("Permintaan perubahan simpanan sukarela berhasil dikirim dan menunggu persetujuan admin!");
-      } else {
-        alert(resData.error || "Gagal mengirim permintaan.");
-      }
-    } catch (error) {
-      console.error('Error submitting voluntary request:', error);
-      alert('Kesalahan jaringan. Gagal mengirim permintaan.');
-    } finally {
-      setIsRequestingVoluntary(false);
-    }
-  };
-
   return (
     <div className="prof-page">
       {/* HEADER */}
@@ -385,104 +339,6 @@ const MyProfile = () => {
                 )} */}
               </div>
               {/* Validation warning removed */}
-            </div>
-            <div className="inp-group" style={{ marginTop: '24px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <label className="inp-label">
-                  KEWAJIBAN SIMPANAN SUKARELA
-                </label>
-                {pendingVoluntaryAmount > 0 && (
-                  <span style={{
-                    fontSize: '11px',
-                    backgroundColor: '#fef3c7',
-                    color: '#d97706',
-                    padding: '2px 8px',
-                    borderRadius: '4px',
-                    fontWeight: '600'
-                  }}>
-                    Menunggu Persetujuan: Rp {parseFloat(pendingVoluntaryAmount).toLocaleString('id-ID')}
-                  </span>
-                )}
-              </div>
-              <span className="inp-desc">Jumlah aktif saat ini: Rp {parseFloat(profile.volSaving || 0).toLocaleString('id-ID')}</span>
-              <span className="inp-desc">Hanya dapat diubah pada tanggal 22–23 setiap bulan (periode tutup buku)</span>
-              
-              {isEditing && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', marginTop: '4px' }}>
-                  <input 
-                    type="checkbox" 
-                    id="demo-bypass" 
-                    checked={demoBypass} 
-                    onChange={e => setDemoBypass(e.target.checked)} 
-                    style={{ cursor: 'pointer' }}
-                  />
-                  <label htmlFor="demo-bypass" style={{ fontSize: '11px', color: '#64748b', cursor: 'pointer', fontWeight: '500' }}>
-                    🔧 Presentation Demo Mode (Bypass 22nd-23rd lock)
-                  </label>
-                </div>
-              )}
-
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <div className="input-with-prefix" style={{ flex: 1, display: 'flex' }}>
-                  <div className="prefix" style={{
-                    backgroundColor: '#f1f5f9',
-                    border: '1px solid #cbd5e1',
-                    borderRight: 'none',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: '0 12px',
-                    borderTopLeftRadius: '8px',
-                    borderBottomLeftRadius: '8px',
-                    color: '#64748b',
-                    fontSize: '14px',
-                    fontWeight: '600'
-                  }}>Rp</div>
-                  <input 
-                    type="text" 
-                    placeholder="0" 
-                    value={profile.volRequestSaving} 
-                    onChange={e => setProfile({...profile, volRequestSaving: e.target.value})} 
-                    disabled={!isEditing || !(new Date().getDate() === 22 || new Date().getDate() === 23 || demoBypass)} 
-                    style={{
-                      flex: 1,
-                      borderTopLeftRadius: 0,
-                      borderBottomLeftRadius: 0
-                    }}
-                  />
-                </div>
-                {isEditing && (new Date().getDate() === 22 || new Date().getDate() === 23 || demoBypass) && (
-                  <button
-                    type="button"
-                    onClick={handleSubmitVoluntaryRequest}
-                    disabled={isRequestingVoluntary}
-                    style={{
-                      padding: '0 16px',
-                      backgroundColor: '#0a1628',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '8px',
-                      fontWeight: '600',
-                      cursor: isRequestingVoluntary ? 'not-allowed' : 'pointer',
-                      fontSize: '12px',
-                      whiteSpace: 'nowrap',
-                      transition: 'background-color 0.2s',
-                      opacity: isRequestingVoluntary ? 0.7 : 1,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px'
-                    }}
-                  >
-                    {isRequestingVoluntary ? <><Loader size={12} className="spinner" /> Mengirim...</> : 'Ajukan Perubahan'}
-                  </button>
-                )}
-              </div>
-
-              {isEditing && !(new Date().getDate() === 22 || new Date().getDate() === 23 || demoBypass) && (
-                <span style={{ fontSize: '11px', color: '#ef4444', marginTop: '4px', display: 'block' }}>
-                  Perubahan dikunci. Periode akses dibatasi pada tanggal 22-23 setiap bulan.
-                </span>
-              )}
             </div>
           </div>
         </div>
