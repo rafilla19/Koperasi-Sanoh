@@ -281,6 +281,34 @@
   height: 40px;
 }
 
+@media (max-width: 900px) {
+  .ald-table-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .ald-search,
+  .ald-filter,
+  .ald-period-filter,
+  .ald-print-btn,
+  .ald-send-reminder-btn {
+    width: 100%;
+  }
+
+  .ald-search {
+    min-height: 48px;
+  }
+
+  .ald-search input {
+    min-width: 0;
+  }
+
+  .ald-filter select,
+  .ald-period-filter select {
+    min-width: 100%;
+  }
+}
+
 .ald-period-filter select {
   height: 36px;
   border: none;
@@ -294,6 +322,7 @@
 
 .ald-search {
   flex: 1;
+  min-width: 260px;
   display: flex;
   align-items: center;
   gap: 8px;

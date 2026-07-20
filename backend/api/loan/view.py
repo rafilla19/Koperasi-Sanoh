@@ -9,6 +9,10 @@ from django.core.files.storage import default_storage
 from django.conf import settings
 from django.utils.html import strip_tags
 from decimal import Decimal
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.date import DateTrigger
+from django_apscheduler.jobstores import DjangoJobStore
+
 
 def is_user_admin(user):
     if not user or not user.is_authenticated:
@@ -58,6 +62,139 @@ def get_absolute_media_url(request, path):
 
     base_url = request.build_absolute_uri(settings.MEDIA_URL)
     return f"{base_url}{path}"
+
+
+def _send_auto_reminders_job():
+    from api.utils.email import send_styled_email
+
+    try:
+        overdue_query = """
+        SELECT DISTINCT
+            m.id as member_id, m.full_name, u.email,
+            li.installment_number, li.due_date, li.amount_total,
+            'OVERDUE' as reminder_type
+        FROM loans l
+        INNER JOIN members m ON l.member_id = m.id
+        INNER JOIN users u ON m.user_id = u.id
+        INNER JOIN loan_installments li ON li.loan_id = l.id
+        WHERE li.status_id IN (27, 28)
+          AND li.due_date <= CURRENT_DATE
+          AND u.is_active = true
+        """
+
+        upcoming_query = """
+        SELECT DISTINCT
+            m.id as member_id, m.full_name, u.email,
+            li.installment_number, li.due_date, li.amount_total,
+            'UPCOMING' as reminder_type
+        FROM loans l
+        INNER JOIN members m ON l.member_id = m.id
+        INNER JOIN users u ON m.user_id = u.id
+        INNER JOIN loan_installments li ON li.loan_id = l.id
+        WHERE li.status_id = 28
+          AND li.due_date > CURRENT_DATE
+          AND li.due_date <= CURRENT_DATE + INTERVAL '30 days'
+          AND u.is_active = true
+        ORDER BY li.due_date ASC
+        """
+
+        with connection.cursor() as cursor:
+            cursor.execute(overdue_query)
+            columns = [col[0] for col in cursor.description]
+            overdue_results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+            cursor.execute(upcoming_query)
+            columns = [col[0] for col in cursor.description]
+            upcoming_results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+        all_results = overdue_results + upcoming_results
+        if not all_results:
+            return {
+                'message': 'Tidak ada angsuran jatuh tempo atau akan datang',
+                'success_count': 0,
+                'failed_count': 0,
+                'errors': [],
+            }
+
+        members_map = {}
+        for row in all_results:
+            mid = row['member_id']
+            if mid not in members_map:
+                members_map[mid] = {
+                    'email': row['email'],
+                    'full_name': row['full_name'],
+                    'overdue': [],
+                    'upcoming': [],
+                }
+            if row['reminder_type'] == 'OVERDUE':
+                members_map[mid]['overdue'].append(row)
+            else:
+                members_map[mid]['upcoming'].append(row)
+
+        success_count = 0
+        failed_count = 0
+        errors = []
+        for mid, mdata in members_map.items():
+            try:
+                details = []
+                has_overdue = len(mdata['overdue']) > 0
+                has_upcoming = len(mdata['upcoming']) > 0
+
+                if has_overdue:
+                    details.append(('--- JATUH TEMPO ---', ''))
+                    for inst in mdata['overdue']:
+                        details.append((
+                            f"Angsuran #{inst['installment_number']} (Jatuh tempo: {inst['due_date']})",
+                            f"Rp {inst['amount_total']:,.0f}"
+                        ))
+
+                if has_upcoming:
+                    details.append(('--- AKAN DATANG ---', ''))
+                    for inst in mdata['upcoming']:
+                        details.append((
+                            f"Angsuran #{inst['installment_number']} (Jatuh tempo: {inst['due_date']})",
+                            f"Rp {inst['amount_total']:,.0f}"
+                        ))
+
+                if has_overdue and has_upcoming:
+                    subject = "PENGINGAT OTOMATIS - Angsuran Jatuh Tempo & Akan Datang"
+                    intro = f"Halo {mdata['full_name']}, Anda memiliki angsuran yang telah jatuh tempo dan angsuran yang akan datang."
+                    highlight = ("Perhatian", "Segera lunasi angsuran yang telah jatuh tempo dan persiapkan pembayaran berikutnya.")
+                elif has_overdue:
+                    subject = "PENGINGAT OTOMATIS - Angsuran Jatuh Tempo"
+                    intro = f"Halo {mdata['full_name']}, ini adalah pengingat otomatis mengenai angsuran pinjaman Anda yang belum dibayar."
+                    highlight = ("Angsuran Jatuh Tempo", "Segera lunasi pembayaran ini.")
+                else:
+                    subject = "PENGINGAT OTOMATIS - Angsuran Akan Datang"
+                    intro = f"Halo {mdata['full_name']}, ini adalah pengingat untuk angsuran Anda yang akan datang."
+                    highlight = ("Pengingat", "Pastikan saldo Anda mencukupi untuk pembayaran berikutnya.")
+
+                send_styled_email(
+                    subject=subject,
+                    recipient=mdata['email'],
+                    intro=intro,
+                    details=details,
+                    highlight=highlight,
+                    footer_note="Jika Anda memiliki pertanyaan, hubungi pengurus koperasi."
+                )
+                success_count += 1
+            except Exception as e:
+                failed_count += 1
+                errors.append(f"Member {mid}: {str(e)}")
+
+        return {
+            'message': f'Auto-reminders sent to {success_count} member(s)',
+            'success_count': success_count,
+            'failed_count': failed_count,
+            'errors': errors,
+        }
+    except Exception as e:
+        return {
+            'message': str(e),
+            'success_count': 0,
+            'failed_count': 0,
+            'errors': [str(e)],
+        }
 
 
 from api.utils.email import build_email_html as _build_email_html
@@ -1506,7 +1643,7 @@ class LoanViewSet(viewsets.ModelViewSet):
                 INNER JOIN transaction_types tt
                     ON tt.id = st.transaction_type_id
 
-                INNER JOIN payment_methods pm
+                LEFT JOIN payment_methods pm
                     ON pm.id = st.payment_method_id
 
                 INNER JOIN statuses s
@@ -1541,7 +1678,7 @@ class LoanViewSet(viewsets.ModelViewSet):
                 INNER JOIN members m
                     ON m.id = w.member_id
 
-                INNER JOIN payment_methods pm
+                LEFT JOIN payment_methods pm
                     ON pm.id = w.payment_method_id
 
                 INNER JOIN statuses s
@@ -1594,7 +1731,7 @@ class LoanViewSet(viewsets.ModelViewSet):
 
                 FROM loan_payments lp
 
-                INNER JOIN payment_methods pm
+                LEFT JOIN payment_methods pm
                     ON pm.id = lp.payment_method_id
 
                 INNER JOIN statuses s
@@ -2584,6 +2721,55 @@ class LoanViewSet(viewsets.ModelViewSet):
             })
         except Exception as e:
             return Response({'error': str(e)}, status=400)
+
+    @action(detail=False, methods=['post'])
+    def schedule_auto_all_reminders(self, request):
+        """
+        Schedule an automatic reminder job to run at a future datetime.
+        """
+        schedule_at = request.data.get('schedule_at')
+        if not schedule_at:
+            return Response({'error': 'schedule_at is required'}, status=400)
+
+        if isinstance(schedule_at, str):
+            schedule_at = schedule_at.strip()
+
+        try:
+            run_date = datetime.datetime.fromisoformat(schedule_at.replace(' ', 'T'))
+        except Exception:
+            return Response(
+                {'error': 'schedule_at must be ISO datetime like YYYY-MM-DDTHH:MM or YYYY-MM-DD HH:MM'},
+                status=400,
+            )
+
+        if run_date.tzinfo is None:
+            run_date = timezone.make_aware(run_date, timezone.get_current_timezone())
+
+        if run_date <= timezone.now():
+            return Response({'error': 'schedule_at must be a future datetime'}, status=400)
+
+        scheduler = BackgroundScheduler(timezone=settings.TIME_ZONE)
+        scheduler.add_jobstore(DjangoJobStore(), 'default')
+        job_id = f'loan_auto_reminder_{uuid4().hex}'
+
+        try:
+            scheduler.add_job(
+                _send_auto_reminders_job,
+                trigger=DateTrigger(run_date=run_date),
+                id=job_id,
+                replace_existing=False,
+                misfire_grace_time=300,
+            )
+            scheduler.start()
+            scheduler.shutdown(wait=False)
+        except Exception as e:
+            return Response({'error': str(e)}, status=400)
+
+        return Response({
+            'message': 'Jadwal pengingat otomatis berhasil dibuat',
+            'schedule_at': run_date.isoformat(),
+            'job_id': job_id,
+        })
 
     @action(detail=False, methods=['get', 'post'])
     def test_send_email(self, request):

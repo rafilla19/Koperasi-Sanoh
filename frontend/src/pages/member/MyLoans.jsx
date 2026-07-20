@@ -38,6 +38,7 @@ const MyLoans = () => {
   const [hasPendingClosure, setHasPendingClosure] = useState(false);
   const [hasNoBankAccount, setHasNoBankAccount] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
+  const [isDataLoading, setIsDataLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -47,6 +48,7 @@ const MyLoans = () => {
       const memberId = user?.member_id || 1;
 
       try {
+        setIsDataLoading(true);
         const response = await fetch(apiUrl(`/loan/loan-applications/?member_id=${memberId}`));
         if (response.ok) {
           const data = await response.json();
@@ -181,6 +183,8 @@ const MyLoans = () => {
         }
       } catch (error) {
         console.error('Failed to fetch data:', error);
+      } finally {
+        setIsDataLoading(false);
       }
     };
 
@@ -246,14 +250,14 @@ const MyLoans = () => {
         <button
           className="btn-apply-loan"
           onClick={handleApplyLoan}
-          disabled={hasActiveLoan || hasPendingLoan || hasPendingClosure || hasNoBankAccount || isNavigating}
-          style={(hasActiveLoan || hasPendingLoan || hasPendingClosure || hasNoBankAccount) ? {
+          disabled={isDataLoading || hasActiveLoan || hasPendingLoan || hasPendingClosure || hasNoBankAccount || isNavigating}
+          style={(isDataLoading || hasActiveLoan || hasPendingLoan || hasPendingClosure || hasNoBankAccount) ? {
             background: '#94a3b8',
             cursor: 'not-allowed',
             color: '#f1f5f9'
           } : {}}
         >
-          {isNavigating ? <><Loader size={16} className="spinner" /> Memuat...</> : <><Plus size={16} strokeWidth={2.5} /> Ajukan Pinjaman Baru</>}
+          {isDataLoading ? <><Loader size={16} className="spinner" /> Memuat...</> : isNavigating ? <><Loader size={16} className="spinner" /> Memuat...</> : <><Plus size={16} strokeWidth={2.5} /> Ajukan Pinjaman Baru</>}
         </button>
       </div>
 

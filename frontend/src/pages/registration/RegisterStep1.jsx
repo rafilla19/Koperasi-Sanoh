@@ -22,7 +22,7 @@ const RegisterStep1 = () => {
     setFormData(prev => ({ ...prev, [field]: val }));
   };
 
-  const onlyNumbers = (val) => val.replace(/[^0-9]/g, '');
+  const onlyNumbers = (val, maxLen = 999) => val.replace(/[^0-9]/g, '').slice(0, maxLen);
   const onlyLetters = (val) => val.replace(/[^a-zA-Z\s]/g, '');
 
   const handleContinue = (e) => {
@@ -39,7 +39,7 @@ const RegisterStep1 = () => {
           {/* Left Column */}
           <div className="reg-form-group">
             <label className="reg-form-label">NIK (Nomor Induk Kependudukan)</label>
-            <input type="text" className="reg-form-input" required value={formData.nik} onChange={handleChange('nik', onlyNumbers)} />
+            <input type="text" className="reg-form-input" required maxLength={12} value={formData.nik} onChange={handleChange('nik', (val) => onlyNumbers(val, 12))} />
           </div>
 
           <div className="reg-form-group">
@@ -49,7 +49,7 @@ const RegisterStep1 = () => {
 
           <div className="reg-form-group">
             <label className="reg-form-label">NIK Employee</label>
-            <input type="text" className="reg-form-input" required value={formData.nikEmployee} onChange={handleChange('nikEmployee', onlyNumbers)} />
+            <input type="text" className="reg-form-input" required maxLength={12} value={formData.nikEmployee} onChange={handleChange('nikEmployee', (val) => onlyNumbers(val, 12))} />
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
@@ -67,7 +67,7 @@ const RegisterStep1 = () => {
 
           <div className="reg-form-group">
             <label className="reg-form-label">No NPWP</label>
-            <input type="text" className="reg-form-input" required value={formData.npwp} onChange={handleChange('npwp', onlyNumbers)} />
+            <input type="text" className="reg-form-input" required maxLength={12} value={formData.npwp} onChange={handleChange('npwp', (val) => onlyNumbers(val, 12))} />
           </div>
 
           <div className="reg-form-group">

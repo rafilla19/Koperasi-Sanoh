@@ -58,7 +58,6 @@ const AdminLoansDashboard = () => {
   const [fundingError, setFundingError] = useState('');
   const [isSavingFunding, setIsSavingFunding] = useState(false);
   const [isSendingReminder, setIsSendingReminder] = useState(false);
-  const [isAutoSending, setIsAutoSending] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
@@ -301,7 +300,7 @@ const AdminLoansDashboard = () => {
     const isChecked = e.target.checked;
     setSelectAll(isChecked);
     if (isChecked) {
-      const allLoanIds = currentLoans.map(loan => loan.member_id);
+      const allLoanIds = filteredLoans.map(loan => loan.member_id);
       setSelectedLoans(allLoanIds);
     } else {
       setSelectedLoans([]);
@@ -351,38 +350,6 @@ const AdminLoansDashboard = () => {
       alert('Kesalahan saat mengirim pengingat. Silakan coba lagi.');
     } finally {
       setIsSendingReminder(false);
-    }
-  };
-
-  const handleAutoSendAll = async () => {
-    if (isAutoSending) return;
-    const confirmed = await window.appConfirm({
-      title: 'Kirim semua pengingat?',
-      message: 'Ini akan mengirim email pengingat ke semua anggota dengan angsuran tertunggak. Lanjutkan?',
-      confirmText: 'Kirim Pengingat',
-      cancelText: 'Batal',
-    });
-    if (!confirmed) return;
-
-    setIsAutoSending(true);
-    try {
-      const response = await fetch(apiUrl('/loan/loans/send_auto_all_reminders/'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        alert(`Proses pengingat otomatis selesai!\nBerhasil: ${data.success_count}\nGagal: ${data.failed_count || 0}`);
-      } else {
-        const error = await response.json().catch(() => ({}));
-        alert(`Gagal memicu pengingat otomatis: ${error.error || 'Unknown error'}`);
-      }
-    } catch (error) {
-      console.error(error);
-      alert('Kesalahan saat memicu pengingat otomatis');
-    } finally {
-      setIsAutoSending(false);
     }
   };
 
@@ -625,9 +592,6 @@ const AdminLoansDashboard = () => {
           <div style={{ display: 'flex', gap: '8px' }}>
             <button className="ald-send-reminder-btn" onClick={handleSendReminder} title="Kirim pengingat ke anggota terpilih" disabled={isSendingReminder}>
               {isSendingReminder ? <><Loader size={14} className="spinner" /> Mengirim...</> : 'Kirim Pengingat'}
-            </button>
-            <button className="ald-send-reminder-btn" onClick={handleAutoSendAll} title="Kirim otomatis ke semua anggota yang menunggak" style={{ background: '#f59e0b' }} disabled={isAutoSending}>
-              {isAutoSending ? <><Loader size={14} className="spinner" /> Mengirim...</> : 'Kirim Otomatis'}
             </button>
           </div>
         </div>

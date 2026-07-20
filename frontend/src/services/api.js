@@ -2,7 +2,7 @@
 const rawApiUrl = import.meta.env.VITE_API_URL || '/api/v1';
 const trimmedApiUrl = rawApiUrl.replace(/\/$/, '');
 export const API_URL = trimmedApiUrl.endsWith('/api') ? `${trimmedApiUrl}/v1` : trimmedApiUrl;
-export const API_ORIGIN = API_URL.replace(/\/api$/, '');
+export const API_ORIGIN = API_URL.replace(/\/api(\/v\d+)?$/, '');
 
 export const apiUrl = (path = '') => {
   if (!path) return API_URL;

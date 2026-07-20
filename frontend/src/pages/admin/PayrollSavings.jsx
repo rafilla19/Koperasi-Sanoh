@@ -349,19 +349,6 @@ const PayrollSavings = () => {
           </div>
         </div>
 
-        {selectedIds.length > 0 && (
-          <div className="pl-selection-bar">
-            <span>
-              <CheckCircle size={16} /> {selectedIds.length} data terpilih
-            </span>
-            <div>
-              <button className="pl-sel-btn" onClick={() => setSelectedIds([])}>Hapus</button>
-              <button className="pl-sel-btn pl-sel-btn--confirm" onClick={() => setShowConfirmDialog(true)}>
-                Konfirmasi Terpilih
-              </button>
-            </div>
-          </div>
-        )}
         {loading ? (
           <div className="pl-loading"><Loader2 size={32} className="pl-spin" /><span>Memuat data penggajian untuk {formattedPeriod}…</span></div>
         ) : (

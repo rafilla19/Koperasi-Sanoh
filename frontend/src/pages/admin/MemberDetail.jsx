@@ -21,7 +21,7 @@ import {
   MapPin,
   ShieldCheck
 } from 'lucide-react';
-import { apiUrl } from '../../services/api';
+import { apiUrl, API_ORIGIN } from '../../services/api';
 import './MemberDetail.css';
 import '../../styles/members.css';
 
@@ -41,11 +41,13 @@ const MemberDetail = () => {
   const [saving, setSaving] = useState(false);
   const [profile, setProfile] = useState(null);
   const [formData, setFormData] = useState(null);
-  const [ktpFile, setKtpFile] = useState(null);
-  const [npwpFile, setNpwpFile] = useState(null);
+  const [ktpUploadPath, setKtpUploadPath] = useState('');
+  const [npwpUploadPath, setNpwpUploadPath] = useState('');
+  const [uploadingDoc, setUploadingDoc] = useState({ ktp: false, npwp: false });
   const [departments, setDepartments] = useState([]);
   const [statuses, setStatuses] = useState([]);
   const [banks, setBanks] = useState([]);
+  const [viewerDoc, setViewerDoc] = useState(null);
 
   useEffect(() => {
     fetchDropdowns();
@@ -87,11 +89,14 @@ const MemberDetail = () => {
     }
   };
 
+  const onlyNumeric = (val, maxLen = 999) => val.replace(/[^0-9]/g, '').slice(0, maxLen);
+
   const handleInputChange = (field, value) => {
+    const normalizedValue = field === 'nik_employee' ? onlyNumeric(value, 12) : value;
     setFormData(prev => {
       const nextState = {
         ...prev,
-        [field]: value
+        [field]: normalizedValue
       };
 
       if (field === 'employee_status_id' && value !== 2) {
@@ -100,6 +105,40 @@ const MemberDetail = () => {
 
       return nextState;
     });
+  };
+
+  const uploadDocument = async (field, file) => {
+    if (!file) return;
+    setUploadingDoc(prev => ({ ...prev, [field]: true }));
+
+    const documentForm = new FormData();
+    documentForm.append('file', file);
+    documentForm.append('type', field);
+
+    try {
+      const res = await fetch(apiUrl('/member/members/upload_temp_document/'), {
+        method: 'POST',
+        body: documentForm,
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Upload failed');
+      }
+
+      if (field === 'ktp') {
+        setKtpUploadPath(data.file_path || '');
+        setFormData(prev => ({ ...prev, ktp_file_path: data.file_path || prev.ktp_file_path }));
+      } else {
+        setNpwpUploadPath(data.file_path || '');
+        setFormData(prev => ({ ...prev, npwp_file: data.file_path || prev.npwp_file }));
+      }
+    } catch (error) {
+      console.error('Upload document failed:', error);
+      alert('Gagal mengupload dokumen. Silakan coba lagi.');
+    } finally {
+      setUploadingDoc(prev => ({ ...prev, [field]: false }));
+    }
   };
 
   const handleSave = async () => {
@@ -122,8 +161,8 @@ const MemberDetail = () => {
       if (formData.account_number) payload.append('account_number', formData.account_number);
       if (formData.account_holder_name) payload.append('account_holder_name', formData.account_holder_name);
       if (formData.bank_id) payload.append('bank_id', formData.bank_id);
-      if (ktpFile) payload.append('ktp_file_path', ktpFile);
-      if (npwpFile) payload.append('npwp_file', npwpFile);
+      if (ktpUploadPath) payload.append('ktpPath', ktpUploadPath);
+      if (npwpUploadPath) payload.append('npwpPath', npwpUploadPath);
 
       const res = await fetch(apiUrl(`/member/members/${id}/update_member_profile/`), {
         method: 'PUT',
@@ -134,8 +173,8 @@ const MemberDetail = () => {
         const updated = await res.json();
         setProfile(updated);
         setFormData(updated);
-        setKtpFile(null);
-        setNpwpFile(null);
+        setKtpUploadPath('');
+        setNpwpUploadPath('');
         setIsEditing(false);
         alert('Profil anggota berhasil diperbarui');
       } else {
@@ -151,8 +190,8 @@ const MemberDetail = () => {
 
   const handleCancel = () => {
     setFormData(profile);
-    setKtpFile(null);
-    setNpwpFile(null);
+    setKtpUploadPath('');
+    setNpwpUploadPath('');
     setIsEditing(false);
   };
 
@@ -172,6 +211,22 @@ const MemberDetail = () => {
       month: 'long',
       day: 'numeric'
     });
+  };
+
+  const resolveDocumentUrl = (filePath) => {
+    if (!filePath) return '';
+    const path = String(filePath).trim();
+    if (!path) return '';
+    if (path.startsWith('http://') || path.startsWith('https://')) return path;
+    if (path.startsWith('/')) return `${API_ORIGIN}${path}`;
+    if (path.startsWith('media/')) return `${API_ORIGIN}/${path}`;
+    return `${API_ORIGIN}/media/${path}`;
+  };
+
+  const handlePreviewDocument = (filePath, title) => {
+    const url = resolveDocumentUrl(filePath);
+    if (!url) return;
+    setViewerDoc({ title, url });
   };
 
   const getInitials = (name) => {
@@ -209,6 +264,23 @@ const MemberDetail = () => {
 
   return (
     <div className="md-container">
+      {viewerDoc && (
+        <div className="md-doc-viewer-overlay" onClick={() => setViewerDoc(null)}>
+          <div className="md-doc-viewer-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="md-doc-viewer-header">
+              <div className="md-doc-viewer-title">{viewerDoc.title}</div>
+              <button className="md-doc-viewer-close" onClick={() => setViewerDoc(null)}>
+                <X size={16} /> Tutup
+              </button>
+            </div>
+            <iframe
+              src={`${viewerDoc.url}#toolbar=1&navpanes=0&scrollbar=1`}
+              className="md-doc-viewer-frame"
+              title={viewerDoc.title}
+            />
+          </div>
+        </div>
+      )}
       {/* Header and Edit Button Section */}
       <div className="md-title-section">
         <div className="md-title-info">
@@ -283,6 +355,7 @@ const MemberDetail = () => {
                   type="text"
                   className="md-input"
                   value={formData.nik_employee  || ''}
+                  maxLength={12}
                   onChange={(e) => handleInputChange('nik_employee', e.target.value)}
                 />
               ) : (
@@ -375,10 +448,14 @@ const MemberDetail = () => {
                     <div className="file-info">
                       <span className="file-name">KTP_{profile.full_name}.jpg</span>
                       <a 
-                        href={profile.ktp_file_path} 
+                        href={resolveDocumentUrl(profile.ktp_file_path)} 
                         target="_blank" 
                         rel="noopener noreferrer" 
                         className="md-file-download-link"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          handlePreviewDocument(profile.ktp_file_path, `KTP - ${profile.full_name}`);
+                        }}
                       >
                         Lihat Dokumen
                       </a>
@@ -392,9 +469,11 @@ const MemberDetail = () => {
                     type="file"
                     className="md-input mt-2"
                     accept="image/*,.pdf"
-                    onChange={(e) => setKtpFile(e.target.files?.[0] || null)}
+                    disabled={uploadingDoc.ktp}
+                    onChange={(e) => uploadDocument('ktp', e.target.files?.[0] || null)}
                   />
                 )}
+                {uploadingDoc.ktp && <div className="uploading-note">Mengupload KTP...</div>}
               </div>
             </div>
 
@@ -407,10 +486,14 @@ const MemberDetail = () => {
                     <div className="file-info">
                       <span className="file-name">NPWP_{profile.full_name}.jpg</span>
                       <a 
-                        href={profile.npwp_file} 
+                        href={resolveDocumentUrl(profile.npwp_file)} 
                         target="_blank" 
                         rel="noopener noreferrer" 
                         className="md-file-download-link"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          handlePreviewDocument(profile.npwp_file, `NPWP - ${profile.full_name}`);
+                        }}
                       >
                         Lihat Dokumen
                       </a>
@@ -424,9 +507,11 @@ const MemberDetail = () => {
                     type="file"
                     className="md-input mt-2"
                     accept="image/*,.pdf"
-                    onChange={(e) => setNpwpFile(e.target.files?.[0] || null)}
+                    disabled={uploadingDoc.npwp}
+                    onChange={(e) => uploadDocument('npwp', e.target.files?.[0] || null)}
                   />
                 )}
+                {uploadingDoc.npwp && <div className="uploading-note">Mengupload NPWP...</div>}
               </div>
             </div>
           </div>

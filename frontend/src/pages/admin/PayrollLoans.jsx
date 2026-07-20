@@ -443,19 +443,6 @@ const PayrollLoans = () => {
           </div>
         </div>
 
-        {/* Selection bar */}
-        {selectedIds.length > 0 && (
-          <div className="pl-selection-bar">
-            <span><CheckCircle size={16} /> {selectedIds.length} data terpilih</span>
-            <div>
-              <button className="pl-sel-btn" onClick={() => setSelectedIds([])}>Hapus</button>
-              <button className="pl-sel-btn pl-sel-btn--confirm" onClick={() => setShowConfirmDialog(true)}>
-                Konfirmasi Terpilih
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* Table */}
         {loading ? (
           <div className="pl-loading">

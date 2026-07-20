@@ -13,9 +13,10 @@ from django.core.mail import send_mail
 from django.db import connection, transaction, IntegrityError
 from django.utils import timezone
 from rest_framework import status, viewsets
+from rest_framework.decorators import action, parser_classes
+from rest_framework.parsers import MultiPartParser, FormParser
 from .models import EmailOTP
 from datetime import timedelta
-from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from api.member.serializers import (
@@ -818,7 +819,7 @@ class MemberViewSet(viewsets.ViewSet):
             return Response({'error': 'Member not found'}, status=status.HTTP_404_NOT_FOUND)
         return Response(result)
 
-    @action(detail=True, methods=['put'])
+    @action(detail=True, methods=['put'], parser_classes=[MultiPartParser, FormParser])
     def update_member_profile(self, request, pk=None):
         data = request.data
         try:
@@ -891,15 +892,28 @@ class MemberViewSet(viewsets.ViewSet):
                         saving_type_id__in=[1, 2, 3],
                     ).update(effective_until=contract_end_value)
 
-                ktp_document = request.FILES.get('ktp_file_path') or request.FILES.get('ktp_file') or data.get('ktp_file_path')
-                if ktp_document is not None:
+                ktp_document = (
+                    request.FILES.get('ktp_file_path')
+                    or request.FILES.get('ktp_file')
+                    or request.FILES.get('ktpFile')
+                    or data.get('ktpPath')
+                    or data.get('ktp_file_path')
+                )
+                if ktp_document not in (None, ''):
                     ktp_path = _persist_member_document(ktp_document, 'members/ktp')
-                    Member.objects.filter(id=pk).update(ktp_file_path=ktp_path)
+                    Member.objects.filter(id=pk).update(ktp_file_path=ktp_path or '')
 
-                npwp_document = request.FILES.get('npwp_file') or request.FILES.get('npwpFile') or data.get('npwp_file')
-                if npwp_document is not None:
+                npwp_document = (
+                    request.FILES.get('npwp_file')
+                    or request.FILES.get('npwpFile')
+                    or request.FILES.get('npwpPath')
+                    or request.FILES.get('npwp_file')
+                    or data.get('npwpPath')
+                    or data.get('npwp_file')
+                )
+                if npwp_document not in (None, ''):
                     npwp_path = _persist_member_document(npwp_document, 'members/npwp')
-                    Member.objects.filter(id=pk).update(npwp_file=npwp_path)
+                    Member.objects.filter(id=pk).update(npwp_file=npwp_path or '')
                 if data.get('account_number') or data.get('account_holder_name') or data.get('bank_id'):
                     with connection.cursor() as cursor:
                         cursor.execute("SELECT id FROM member_bank_accounts WHERE member_id = %s LIMIT 1", [pk])
