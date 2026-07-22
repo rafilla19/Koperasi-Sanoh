@@ -78,6 +78,7 @@ class DocumentArchive(models.Model):
 
     class Meta:
         db_table = 'document_archives'
+        managed = False
         ordering = ['-uploaded_at']
 
     def __str__(self):

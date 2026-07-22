@@ -12,3 +12,5 @@ scikit-learn
 xgboost
 imbalanced-learn
 joblib
+django-storages
+boto3

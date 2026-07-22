@@ -9,16 +9,18 @@ const AuthLayout = () => {
 
   useEffect(() => {
     fetch(apiUrl('/member/members/footer_contact/'))
-      .then(res => res.json())
+      .then(res => (res.ok ? res.json() : null))
       .then(data => {
-        if (data.email || data.phone || data.phone_number) {
+        if (data && (data.email || data.phone || data.phone_number)) {
           setContact({
             email: data.email || '...',
             phone: data.phone || data.phone_number || '...'
           });
         }
       })
-      .catch(err => console.error('Failed to fetch contact Info', err));
+      .catch(() => {
+        // Backend may not be reachable yet (e.g. during local dev); keep placeholder contact info.
+      });
   }, []);
 
   return (

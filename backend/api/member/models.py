@@ -9,7 +9,7 @@ class EmailOTP(models.Model):
 
     class Meta:
         db_table = 'email_otps'
-        managed = True
+        managed = False
 
     def __str__(self):
         return f"{self.email} - {self.code}"

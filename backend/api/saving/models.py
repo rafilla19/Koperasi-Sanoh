@@ -114,7 +114,7 @@ class VoluntarySavingsRequests(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        managed = True
+        managed = False
         db_table = 'voluntary_savings_requests'
 
 
