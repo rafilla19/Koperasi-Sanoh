@@ -145,6 +145,72 @@ def send_withdrawal_paid_email(withdrawal, proof_url):
         return False
 
 
+def send_voluntary_request_submitted_email(voluntary_request):
+    """Send a confirmation email to the member after they submit a voluntary saving change request."""
+    member = voluntary_request.member
+    email = _get_member_email(member)
+    if not email:
+        logger.warning('Member %s has no email address configured', member.id)
+        return False
+
+    current_formatted = f"Rp {int(voluntary_request.current_amount):,}".replace(',', '.')
+    requested_formatted = f"Rp {int(voluntary_request.requested_amount):,}".replace(',', '.')
+
+    request_date = '-'
+    if voluntary_request.created_at:
+        request_date = voluntary_request.created_at.strftime('%d %B %Y, %H:%M WIB')
+
+    subject = 'Permintaan Perubahan Simpanan Sukarela Telah Diajukan'
+    intro = (
+        f'Halo {member.full_name},\n\n'
+        f'Permintaan perubahan jumlah simpanan sukarela Anda telah berhasil diajukan '
+        f'dan sedang menunggu persetujuan admin. Berikut adalah detailnya:'
+    )
+
+    details = [
+        ('Jumlah Saat Ini', current_formatted),
+        ('Jumlah Diminta', requested_formatted),
+        ('Tanggal Pengajuan', request_date),
+    ]
+
+    highlight = ('Status', 'Menunggu Persetujuan')
+
+    frontend_url = getattr(settings, 'FRONTEND_BASE_URL', '') or ''
+    cta_url = f'{frontend_url}/dashboard/saving' if frontend_url else None
+    cta_label = 'Lihat Status Permintaan' if cta_url else None
+
+    footer_note = (
+        'Anda akan menerima notifikasi lain setelah permintaan ini disetujui atau ditolak oleh admin.'
+    )
+
+    plain_fallback = (
+        f'Halo {member.full_name},\n\n'
+        f'Permintaan perubahan simpanan sukarela Anda telah diajukan.\n\n'
+        f'Jumlah Saat Ini: {current_formatted}\n'
+        f'Jumlah Diminta: {requested_formatted}\n'
+        f'Tanggal Pengajuan: {request_date}\n\n'
+        f'Silakan cek status permintaan Anda di dashboard.'
+    )
+
+    try:
+        send_styled_email(
+            subject=subject,
+            recipient=email,
+            intro=intro,
+            details=details,
+            highlight=highlight,
+            cta_label=cta_label,
+            cta_url=cta_url,
+            footer_note=footer_note,
+            plain_fallback=plain_fallback,
+        )
+        logger.info('Voluntary request submitted email sent to %s for request #%s', email, voluntary_request.id)
+        return True
+    except Exception as exc:
+        logger.error('Failed to send voluntary request submitted email to %s: %s', email, exc)
+        return False
+
+
 def send_shu_paid_email(dist, proof_url):
     """Send SHU Jasa Modal transfer notification email to the member."""
     member = dist.member

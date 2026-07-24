@@ -34,7 +34,7 @@ from .serializers import (
     WithdrawalCreateSerializer,
     WithdrawalSerializer,
 )
-from .email_utils import send_member_notification_email, send_withdrawal_paid_email
+from .email_utils import send_member_notification_email, send_withdrawal_paid_email, send_voluntary_request_submitted_email
 from api.utils.auth import get_verified_admin
 
 TEMP_MEMBER_ID = 5
@@ -188,6 +188,18 @@ def my_member_profile(request):
                     user_email = row[0]
         except Exception:
             user_email = None
+
+        has_pending_closure = False
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT COUNT(*) FROM close_account_requests WHERE member_id = %s AND status_id = 44 AND deleted_at IS NULL",
+                    [member_id],
+                )
+                has_pending_closure = cursor.fetchone()[0] > 0
+        except Exception:
+            has_pending_closure = False
+
         return Response({
             'id': member.id,
             'full_name': member.full_name,
@@ -196,6 +208,7 @@ def my_member_profile(request):
             'employee_status_id': employee_status_id,
             'is_payroll': is_payroll,
             'email': user_email,
+            'has_pending_closure': has_pending_closure,
         })
     except Members.DoesNotExist:
         return Response({'error': 'Member not found'}, status=404)
@@ -343,6 +356,14 @@ def my_voluntary_request(request):
     if VoluntarySavingsRequests.objects.filter(member_id=member_id, status_id=41).exists():
         return Response({'error': 'Kamu sudah memiliki permintaan yang sedang menunggu persetujuan'}, status=400)
 
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT COUNT(*) FROM close_account_requests WHERE member_id = %s AND status_id = 44 AND deleted_at IS NULL",
+            [member_id],
+        )
+        if cursor.fetchone()[0] > 0:
+            return Response({'error': 'Akun Anda sedang dalam proses penutupan. Permintaan perubahan simpanan tidak dapat diajukan.'}, status=400)
+
     serializer = VoluntarySavingsRequestCreateSerializer(data=request.data)
     if not serializer.is_valid():
         return Response(serializer.errors, status=400)
@@ -350,13 +371,17 @@ def my_voluntary_request(request):
     config = _get_member_savings_config(member_id)
     current_amount = config.voluntary_amount if config else _get_active_voluntary_amount(member_id)
 
-    VoluntarySavingsRequests.objects.create(
+    voluntary_request = VoluntarySavingsRequests.objects.create(
         member_id=member_id,
         current_amount=current_amount,
         requested_amount=serializer.validated_data['requested_amount'],
         status='pending',
         status_id=41,
     )
+    try:
+        send_voluntary_request_submitted_email(voluntary_request)
+    except Exception:
+        pass
     return Response({'message': 'Permintaan perubahan simpanan sukarela berhasil diajukan'}, status=201)
 
 

@@ -3534,28 +3534,84 @@ class LoanViewSet(viewsets.ModelViewSet):
         if not saving_bills and not loan_installments:
             return Response({'error': 'Selected bills are already paid or invalid.'}, status=400)
 
+        # Look up any transactions already pending for the selected items instead of
+        # blindly cancelling + recreating on every click (that caused duplicate Midtrans
+        # transactions and made the previously-issued QR disappear from the UI).
+        existing_loan_pgt = set()
+        existing_saving_pgt = set()
         with connection.cursor() as cursor:
             if loan_ids:
                 cursor.execute("""
-                    SELECT DISTINCT pgt.id, pgt.gateway_transaction_id
+                    SELECT DISTINCT pgt.id
                     FROM loan_payments lp
                     JOIN payment_gateway_transactions pgt ON CAST(pgt.id AS varchar) = lp.payment_reference_id
                     WHERE lp.installment_id IN %s AND lp.status_id = 32
                 """, [tuple(loan_ids)])
-                for pgt_id, order_id in cursor.fetchall():
-                    cursor.execute("UPDATE payment_gateway_transactions SET gateway_status = 'cancel', updated_at = NOW() WHERE id = %s", [pgt_id])
-                    cursor.execute("UPDATE loan_payments SET status_id = 36, updated_at = NOW() WHERE payment_reference_id = %s", [str(pgt_id)])
-            
+                existing_loan_pgt = {row[0] for row in cursor.fetchall()}
+
             if saving_ids:
                 cursor.execute("""
-                    SELECT DISTINCT pgt.id, pgt.gateway_transaction_id
+                    SELECT DISTINCT pgt.id
                     FROM saving_transactions st
                     JOIN payment_gateway_transactions pgt ON CAST(pgt.id AS varchar) = st.payment_reference_id
                     WHERE st.monthly_saving_bill_id IN %s AND st.status_id = 32
                 """, [tuple(saving_ids)])
-                for pgt_id, order_id in cursor.fetchall():
-                    cursor.execute("UPDATE payment_gateway_transactions SET gateway_status = 'cancel', updated_at = NOW() WHERE id = %s", [pgt_id])
-                    cursor.execute("UPDATE saving_transactions SET status_id = 36, updated_at = NOW() WHERE payment_reference_id = %s", [str(pgt_id)])
+                existing_saving_pgt = {row[0] for row in cursor.fetchall()}
+
+        combined_pgt_ids = existing_loan_pgt | existing_saving_pgt
+        reusable_pgt_id = None
+        if len(combined_pgt_ids) == 1:
+            candidate = next(iter(combined_pgt_ids))
+            covers_loans = (not loan_ids) or (existing_loan_pgt == {candidate})
+            covers_savings = (not saving_ids) or (existing_saving_pgt == {candidate})
+            if covers_loans and covers_savings:
+                reusable_pgt_id = candidate
+
+        if reusable_pgt_id:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT gateway_transaction_id, callback_raw_data FROM payment_gateway_transactions WHERE id = %s",
+                    [reusable_pgt_id],
+                )
+                pgt_row = cursor.fetchone()
+            existing_order_id, existing_raw_data = pgt_row if pgt_row else (None, None)
+
+            is_still_pending = True
+            if existing_order_id:
+                status_url = f"https://api.midtrans.com/v2/{existing_order_id}/status" if is_production else f"https://api.sandbox.midtrans.com/v2/{existing_order_id}/status"
+                try:
+                    res = requests.get(status_url, headers=headers, timeout=5)
+                    if res.status_code == 200:
+                        midtrans_status = res.json().get('transaction_status')
+                        if midtrans_status in ['expire', 'cancel', 'deny', 'failure']:
+                            is_still_pending = False
+                        elif midtrans_status in ['settlement', 'capture']:
+                            return Response({'error': 'Tagihan yang dipilih sudah berhasil dibayar.'}, status=400)
+                except Exception:
+                    pass
+
+            if is_still_pending:
+                existing_snap_token = None
+                if existing_raw_data:
+                    try:
+                        existing_snap_token = json.loads(existing_raw_data).get('snap_token')
+                    except Exception:
+                        pass
+                if existing_snap_token:
+                    return Response({
+                        'snap_token': existing_snap_token,
+                        'order_id': existing_order_id,
+                        'reused': True,
+                    })
+
+        # No reusable pending transaction (or it expired/failed) — cancel stale records, then create a fresh one below.
+        with connection.cursor() as cursor:
+            for pgt_id in existing_loan_pgt:
+                cursor.execute("UPDATE payment_gateway_transactions SET gateway_status = 'cancel', updated_at = NOW() WHERE id = %s", [pgt_id])
+                cursor.execute("UPDATE loan_payments SET status_id = 36, updated_at = NOW() WHERE payment_reference_id = %s", [str(pgt_id)])
+            for pgt_id in existing_saving_pgt:
+                cursor.execute("UPDATE payment_gateway_transactions SET gateway_status = 'cancel', updated_at = NOW() WHERE id = %s", [pgt_id])
+                cursor.execute("UPDATE saving_transactions SET status_id = 36, updated_at = NOW() WHERE payment_reference_id = %s", [str(pgt_id)])
 
         subtotal = 0
         item_details = []
@@ -3716,6 +3772,90 @@ class LoanViewSet(viewsets.ModelViewSet):
             
         except Exception as e:
             return Response({'error': f"Connection to Midtrans failed: {str(e)}"}, status=500)
+
+    @action(detail=False, methods=['get'])
+    def pending_bulk_payment(self, request):
+        """
+        Check whether the member has an existing pending gateway payment (savings and/or
+        loan installments) so the dashboard can show its QR/snap token again instead of
+        letting the member create a duplicate Midtrans transaction.
+        """
+        _, _, member_id, _ = get_verified_member(request)
+        if not member_id:
+            return Response({'error': 'Akun ini tidak terhubung ke data anggota.'}, status=403)
+
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT pgt.id, pgt.gateway_transaction_id, pgt.callback_raw_data
+                FROM payment_gateway_transactions pgt
+                WHERE pgt.gateway_status = 'pending'
+                  AND (
+                    EXISTS (
+                        SELECT 1 FROM saving_transactions st
+                        WHERE st.payment_reference_id = CAST(pgt.id AS varchar)
+                          AND st.member_id = %s AND st.status_id = 32
+                    )
+                    OR EXISTS (
+                        SELECT 1 FROM loan_payments lp
+                        JOIN loan_installments li ON li.id = lp.installment_id
+                        JOIN loans l ON l.id = li.loan_id
+                        WHERE lp.payment_reference_id = CAST(pgt.id AS varchar)
+                          AND l.member_id = %s AND lp.status_id = 32
+                    )
+                  )
+                ORDER BY pgt.created_at DESC
+                LIMIT 1
+            """, [member_id, member_id])
+            row = cursor.fetchone()
+
+        if not row:
+            return Response({'pending': False})
+
+        pgt_id, order_id, raw_data = row
+
+        import requests
+        import base64
+        import json
+
+        server_key = settings.MIDTRANS_SERVER_KEY
+        is_production = settings.MIDTRANS_IS_PRODUCTION
+        auth_str = f"{server_key}:"
+        auth_base64 = base64.b64encode(auth_str.encode('utf-8')).decode('utf-8')
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "Authorization": f"Basic {auth_base64}"
+        }
+
+        if order_id:
+            status_url = f"https://api.midtrans.com/v2/{order_id}/status" if is_production else f"https://api.sandbox.midtrans.com/v2/{order_id}/status"
+            try:
+                res = requests.get(status_url, headers=headers, timeout=5)
+                if res.status_code == 200:
+                    midtrans_status = res.json().get('transaction_status')
+                    if midtrans_status in ['expire', 'cancel', 'deny', 'failure']:
+                        cursor_status = 36 if midtrans_status == 'cancel' else 35
+                        with connection.cursor() as cursor:
+                            cursor.execute("UPDATE payment_gateway_transactions SET gateway_status = %s, updated_at = NOW() WHERE id = %s", [midtrans_status, pgt_id])
+                            cursor.execute("UPDATE loan_payments SET status_id = %s, updated_at = NOW() WHERE payment_reference_id = %s", [cursor_status, str(pgt_id)])
+                            cursor.execute("UPDATE saving_transactions SET status_id = %s, updated_at = NOW() WHERE payment_reference_id = %s", [cursor_status, str(pgt_id)])
+                        return Response({'pending': False})
+                    elif midtrans_status in ['settlement', 'capture']:
+                        return Response({'pending': False})
+            except Exception:
+                pass
+
+        snap_token = None
+        if raw_data:
+            try:
+                snap_token = json.loads(raw_data).get('snap_token')
+            except Exception:
+                pass
+
+        if not snap_token:
+            return Response({'pending': False})
+
+        return Response({'pending': True, 'snap_token': snap_token, 'order_id': order_id})
 
     @action(detail=False, methods=['get'])
     def my_transactions(self, request):

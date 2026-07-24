@@ -704,11 +704,23 @@ textarea.prof-input {
 .bal-item {
   display: flex;
   justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
   font-size: 13px;
   color: #475569;
   padding-bottom: 10px;
   border-bottom: 1.5px dashed #E2E8F0;
   font-weight: 500;
+}
+
+.bal-item span {
+  flex: 1 1 auto;
+}
+
+.bal-item strong {
+  flex-shrink: 0;
+  white-space: nowrap;
+  text-align: right;
 }
 
 .bal-item:last-child {

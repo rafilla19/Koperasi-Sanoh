@@ -180,6 +180,17 @@ const AdminDashboard = () => {
     },
   };
 
+  const transactionChartOptions = {
+    ...chartOptions,
+    scales: {
+      ...chartOptions.scales,
+      y: {
+        ...chartOptions.scales.y,
+        ticks: { stepSize: 5000000 },
+      },
+    },
+  };
+
   return (
     <div className="ad-container">
       {/* Header */}
@@ -322,7 +333,7 @@ const AdminDashboard = () => {
             </select>
           </div>
           <div className="ad-chart-body">
-            <Line data={shuData} options={chartOptions} />
+            <Line data={shuData} options={transactionChartOptions} />
           </div>
         </div>
 

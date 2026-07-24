@@ -1,5 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { AlertTriangle, CheckCircle2, Info } from 'lucide-react';
 import './GlobalPopup.css';
+
+const VARIANT_ICONS = {
+  danger: AlertTriangle,
+  success: CheckCircle2,
+  info: Info,
+};
 
 const normalizeOptions = (input, fallbackTitle = 'Notification') => {
   if (typeof input === 'string') {
@@ -63,10 +70,23 @@ const GlobalPopup = () => {
     });
 
     window.alert = (message) => {
+      const text = String(message ?? '');
+      const lower = text.toLowerCase();
+      let variant = 'info';
+      let title = 'Pemberitahuan';
+
+      if (/berhasil|sukses|success|terverifikasi|✓/.test(lower)) {
+        variant = 'success';
+        title = 'Berhasil';
+      } else if (/gagal|error|tidak dapat|tidak bisa|kesalahan|sudah terdaftar|invalid|failed|ditolak|dibatalkan/.test(lower)) {
+        variant = 'danger';
+        title = 'Gagal';
+      }
+
       window.appAlert({
-        title: '',
-        message: String(message ?? ''),
-        hideHeader: true,
+        title,
+        message: text,
+        variant,
       });
     };
 
@@ -87,6 +107,7 @@ const GlobalPopup = () => {
 
   const isConfirm = popup.mode === 'confirm';
   const variantClass = `gp-modal-icon ${popup.variant || 'info'}`;
+  const VariantIcon = VARIANT_ICONS[popup.variant] || VARIANT_ICONS.info;
 
   return (
     <div className="gp-overlay" role="presentation">
@@ -99,7 +120,7 @@ const GlobalPopup = () => {
         {!popup.hideHeader && (
           <>
             <div className={variantClass}>
-              <span>{popup.variant === 'danger' ? '!' : popup.variant === 'success' ? '✓' : 'i'}</span>
+              <VariantIcon size={20} strokeWidth={2.5} />
             </div>
             <div className="gp-modal-body">
               <p className="gp-modal-kicker">{isConfirm ? 'Konfirmasi tindakan' : 'Pesan sistem'}</p>

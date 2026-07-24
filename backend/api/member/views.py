@@ -407,11 +407,31 @@ class MemberViewSet(viewsets.ViewSet):
         return Response({'file_path': _absolute_media_url(request, saved_path)})
 
     @action(detail=False, methods=['post'])
+    def check_email_available(self, request):
+        email = (request.data.get('email') or '').strip()
+        if not email:
+            return Response({'error': 'Email is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if User.objects.filter(email__iexact=email).exists():
+            return Response(
+                {'available': False, 'error': 'Email sudah terdaftar. Silakan gunakan email lain atau masuk ke akun Anda. Atau hubungi pihak koperasi.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response({'available': True})
+
+    @action(detail=False, methods=['post'])
     def send_verification_email(self, request):
         serializer = VerificationRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         email = serializer.validated_data['email']
         full_name = serializer.validated_data.get('fullName', '')
+
+        if User.objects.filter(email__iexact=email).exists():
+            return Response(
+                {'error': 'Email sudah terdaftar. Silakan gunakan email lain atau masuk ke akun Anda.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         code = ''.join(random.choices(string.digits, k=6))
 
         # Store OTP in database and keep timestamp for expiry checks
@@ -602,38 +622,7 @@ class MemberViewSet(viewsets.ViewSet):
                 return Response({'error': 'Lengkapi data rekening bank Anda terlebih dahulu sebelum mengajukan penutupan akun.'}, status=status.HTTP_400_BAD_REQUEST)
 
             with connection.cursor() as cursor:
-                cursor.execute(
-                    """
-                    SELECT table_name
-                    FROM information_schema.tables
-                    WHERE table_schema = 'public'
-                      AND table_name IN ('close_account_requests', 'member_close_requests', 'close_accounts')
-                    ORDER BY CASE table_name
-                        WHEN 'close_account_requests' THEN 1
-                        WHEN 'member_close_requests' THEN 2
-                        ELSE 3
-                    END
-                    LIMIT 1
-                    """
-                )
-                row = cursor.fetchone()
-                table_name = row[0] if row else None
-
-                if table_name == 'close_account_requests':
-                    cursor.execute(
-                        "INSERT INTO close_account_requests (member_id, reason, status_id, request_date) VALUES (%s, %s, 44, NOW())",
-                        [member_id, reason],
-                    )
-                elif table_name == 'member_close_requests':
-                    cursor.execute(
-                        "INSERT INTO member_close_requests (member_id, reason, status_id, request_date) VALUES (%s, %s, 44, NOW())",
-                        [member_id, reason],
-                    )
-                elif table_name == 'close_accounts':
-                    cursor.execute(
-                        "INSERT INTO close_accounts (member_id, reason, status_id, request_date) VALUES (%s, %s, 44, NOW())",
-                        [member_id, reason],
-                    )
+                cursor.execute("CALL sp_request_account_closure(%s, %s)", [member_id, reason])
 
             admin_email = getattr(settings, 'ADMIN_EMAIL', None) or getattr(settings, 'DEFAULT_FROM_EMAIL', None)
             if admin_email:

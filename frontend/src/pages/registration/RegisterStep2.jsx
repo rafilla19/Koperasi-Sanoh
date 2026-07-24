@@ -153,10 +153,33 @@ const RegisterStep2 = () => {
     return hasBasicFields && hasFiles && hasContractDate && hasDefaultAgree && hasPayrollAgree && !isUploading.npwp && !isUploading.ktp;
   };
 
-  const handleContinue = (e) => {
+  const [isCheckingEmail, setIsCheckingEmail] = useState(false);
+
+  const handleContinue = async (e) => {
     e.preventDefault();
-    if (!isFormValid()) return;
-    navigate('/register/step-3');
+    if (!isFormValid() || isCheckingEmail) return;
+
+    setIsCheckingEmail(true);
+    try {
+      const response = await fetch(apiUrl('/member/members/check_email_available/'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: formData.email })
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        alert(data.error || 'Email sudah terdaftar. Silakan gunakan email lain.');
+        return;
+      }
+
+      navigate('/register/step-3');
+    } catch (error) {
+      console.error('Email check error:', error);
+      alert('Kesalahan koneksi. Silakan periksa koneksi internet Anda.');
+    } finally {
+      setIsCheckingEmail(false);
+    }
   };
 
   return (
@@ -309,16 +332,16 @@ const RegisterStep2 = () => {
 
         <div className="reg-actions" style={{ justifyContent: 'space-between', marginTop: '2rem' }}>
           <Link to="/register/step-1" className="btn-secondary">← Back</Link>
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             className="btn-primary-sm"
-            disabled={!isFormValid()}
-            style={{ 
-              opacity: isFormValid() ? 1 : 0.6, 
-              cursor: isFormValid() ? 'pointer' : 'not-allowed'
+            disabled={!isFormValid() || isCheckingEmail}
+            style={{
+              opacity: (isFormValid() && !isCheckingEmail) ? 1 : 0.6,
+              cursor: (isFormValid() && !isCheckingEmail) ? 'pointer' : 'not-allowed'
             }}
           >
-            Lanjutkan →
+            {isCheckingEmail ? 'Memeriksa email...' : 'Lanjutkan →'}
           </button>
         </div>
       </form>

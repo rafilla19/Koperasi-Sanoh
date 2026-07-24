@@ -352,7 +352,6 @@ class AuthViewSet(viewsets.ViewSet):
                     highlight=('Tindakan Diperlukan', 'Klik tombol di bawah untuk memilih password baru.'),
                     cta_label='Reset Password',
                     cta_url=reset_link,
-                    footer_note='Link reset password ini akan kedaluwarsa setelah 1 jam. Jika Anda tidak meminta reset ini, Anda dapat mengabaikan email ini.',
                     plain_fallback=f'Reset password Anda menggunakan link ini: {reset_link}',
                 )
 

@@ -585,15 +585,26 @@ const MySaving = () => {
                 <button
                   className="sv-uc-request-btn"
                   onClick={() => { setShowVoluntaryForm(v => !v); setVrError(''); setVrMessage(''); setVrAmount(''); }}
-                  disabled={!isVoluntaryChangeAllowed}
-                  title={isVoluntaryChangeAllowed ? 'Ajukan perubahan' : 'Permintaan perubahan hanya bisa dilakukan tanggal 22-23'}
-                  style={{ opacity: isVoluntaryChangeAllowed ? 1 : 0.5, cursor: isVoluntaryChangeAllowed ? 'pointer' : 'not-allowed' }}
+                  disabled={!isVoluntaryChangeAllowed || memberProfile?.has_pending_closure}
+                  title={
+                    memberProfile?.has_pending_closure
+                      ? 'Tidak dapat mengajukan perubahan karena akun sedang dalam proses penutupan'
+                      : (isVoluntaryChangeAllowed ? 'Ajukan perubahan' : 'Permintaan perubahan hanya bisa dilakukan tanggal 22-23')
+                  }
+                  style={{
+                    opacity: (isVoluntaryChangeAllowed && !memberProfile?.has_pending_closure) ? 1 : 0.5,
+                    cursor: (isVoluntaryChangeAllowed && !memberProfile?.has_pending_closure) ? 'pointer' : 'not-allowed'
+                  }}
                 >
                   {showVoluntaryForm ? 'Batal' : '+ Ajukan Perubahan'}
                 </button>
               </div>
             </div>
-            {!isVoluntaryChangeAllowed && (
+            {memberProfile?.has_pending_closure ? (
+              <p className="sv-vr-note" style={{ marginTop: 12, color: '#64748B', fontSize: 13 }}>
+                Akun Anda sedang dalam proses penutupan, permintaan perubahan simpanan sukarela tidak dapat diajukan.
+              </p>
+            ) : !isVoluntaryChangeAllowed && (
               <p className="sv-vr-note" style={{ marginTop: 12, color: '#64748B', fontSize: 13 }}>
                 Perubahan simpanan sukarela hanya bisa diajukan pada tanggal 22-23 setiap bulan.
               </p>

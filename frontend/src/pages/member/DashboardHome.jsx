@@ -107,6 +107,7 @@ const DashboardHome = () => {
   const [paymentChannels, setPaymentChannels] = useState([]);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('');
   const [isInitiating, setIsInitiating] = useState(false);
+  const [pendingBulkPayment, setPendingBulkPayment] = useState(null);
   const [shuAnalytics, setShuAnalytics] = useState(null);
   const [showShuHistory, setShowShuHistory] = useState(false);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
@@ -138,22 +139,25 @@ const DashboardHome = () => {
           url += `&end_date=${endDate}`;
         }
 
-        const [summaryRes, txRes, chanRes, shuRes] = await Promise.all([
+        const [summaryRes, txRes, chanRes, shuRes, pendingRes] = await Promise.all([
           fetch(apiUrl(`/loan/loans/dashboard_summary/?member_id=${memberId}`)),
           fetch(url),
           fetch(apiUrl('/loan/loans/payment_channels/')),
-          fetch(apiUrl(`/my-shu/analytics/?member_id=${memberId}`))
+          fetch(apiUrl(`/my-shu/analytics/?member_id=${memberId}`)),
+          fetch(apiUrl(`/loan/loans/pending_bulk_payment/?member_id=${memberId}`), { headers: getAuthHeaders() })
         ]);
 
         const summaryData = await summaryRes.json();
         const txData = await txRes.json();
         const chanData = chanRes.ok ? await chanRes.json() : [];
         const shuData = shuRes.ok ? await shuRes.json() : null;
+        const pendingData = pendingRes.ok ? await pendingRes.json() : null;
 
         setSummary(summaryData);
         setTransactions(Array.isArray(txData) ? txData : []);
         setPaymentChannels(chanData);
         if (shuData) setShuAnalytics(shuData);
+        setPendingBulkPayment(pendingData && pendingData.pending ? pendingData : null);
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
       } finally {
@@ -305,6 +309,35 @@ const DashboardHome = () => {
     return ((inc / total) * 100).toFixed(1);
   };
 
+  const handleContinuePendingPayment = () => {
+    if (!pendingBulkPayment?.snap_token || isInitiating) return;
+    setIsInitiating(true);
+    if (window.snap) {
+      window.snap.pay(pendingBulkPayment.snap_token, {
+        onSuccess: function() {
+          alert("Pembayaran berhasil!");
+          setShowPaymentModal(false);
+          setIsInitiating(false);
+          window.location.reload();
+        },
+        onPending: function() {
+          alert("Pembayaran tertunda. Harap selesaikan pembayaran Anda.");
+          setIsInitiating(false);
+        },
+        onError: function() {
+          alert("Pembayaran gagal!");
+          setIsInitiating(false);
+        },
+        onClose: function() {
+          setIsInitiating(false);
+        }
+      });
+    } else {
+      alert("Midtrans Snap belum terisi. Harap muat ulang halaman.");
+      setIsInitiating(false);
+    }
+  };
+
   const handleInitiatePayment = async () => {
     if (isInitiating) return;
     if (!selectedPaymentMethod) {
@@ -337,6 +370,8 @@ const DashboardHome = () => {
         return;
       }
 
+      setPendingBulkPayment({ pending: true, snap_token: data.snap_token, order_id: data.order_id });
+
       if (window.snap) {
         window.snap.pay(data.snap_token, {
           onSuccess: function(result) {
@@ -356,7 +391,7 @@ const DashboardHome = () => {
             setIsInitiating(false);
           },
           onClose: function() {
-            alert("Anda menutup halaman pembayaran sebelum selesai.");
+            alert("Anda menutup halaman pembayaran sebelum selesai. Klik \"Lanjutkan Pembayaran\" kapan saja untuk melanjutkan transaksi ini.");
             setIsInitiating(false);
           }
         });
@@ -1287,6 +1322,38 @@ const DashboardHome = () => {
             </div>
 
             <div className="dh-modal-content">
+              {pendingBulkPayment?.pending && (
+                <div style={{
+                  background: '#FFF7ED',
+                  border: '1px solid #FDBA74',
+                  borderRadius: '12px',
+                  padding: '14px 16px',
+                  marginBottom: '18px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px'
+                }}>
+                  <div style={{ fontSize: '13px', color: '#9A3412' }}>
+                    <strong>Transaksi Tertunda:</strong> Anda memiliki sesi pembayaran aktif yang belum diselesaikan. Klik tombol di bawah untuk melanjutkan pembayaran tersebut (jangan buat transaksi baru).
+                  </div>
+                  <button
+                    onClick={handleContinuePendingPayment}
+                    disabled={isInitiating}
+                    style={{
+                      padding: '10px 16px',
+                      borderRadius: '10px',
+                      border: 'none',
+                      background: isInitiating ? '#CBD5E1' : '#E11D48',
+                      color: '#fff',
+                      fontWeight: 600,
+                      fontSize: '13px',
+                      cursor: isInitiating ? 'not-allowed' : 'pointer'
+                    }}
+                  >
+                    {isInitiating ? 'Memproses...' : 'Lanjutkan Pembayaran'}
+                  </button>
+                </div>
+              )}
               <div className="payment-options">
                 {/* Savings Bill Section */}
                 <div className="payment-group-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

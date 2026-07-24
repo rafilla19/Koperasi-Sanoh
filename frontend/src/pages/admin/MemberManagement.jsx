@@ -199,7 +199,6 @@ const MemberManagement = () => {
               className="mm-filter mm-filter-active"
               value={activeFilter}
               onChange={(e) => setActiveFilter(e.target.value)}
-              style={{ marginLeft: 12 }}
             >
               <option value="all">Semua Status</option>
               <option value="active">Aktif</option>
@@ -209,7 +208,6 @@ const MemberManagement = () => {
               className="mm-filter mm-filter-employee-status"
               value={employeeStatusFilter}
               onChange={(e) => setEmployeeStatusFilter(e.target.value)}
-              style={{ marginLeft: 12 }}
             >
               <option value="all">Semua Tipe Karyawan</option>
               <option value="FULLTIME">Fulltime</option>

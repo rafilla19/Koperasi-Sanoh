@@ -309,9 +309,9 @@ const MyProfile = () => {
                   className="prof-input" 
                   style={{ flex: 1 }}
                   placeholder="xxxx xxxx xxxx" 
-                  value={profile.accNo} 
-                  onChange={e => { setProfile({...profile, accNo: e.target.value, accName: ''}); setIsValidated(false); }} 
-                  disabled={!isEditing} 
+                  value={profile.accNo}
+                  onChange={e => { setProfile({...profile, accNo: e.target.value}); setIsValidated(false); }}
+                  disabled={!isEditing}
                 />
                 {/* {isEditing && (
                   <button 
@@ -473,7 +473,7 @@ const MyProfile = () => {
                       <strong>Rp {parseFloat(profile.voluntaryBal).toLocaleString('id-ID')}</strong>
                     </div>
                     <div className="bal-item">
-                      <span>SHU Terakumulasi</span>
+                      <span>Current SHU (only distributable last year)</span>
                       <strong>Rp {parseFloat(profile.accruedShu).toLocaleString('id-ID')}</strong>
                     </div>
                   </div>

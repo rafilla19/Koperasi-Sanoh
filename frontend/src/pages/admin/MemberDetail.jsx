@@ -92,7 +92,7 @@ const MemberDetail = () => {
   const onlyNumeric = (val, maxLen = 999) => val.replace(/[^0-9]/g, '').slice(0, maxLen);
 
   const handleInputChange = (field, value) => {
-    const normalizedValue = field === 'nik_employee' ? onlyNumeric(value, 12) : value;
+    const normalizedValue = field === 'nik_employee' ? onlyNumeric(value, 16) : value;
     setFormData(prev => {
       const nextState = {
         ...prev,
@@ -355,7 +355,7 @@ const MemberDetail = () => {
                   type="text"
                   className="md-input"
                   value={formData.nik_employee  || ''}
-                  maxLength={12}
+                  maxLength={16}
                   onChange={(e) => handleInputChange('nik_employee', e.target.value)}
                 />
               ) : (

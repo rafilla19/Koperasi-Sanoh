@@ -551,66 +551,11 @@ const ApprovalDetail = () => {
                     <p className="doc-path">{getFileName(data.transfer_file_path || data.transfer_file || transferFile)}</p>
                   </div>
                   <div className="doc-actions">
-                    <button className="doc-action-btn" onClick={() => handleDownloadFile(data.transfer_file_path || data.transfer_file || transferFile)}>
-                      <span className="doc-action-icon"><Download size={14} /></span>
-                      Unduh
-                    </button>
                     <button className="doc-action-btn" onClick={() => handlePreviewDoc(data.transfer_file_path || data.transfer_file || transferFile, 'Bukti Transfer')}>
                       <span className="doc-action-icon"><Eye size={14} /></span>
                       Lihat
                     </button>
                   </div>
-                </div>
-              )}
-
-              {/* File Upload for Close Account - always show upload box; show uploaded file info when present */}
-              {!isNewRegistration && (
-                <div className="upload-file-container">
-                  { (data.transfer_file_path || data.transfer_file || transferFile || selectedFile) ? (
-                    <div className="uploaded-file-box" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: '14px', fontWeight: 700 }}>
-                          {selectedFile ? selectedFile.name : getFileName(data.transfer_file_path || data.transfer_file || transferFile, 'Transfer')}
-                        </div>
-                        <div style={{ fontSize: '13px', color: '#64748b' }}>
-                          {selectedFile ? 'File dipilih — akan tersimpan saat Anda klik Setujui/Tolak' : 'File sudah terunggah'}
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <button className="btn" onClick={() => handleDownloadFile(data.transfer_file_path || data.transfer_file || transferFile)}>
-                          <Download size={14} /> Lihat
-                        </button>
-                        <label className="btn" style={{ cursor: uploadLoading ? 'not-allowed' : 'pointer' }}>
-                          Ganti File
-                          <input type="file" onChange={handleTransferFileUpload} disabled={uploadLoading} accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" style={{ display: 'none' }} />
-                        </label>
-                      </div>
-                    </div>
-                  ) : (
-                    <label className="upload-file-label">
-                      <div className="upload-file-box">
-                        {uploadLoading ? (
-                          <>
-                            <Loader2 size={24} className="spinner" />
-                            <p>Mengunggah...</p>
-                          </>
-                        ) : (
-                          <>
-                            <Upload size={24} />
-                            <p>Unggah Bukti Transfer</p>
-                            <span>Klik untuk mengunggah (Maks 10MB)</span>
-                          </>
-                        )}
-                      </div>
-                      <input
-                        type="file"
-                        onChange={handleTransferFileUpload}
-                        disabled={uploadLoading}
-                        style={{ display: 'none' }}
-                        accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
-                      />
-                    </label>
-                  )}
                 </div>
               )}
 
