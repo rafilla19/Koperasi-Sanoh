@@ -1,7 +1,23 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { apiUrl } from "../../services/api";
 import "./SavingsManagement.css";
+import "./AdminPolish.css";
+import "./AdminResponsive.css";
 import SavingsTabNav from "../../components/SavingsTabNav";
+
+const SkeletonRows = ({ cols, rows = 6 }) => (
+  <>
+    {Array.from({ length: rows }).map((_, r) => (
+      <tr key={r}>
+        {Array.from({ length: cols }).map((__, c) => (
+          <td key={c} style={{ padding: '14px 12px' }}>
+            <span className="skeleton" style={{ display: 'block', height: 13, width: c === 0 ? '20%' : '70%' }} />
+          </td>
+        ))}
+      </tr>
+    ))}
+  </>
+);
 
 const formatRupiah = (num) => "Rp " + Number(num || 0).toLocaleString("id-ID");
 
@@ -60,6 +76,15 @@ export default function SavingsManagement() {
 
   useEffect(() => { fetchData('', ''); }, []);
 
+  // Debounced live search — fetch shortly after the user stops typing.
+  const isFirstSearchRender = useRef(true);
+  useEffect(() => {
+    if (isFirstSearchRender.current) { isFirstSearchRender.current = false; return; }
+    const timer = setTimeout(() => { setCurrentPage(1); fetchData(search, department); }, 400);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
+
   const handleSearch = () => { setCurrentPage(1); fetchData(search, department); };
   const handleClear = () => { setSearch(''); setDepartment(''); setCurrentPage(1); fetchData('', ''); };
 
@@ -80,8 +105,9 @@ export default function SavingsManagement() {
       </div>
 
       {/* SEARCH & FILTER */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+      <div className="admin-toolbar" style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
         <input
+          className="admin-toolbar-search"
           style={{
             flex: 1,
             minWidth: 180,
@@ -97,6 +123,7 @@ export default function SavingsManagement() {
           onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
         />
         <select
+          className="admin-toolbar-select"
           style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid #e5e7eb', fontSize: 13, cursor: 'pointer' }}
           value={department}
           onChange={handleDepartmentChange}
@@ -136,6 +163,7 @@ export default function SavingsManagement() {
       </div>
 
       {/* TABLE */}
+      <div className="admin-table-wrapper">
       <table>
         <thead style={{ background: 'linear-gradient(135deg, #3b82f6, #2563eb)' }}>
           <tr>
@@ -149,9 +177,9 @@ export default function SavingsManagement() {
             <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Total</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody className={loading ? '' : 'admin-fade-in'}>
           {loading ? (
-            <tr><td colSpan="8" className="empty">Memuat...</td></tr>
+            <SkeletonRows cols={8} />
           ) : data.length === 0 ? (
             <tr><td colSpan="8" className="empty">Data tidak ditemukan</td></tr>
           ) : (
@@ -181,10 +209,11 @@ export default function SavingsManagement() {
           )}
         </tbody>
       </table>
+      </div>
 
       {/* PAGINATION */}
       {!loading && data.length > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, flexWrap: 'wrap', gap: 10 }}>
+        <div className="admin-pagination" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, flexWrap: 'wrap', gap: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#6b7280' }}>
             <span>Baris per halaman:</span>
             <select

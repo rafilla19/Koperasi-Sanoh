@@ -823,6 +823,25 @@ def document_archive_list_create(request):
     return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
+@api_view(['DELETE'])
+def document_archive_delete(request, pk):
+    try:
+        archive = DocumentArchive.objects.get(pk=pk)
+    except DocumentArchive.DoesNotExist:
+        return Response({'error': 'Dokumen tidak ditemukan.'}, status=status.HTTP_404_NOT_FOUND)
+
+    prefix = f"{SUPABASE_URL}/storage/v1/object/public/{S3_BUCKET}/"
+    if archive.document_url and archive.document_url.startswith(prefix):
+        s3_key = archive.document_url[len(prefix):]
+        try:
+            get_s3_client().delete_object(Bucket=S3_BUCKET, Key=s3_key)
+        except (BotoCoreError, ClientError):
+            pass  # DB record is still removed even if storage cleanup fails
+
+    archive.delete()
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 @api_view(['GET'])
 def document_type_list(request):
     document_types = DocumentType.objects.all()

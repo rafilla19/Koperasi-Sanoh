@@ -1,6 +1,6 @@
 from rest_framework.routers import DefaultRouter
 from django.urls import path
-from .views import StatusViewSet, SHUComponentViewSet, DepartmentViewSet, AuthViewSet, PaymentChannelViewSet, IncomeExpenseCategoryViewSet, BankViewSet, EmployeeStatusViewSet, document_archive_list_create, document_type_list
+from .views import StatusViewSet, SHUComponentViewSet, DepartmentViewSet, AuthViewSet, PaymentChannelViewSet, IncomeExpenseCategoryViewSet, BankViewSet, EmployeeStatusViewSet, document_archive_list_create, document_archive_delete, document_type_list
 
 router = DefaultRouter()
 router.register('statuses', StatusViewSet, basename='statuses')
@@ -15,5 +15,6 @@ router.register('auth', AuthViewSet, basename='auth')
 # include router generated routes and add custom document routes
 urlpatterns = router.urls + [
     path('documents/', document_archive_list_create, name='document_archive_list_create'),
+    path('documents/<int:pk>/', document_archive_delete, name='document_archive_delete'),
     path('document-types/', document_type_list, name='document_type_list'),
 ]

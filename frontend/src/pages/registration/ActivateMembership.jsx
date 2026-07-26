@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   ShieldCheck, Lock,
-  CheckCircle2, ChevronDown, ChevronUp, AlertCircle, Timer
+  CheckCircle2, ChevronDown, ChevronUp, AlertCircle
 } from 'lucide-react';
 import { apiUrl } from '../../services/api';
 import './RegistrationPages.css';
@@ -39,6 +39,8 @@ const ActivateMembership = () => {
   const [memberId, setMemberId] = useState(null);
   const [paymentChannels, setPaymentChannels] = useState([]);
   const [alreadyPaid, setAlreadyPaid] = useState(false);
+  const [pendingSnapToken, setPendingSnapToken] = useState(null);
+  const [pendingOrderId, setPendingOrderId] = useState(null);
 
   const countdown = useCountdown(COUNTDOWN_SECONDS);
 
@@ -53,7 +55,7 @@ const ActivateMembership = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const res = await fetch(`${API_BASE}/member/members/saving_types_info/`);
+        const res = await fetch(`${API_BASE}/members/saving_types_info/`);
         if (res.ok) {
           const data = await res.json();
           const principalType = data.find(st => st.id === 3);
@@ -70,26 +72,43 @@ const ActivateMembership = () => {
     fetchData();
   }, []);
 
-  useEffect(() => {
-    if (!memberId) return;
-    const checkPaid = async () => {
-      try {
-        const res = await fetch(`${API_BASE}/members/${memberId}/principal_payment_status/`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.already_paid) {
-            setAlreadyPaid(true);
-            setError('Simpanan pokok sudah pernah dibayar. Silakan login untuk mengakses akun Anda.');
-          } else if (data.has_pending) {
-            setError('Anda memiliki transaksi pembayaran yang masih diproses. Silakan selesaikan atau tunggu hingga expired.');
-          }
+  const fetchPaymentStatus = useCallback(async () => {
+    if (!memberId) return null;
+    try {
+      const res = await fetch(`${API_BASE}/members/${memberId}/principal_payment_status/`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (data.already_paid) {
+        setAlreadyPaid(true);
+        setPendingSnapToken(null);
+        setPendingOrderId(null);
+        setError('Simpanan pokok sudah pernah dibayar. Silakan login untuk mengakses akun Anda.');
+      } else if (data.has_pending && data.snap_token) {
+        setPendingSnapToken(data.snap_token);
+        setPendingOrderId(data.order_id || null);
+        // Reflect the pending transaction's actual channel/fee/total in the
+        // "Ringkasan Pembayaran" summary card, same as it showed when the
+        // Snap popup was first opened, instead of the default "Pilih channel".
+        if (data.payment_method) {
+          setSelectedMethod(data.payment_method);
         }
-      } catch (err) {
-        console.error('Error checking payment status:', err);
+      } else {
+        // No longer pending (e.g. it expired at Midtrans and was cancelled
+        // server-side via sync_member_pending_payments) — clear the stale
+        // token so the user picks a channel and starts a fresh transaction.
+        setPendingSnapToken(null);
+        setPendingOrderId(null);
       }
-    };
-    checkPaid();
+      return data;
+    } catch (err) {
+      console.error('Error checking payment status:', err);
+      return null;
+    }
   }, [memberId]);
+
+  useEffect(() => {
+    fetchPaymentStatus();
+  }, [fetchPaymentStatus]);
 
   useEffect(() => {
     const fetchChannels = async () => {
@@ -122,6 +141,70 @@ const ActivateMembership = () => {
   const feeFixed = selectedChannel ? Number(selectedChannel.fee_fixed) : 0;
   const feeTotal = selectedChannel ? Math.round((principalAmount * feePercentage) / 100) + feeFixed : 0;
   const totalAmount = principalAmount + feeTotal;
+
+  const paySnapToken = (snapToken) => {
+    if (!window.snap || !snapToken) {
+      setError('Snap.js belum dimuat atau token tidak tersedia.');
+      setProcessing(false);
+      return;
+    }
+
+    // Safety net: if Midtrans's popup breaks silently (e.g. its own CSP
+    // blocks an inline script) none of the callbacks below ever fire,
+    // leaving the button stuck disabled. Force a reset after a timeout.
+    const stuckTimer = setTimeout(() => setProcessing(false), 90000);
+    const clearStuckTimer = () => clearTimeout(stuckTimer);
+
+    window.snap.pay(snapToken, {
+      onSuccess: (result) => {
+        clearStuckTimer();
+        console.log('Payment success:', result);
+        navigate('/register/payment-success');
+      },
+      onPending: (result) => {
+        // "Pending" means the QR/payment was created but not yet paid — not a
+        // success. Same handling as the loan/dashboard flows: don't navigate
+        // away, just stop processing so the "Lanjutkan Pembayaran" banner
+        // (already primed with this snap_token) stays available.
+        clearStuckTimer();
+        console.log('Payment pending:', result);
+        setProcessing(false);
+      },
+      onError: (result) => {
+        clearStuckTimer();
+        console.error('Payment error:', result);
+        setError('Pembayaran gagal. Silakan coba lagi.');
+        setProcessing(false);
+      },
+      onClose: () => {
+        clearStuckTimer();
+        setProcessing(false);
+      },
+    });
+  };
+
+  // Resume a previously created but unfinished Midtrans transaction — same
+  // "Lanjutkan Pembayaran" pattern as the member dashboard / loan pages.
+  const handleResumePayment = async () => {
+    setError('');
+    setProcessing(true);
+
+    // Re-verify with the server first (it checks live Midtrans status) instead
+    // of trusting the token already held in state — QRIS/e-wallet transactions
+    // expire quickly, and reopening a stale token shows "failed" in the popup.
+    const data = await fetchPaymentStatus();
+
+    if (data?.already_paid) {
+      setProcessing(false);
+      return;
+    }
+    if (data?.has_pending && data?.snap_token) {
+      paySnapToken(data.snap_token);
+    } else {
+      setProcessing(false);
+      setError('Transaksi sebelumnya sudah kedaluwarsa. Silakan pilih metode pembayaran lagi.');
+    }
+  };
 
   const handlePayment = async () => {
     if (alreadyPaid) {
@@ -156,25 +239,13 @@ const ActivateMembership = () => {
         throw new Error(data.error || 'Gagal membuat token pembayaran.');
       }
 
-      if (window.snap && data.snap_token) {
-        window.snap.pay(data.snap_token, {
-          onSuccess: (result) => {
-            console.log('Payment success:', result);
-            navigate('/register/payment-success');
-          },
-          onPending: (result) => {
-            console.log('Payment pending:', result);
-            navigate('/register/payment-success');
-          },
-          onError: (result) => {
-            console.error('Payment error:', result);
-            setError('Pembayaran gagal. Silakan coba lagi.');
-            setProcessing(false);
-          },
-          onClose: () => {
-            setProcessing(false);
-          },
-        });
+      if (data.snap_token) {
+        // Remember this token immediately so if the popup is closed/broken
+        // before finishing, the user gets a "Lanjutkan Pembayaran" option
+        // instead of being stuck or having to create a new transaction.
+        setPendingSnapToken(data.snap_token);
+        setPendingOrderId(data.order_id || null);
+        paySnapToken(data.snap_token);
       } else if (data.redirect_url) {
         window.location.href = data.redirect_url;
       } else {
@@ -219,7 +290,38 @@ const ActivateMembership = () => {
           )}
 
           <div className="activate-methods">
-            {loadingChannels ? (
+            {pendingSnapToken ? (
+              <div className="activate-pending-notice">
+                <AlertCircle size={16} />
+                <div>
+                  <strong>Transaksi Tertunda</strong>
+                  <p>
+                    Anda memiliki QR pembayaran yang belum diselesaikan{pendingOrderId ? ` (${pendingOrderId})` : ''}.
+                    Klik tombol di bawah untuk melanjutkan pembayaran tersebut — jangan buat transaksi baru.
+                  </p>
+                  <button
+                    className="activate-pay-btn"
+                    onClick={handleResumePayment}
+                    disabled={processing || countdown.expired}
+                  >
+                    {processing ? <span className="activate-spinner" /> : (
+                      <>
+                        <Lock size={15} />
+                        Lanjutkan Pembayaran
+                      </>
+                    )}
+                  </button>
+                  <a
+                    href={`https://app.sandbox.midtrans.com/snap/v2/vtweb/${pendingSnapToken}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="activate-fallback-link"
+                  >
+                    QR tidak muncul? Buka halaman pembayaran di tab baru
+                  </a>
+                </div>
+              </div>
+            ) : loadingChannels ? (
               <div className="activate-loading-pill">Memuat channel pembayaran…</div>
             ) : paymentChannels.length === 0 ? (
               <div className="activate-error">
@@ -292,12 +394,6 @@ const ActivateMembership = () => {
 
         {/* ── Right: Order Summary ── */}
         <div className="activate-sidebar">
-          {/* Countdown */}
-          <div className={`activate-countdown ${countdown.urgent ? 'urgent' : ''}`}>
-            <Timer size={16} />
-            <span>Selesaikan dalam&nbsp;<strong>{countdown.label}</strong></span>
-          </div>
-
           {/* Summary card */}
           <div className="activate-summary-card">
             <div className="activate-summary-header">

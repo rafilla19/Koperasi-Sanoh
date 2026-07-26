@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Search, FileText, Plus, Download, X, ExternalLink, Eye } from 'lucide-react';
-import { fetchDocumentArchives, fetchDocumentTypes, uploadDocumentArchive } from '../../services/api';
+import { Search, FileText, Plus, Download, X, ExternalLink, Eye, Trash2 } from 'lucide-react';
+import { fetchDocumentArchives, fetchDocumentTypes, uploadDocumentArchive, deleteDocumentArchive } from '../../services/api';
 import './DocumentArchives.css';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
@@ -31,6 +31,7 @@ const DocumentArchives = () => {
     document: null,
   });
   const [viewerDoc, setViewerDoc] = useState(null); // { title, url }
+  const [deletingId, setDeletingId] = useState(null);
 
   const typeOptions = useMemo(() => ['Semua Tipe', ...types.map((t) => t.name)], [types]);
 
@@ -135,6 +136,28 @@ const DocumentArchives = () => {
   const handleRowDoubleClick = (doc) => {
     if (doc.document_url) {
       setViewerDoc({ title: doc.title, url: doc.document_url });
+    }
+  };
+
+  const handleDelete = async (doc) => {
+    const confirmed = await window.appConfirm({
+      title: 'Hapus dokumen?',
+      message: `Hapus dokumen "${doc.title}"? Tindakan ini tidak dapat dibatalkan.`,
+      confirmText: 'Hapus',
+      cancelText: 'Batal',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
+
+    setDeletingId(doc.id);
+    try {
+      await deleteDocumentArchive(doc.id);
+      setDocuments((prev) => prev.filter((d) => d.id !== doc.id));
+    } catch (error) {
+      console.error(error);
+      alert(error.message || 'Gagal menghapus dokumen. Coba lagi.');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -307,7 +330,7 @@ const DocumentArchives = () => {
               { label: 'Jenis Dokumen', style: {} },
               { label: 'Ukuran', style: {} },
               { label: 'Tanggal Unggah', style: {} },
-              { label: 'Aksi', style: { width: 80 } },
+              { label: 'Aksi', style: { width: 100 } },
             ].map(({ label, style }) => (
               <th
                 key={label}
@@ -369,19 +392,38 @@ const DocumentArchives = () => {
                     })}
                   </td>
                   <td>
-                    {doc.document_url ? (
-                      <a
-                        href={doc.document_url}
-                        target="_blank"
-                        rel="noreferrer"
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {doc.document_url ? (
+                        <a
+                          href={doc.document_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="da-download-btn"
+                          title="Unduh dokumen"
+                        >
+                          <Download size={14} />
+                        </a>
+                      ) : (
+                        <span style={{ color: '#cbd5e1', fontSize: 12 }}>-</span>
+                      )}
+                      <button
+                        type="button"
                         className="da-download-btn"
-                        title="Unduh dokumen"
+                        style={{
+                          color: '#dc2626',
+                          background: '#fef2f2',
+                          border: 'none',
+                          padding: 0,
+                          cursor: deletingId === doc.id ? 'not-allowed' : 'pointer',
+                          opacity: deletingId === doc.id ? 0.6 : 1,
+                        }}
+                        title="Hapus dokumen"
+                        onClick={() => handleDelete(doc)}
+                        disabled={deletingId === doc.id}
                       >
-                        <Download size={14} />
-                      </a>
-                    ) : (
-                      <span style={{ color: '#cbd5e1', fontSize: 12 }}>-</span>
-                    )}
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               );

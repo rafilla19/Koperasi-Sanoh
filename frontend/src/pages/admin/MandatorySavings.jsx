@@ -1,7 +1,23 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { apiUrl } from "../../services/api";
 import "./MandatorySavings.css";
+import "./AdminPolish.css";
+import "./AdminResponsive.css";
 import SavingsTabNav from "../../components/SavingsTabNav";
+
+const SkeletonRows = ({ cols, rows = 6 }) => (
+  <>
+    {Array.from({ length: rows }).map((_, r) => (
+      <tr key={r}>
+        {Array.from({ length: cols }).map((__, c) => (
+          <td key={c} style={{ padding: '14px 12px' }}>
+            <span className="skeleton" style={{ display: 'block', height: 13, width: c === 0 ? '20%' : '70%' }} />
+          </td>
+        ))}
+      </tr>
+    ))}
+  </>
+);
 
 const MONTH_NAMES = [
   'Januari','Februari','Maret','April','Mei','Juni',
@@ -95,6 +111,19 @@ export default function MandatorySavings() {
 
   useEffect(() => { fetchData(search, monthNum, year, statusFilter, employeeStatusFilter); }, []);  // eslint-disable-line
 
+  // Debounced live search — fetch shortly after the user stops typing,
+  // instead of requiring Enter/"Cari" for the name/NIK search box.
+  const isFirstSearchRender = useRef(true);
+  useEffect(() => {
+    if (isFirstSearchRender.current) { isFirstSearchRender.current = false; return; }
+    const timer = setTimeout(() => {
+      setCurrentPage(1);
+      fetchData(search, monthNum, year, statusFilter, employeeStatusFilter);
+    }, 400);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
+
   const handleApply = () => { setCurrentPage(1); fetchData(search, monthNum, year, statusFilter, employeeStatusFilter); };
   const handleClear = () => {
     setSearch(''); setStatusFilter(''); setEmployeeStatusFilter(''); setCurrentPage(1);
@@ -104,13 +133,13 @@ export default function MandatorySavings() {
   const totalPages = Math.ceil(data.length / rowsPerPage);
   const paginatedData = data.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage);
 
-  // Checkbox logic
-  const allIds    = data.map(d => d.member_id);
-  const allChecked = allIds.length > 0 && allIds.every(id => selectedIds.includes(id));
+  // Checkbox logic — only rows still "Belum Generate" can be selected
+  const selectableIds = data.filter(d => d.bill_status === 'not_generated').map(d => d.member_id);
+  const allChecked = selectableIds.length > 0 && selectableIds.every(id => selectedIds.includes(id));
   const someChecked = selectedIds.length > 0;
 
   const toggleAll = () =>
-    setSelectedIds(allChecked ? [] : allIds);
+    setSelectedIds(allChecked ? [] : selectableIds);
 
   const toggleOne = (id) =>
     setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
@@ -157,8 +186,9 @@ export default function MandatorySavings() {
       </div>
 
       {/* FILTER BAR */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+      <div className="admin-toolbar" style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
         <input
+          className="admin-toolbar-search"
           style={{ flex: 1, minWidth: 180, padding: '10px 14px', borderRadius: 10, border: '1px solid #e5e7eb', fontSize: 13, outline: 'none' }}
           placeholder="Cari nama atau NIK..."
           value={search}
@@ -166,6 +196,7 @@ export default function MandatorySavings() {
           onKeyDown={e => e.key === 'Enter' && handleApply()}
         />
         <select
+          className="admin-toolbar-select"
           style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid #e5e7eb', fontSize: 13, cursor: 'pointer' }}
           value={month}
           onChange={e => setMonth(e.target.value)}
@@ -173,6 +204,7 @@ export default function MandatorySavings() {
           {MONTH_NAMES.map(m => <option key={m}>{m}</option>)}
         </select>
         <select
+          className="admin-toolbar-select"
           style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid #e5e7eb', fontSize: 13, cursor: 'pointer' }}
           value={year}
           onChange={e => setYear(e.target.value)}
@@ -180,6 +212,7 @@ export default function MandatorySavings() {
           {YEARS.map(y => <option key={y}>{y}</option>)}
         </select>
         <select
+          className="admin-toolbar-select"
           style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid #e5e7eb', fontSize: 13, cursor: 'pointer' }}
           value={employeeStatusFilter}
           onChange={e => setEmployeeStatusFilter(e.target.value)}
@@ -189,6 +222,7 @@ export default function MandatorySavings() {
           ))}
         </select>
         <select
+          className="admin-toolbar-select"
           style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid #e5e7eb', fontSize: 13, cursor: 'pointer' }}
           value={statusFilter}
           onChange={e => setStatusFilter(e.target.value)}
@@ -237,7 +271,7 @@ export default function MandatorySavings() {
       </div>
 
       {/* ACTION BAR */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, justifyContent: 'space-between' }}>
+      <div className="admin-actionbar" style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, justifyContent: 'space-between', flexWrap: 'wrap' }}>
         <button
           onClick={handleGenerateBills}
           disabled={!someChecked || generating}
@@ -277,8 +311,8 @@ export default function MandatorySavings() {
                 type="checkbox"
                 checked={allChecked}
                 onChange={toggleAll}
-                disabled={loading || data.length === 0}
-                style={{ cursor: 'pointer' }}
+                disabled={loading || selectableIds.length === 0}
+                style={{ cursor: selectableIds.length === 0 ? 'not-allowed' : 'pointer' }}
               />
             </th>
             <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none', width: 40 }}>No</th>
@@ -293,9 +327,9 @@ export default function MandatorySavings() {
             <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Status</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody className={loading ? '' : 'admin-fade-in'}>
           {loading ? (
-            <tr><td colSpan="11" className="empty">Memuat...</td></tr>
+            <SkeletonRows cols={11} />
           ) : error ? (
             <tr><td colSpan="11" className="empty" style={{ color: '#dc2626' }}>{error}</td></tr>
           ) : data.length === 0 ? (
@@ -308,7 +342,9 @@ export default function MandatorySavings() {
                     type="checkbox"
                     checked={selectedIds.includes(row.member_id)}
                     onChange={() => toggleOne(row.member_id)}
-                    style={{ cursor: 'pointer' }}
+                    disabled={row.bill_status !== 'not_generated'}
+                    title={row.bill_status !== 'not_generated' ? 'Tagihan sudah pernah dibuat untuk periode ini' : ''}
+                    style={{ cursor: row.bill_status !== 'not_generated' ? 'not-allowed' : 'pointer' }}
                   />
                 </td>
                 <td style={{ color: '#94a3b8', fontSize: 12 }}>{(currentPage - 1) * rowsPerPage + index + 1}</td>
@@ -322,20 +358,25 @@ export default function MandatorySavings() {
                     borderRadius: 999,
                     fontSize: 12,
                     fontWeight: 500,
-                    background: row.employee_status_name === 'Fulltime' ? '#dbeafe'
-                      : row.employee_status_name === 'Contract' ? '#fef9c3'
-                      : row.employee_status_name === 'Outsource' ? '#f3e8ff'
+                    background: (row.employee_status_name || '').toUpperCase() === 'FULLTIME' ? '#dbeafe'
+                      : (row.employee_status_name || '').toUpperCase() === 'CONTRACT' ? '#fef9c3'
+                      : (row.employee_status_name || '').toUpperCase() === 'OUTSOURCE' ? '#f3e8ff'
                       : '#f3f4f6',
-                    color: row.employee_status_name === 'Fulltime' ? '#1d4ed8'
-                      : row.employee_status_name === 'Contract' ? '#a16207'
-                      : row.employee_status_name === 'Outsource' ? '#7e22ce'
+                    color: (row.employee_status_name || '').toUpperCase() === 'FULLTIME' ? '#1d4ed8'
+                      : (row.employee_status_name || '').toUpperCase() === 'CONTRACT' ? '#a16207'
+                      : (row.employee_status_name || '').toUpperCase() === 'OUTSOURCE' ? '#7e22ce'
                       : '#6b7280',
                   }}>
                     {row.employee_status_name || '-'}
                   </span>
                 </td>
                 <td style={{ color: row.is_new_member ? '#0f172a' : '#cbd5e1' }}>
-                  {row.is_new_member ? formatRupiah(row.pokok_amount) : '-'}
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    {row.is_new_member ? formatRupiah(row.pokok_amount) : '-'}
+                    {(row.employee_status_name || '').toUpperCase() === 'OUTSOURCE' && row.pokok_paid && (
+                      <span style={{ color: '#16a34a', fontWeight: 700 }} title="Sudah dibayar via gateway">✓</span>
+                    )}
+                  </span>
                 </td>
                 <td>{formatRupiah(row.wajib_amount)}</td>
                 <td>{formatRupiah(row.sukarela_amount)}</td>
@@ -361,7 +402,7 @@ export default function MandatorySavings() {
 
       {/* PAGINATION */}
       {!loading && data.length > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, flexWrap: 'wrap', gap: 10 }}>
+        <div className="admin-pagination" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, flexWrap: 'wrap', gap: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#6b7280' }}>
             <span>Baris per halaman:</span>
             <select
@@ -388,8 +429,8 @@ export default function MandatorySavings() {
 
       {/* CONFIRM MODAL */}
       {confirmModal && (
-        <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget && !confirmModalGuard.current) setConfirmModal(null); }}>
-          <div className="modal-box" onClick={e => e.stopPropagation()}>
+        <div className="modal-overlay admin-modal-overlay" onClick={(e) => { if (e.target === e.currentTarget && !confirmModalGuard.current) setConfirmModal(null); }}>
+          <div className="modal-box admin-modal-box" onClick={e => e.stopPropagation()}>
             <div className="modal-icon">
               <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
                 <circle cx="12" cy="12" r="10" stroke="#3b82f6" strokeWidth="2"/>

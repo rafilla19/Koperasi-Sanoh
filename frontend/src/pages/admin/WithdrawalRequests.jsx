@@ -2,7 +2,31 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiUrl } from "../../services/api";
 import "./WithdrawalRequests.css";
+import "./AdminPolish.css";
+import "./AdminResponsive.css";
 import SavingsTabNav from "../../components/SavingsTabNav";
+
+const SkeletonCards = ({ count = 4 }) => (
+  <>
+    {Array.from({ length: count }).map((_, i) => (
+      <div key={i} className="request-card">
+        <div className="profile">
+          <div className="avatar" style={{ background: '#f1f5f9' }} />
+          <div style={{ flex: 1 }}>
+            <span className="skeleton" style={{ display: 'block', height: 14, width: '60%', marginBottom: 8 }} />
+            <span className="skeleton" style={{ display: 'block', height: 11, width: '40%' }} />
+          </div>
+        </div>
+        {Array.from({ length: 4 }).map((__, j) => (
+          <div className="info" key={j}>
+            <span className="skeleton" style={{ display: 'block', height: 11, width: '50%', marginBottom: 6 }} />
+            <span className="skeleton" style={{ display: 'block', height: 13, width: '75%' }} />
+          </div>
+        ))}
+      </div>
+    ))}
+  </>
+);
 
 const formatRupiah = (num) => "Rp " + Number(num || 0).toLocaleString("id-ID");
 
@@ -72,7 +96,7 @@ export default function WithdrawalRequests() {
       </div>
 
       {/* FILTER */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+      <div className="admin-toolbar" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, marginBottom: 20 }}>
         {/* Status filter */}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {[
@@ -128,7 +152,7 @@ export default function WithdrawalRequests() {
         </div>
 
         {/* Export */}
-        <div style={{ marginLeft: 'auto' }}>
+        <div className="admin-toolbar-export" style={{ marginLeft: 'auto' }}>
           <button
             disabled={filteredWithdrawals.length === 0}
             onClick={() => {
@@ -159,9 +183,9 @@ export default function WithdrawalRequests() {
       </div>
 
       {/* LIST */}
-      <div className="request-list">
+      <div className={`request-list${loading ? '' : ' admin-fade-in'}`}>
         {loading ? (
-          <p style={{ color: '#94a3b8', fontSize: 13 }}>Memuat...</p>
+          <SkeletonCards />
         ) : filteredWithdrawals.length === 0 ? (
           <p style={{ color: '#94a3b8', fontSize: 13 }}>
             Tidak ada data{filterDate ? ` pada tanggal ${new Date(filterDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}` : statusFilter ? ` dengan status "${statusFilter}"` : ''}
@@ -218,7 +242,7 @@ export default function WithdrawalRequests() {
 
       {/* PAGINATION */}
       {!loading && filteredWithdrawals.length > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, flexWrap: 'wrap', gap: 10 }}>
+        <div className="admin-pagination" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, flexWrap: 'wrap', gap: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#6b7280' }}>
             <span>Item per halaman:</span>
             <select

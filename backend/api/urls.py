@@ -5,7 +5,7 @@ from .views import (
     wa_questions_list,
     wa_question_detail,
 )
-from api.master.views import document_archive_list_create, document_type_list
+from api.master.views import document_archive_list_create, document_archive_delete, document_type_list
 
 urlpatterns = [
     # path('api/', include('login.urls')),
@@ -27,6 +27,7 @@ urlpatterns = [
 # Convenience aliases so legacy frontend paths work (/api/documents/ and /api/document-types/)
 urlpatterns += [
     path('documents/', document_archive_list_create, name='document_archive_list_create_root'),
+    path('documents/<int:pk>/', document_archive_delete, name='document_archive_delete_root'),
     path('document-types/', document_type_list, name='document_type_list_root'),
 ]
 

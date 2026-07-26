@@ -570,6 +570,10 @@
   .chart-bar-wrapper {
     height: 240px;
   }
+
+  .analytics-charts {
+    grid-template-columns: 1fr;
+  }
 }
 .savings-container {
   padding: 24px;

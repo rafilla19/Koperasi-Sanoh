@@ -98,3 +98,20 @@ export const uploadDocumentArchive = async (formData) => {
   });
   return handleJsonResponse(response);
 };
+
+export const deleteDocumentArchive = async (id) => {
+  const response = await fetch(apiUrl(`/documents/${id}/`), {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) {
+    let message = 'Gagal menghapus dokumen.';
+    try {
+      const payload = await response.json();
+      message = payload?.error || payload?.detail || message;
+    } catch (e) {
+      // no JSON body (e.g. 204) — ignore
+    }
+    throw new Error(message);
+  }
+};

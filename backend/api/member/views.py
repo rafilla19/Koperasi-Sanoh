@@ -412,7 +412,7 @@ class MemberViewSet(viewsets.ViewSet):
         if not email:
             return Response({'error': 'Email is required'}, status=status.HTTP_400_BAD_REQUEST)
 
-        if User.objects.filter(email__iexact=email).exists():
+        if User.objects.filter(email__iexact=email, is_active=False).exists():
             return Response(
                 {'available': False, 'error': 'Email sudah terdaftar. Silakan gunakan email lain atau masuk ke akun Anda. Atau hubungi pihak koperasi.'},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -944,6 +944,7 @@ class MemberViewSet(viewsets.ViewSet):
         import requests as http_requests
         import base64
         import json
+        from api.loan.view import sync_member_pending_payments
 
         try:
             member_id = request.data.get('member_id')
@@ -955,12 +956,16 @@ class MemberViewSet(viewsets.ViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
+            # Settle/expire any stale pending transaction against live Midtrans status first
+            # (same helper used by the loan/dashboard payment flows)
+            sync_member_pending_payments(member_id)
+
             # Check for existing paid principal saving (prevent duplicate payment)
             already_paid = _try_fetchone(
                 """
                 SELECT id FROM saving_transactions
                 WHERE member_id = %s AND saving_type_id = 3 AND transaction_type_id = 1
-                  AND status_id NOT IN (32)
+                  AND status_id = 34
                 LIMIT 1
                 """,
                 [member_id]
@@ -971,20 +976,39 @@ class MemberViewSet(viewsets.ViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            # Check for existing pending gateway transaction (prevent double-click)
+            # Check for existing pending gateway transaction — reuse its snap_token
+            # instead of blocking, so the user can resume the pending QR (same pattern
+            # as the loan/dashboard "Lanjutkan Pembayaran" flow).
             pending_tx = _try_fetchone(
                 """
-                SELECT pgt.id, pgt.gateway_transaction_id
+                SELECT pgt.id, pgt.gateway_transaction_id, pgt.callback_raw_data
                 FROM payment_gateway_transactions pgt
                 WHERE pgt.gateway_transaction_id LIKE %s
                   AND pgt.gateway_status = 'pending'
-                  AND pgt.created_at > NOW() - INTERVAL '15 minutes'
                 ORDER BY pgt.created_at DESC
                 LIMIT 1
                 """,
                 [f'KOP-PRINCIPAL-{member_id}-%']
             )
             if pending_tx:
+                pending_raw = {}
+                if pending_tx.get('callback_raw_data'):
+                    try:
+                        pending_raw = json.loads(pending_tx['callback_raw_data']) or {}
+                    except Exception:
+                        pending_raw = {}
+                pending_snap_token = pending_raw.get('snap_token')
+                if pending_snap_token:
+                    return Response({
+                        'snap_token': pending_snap_token,
+                        'order_id': pending_tx['gateway_transaction_id'],
+                        'payment_method': pending_raw.get('payment_method'),
+                        'payment_channel': pending_raw.get('channel_name'),
+                        'principal_amount': pending_raw.get('principal_amount'),
+                        'admin_fee': pending_raw.get('admin_fee'),
+                        'amount': pending_raw.get('gross_amount'),
+                        'reused': True,
+                    })
                 return Response(
                     {'error': 'Anda memiliki transaksi pembayaran yang masih diproses. Silakan selesaikan pembayaran tersebut atau tunggu hingga expired.'},
                     status=status.HTTP_400_BAD_REQUEST
@@ -1110,7 +1134,13 @@ class MemberViewSet(viewsets.ViewSet):
 
             # Add payment method filter if specified
             if payment_method:
-                payload['enabled_payments'] = [payment_method]
+                enabled_payments_mapping = {
+                    'qris': ['other_qris'],
+                    'gopay': ['gopay'],
+                    'shopeepay': ['shopeepay'],
+                    'dana': ['other_qris'],
+                }
+                payload['enabled_payments'] = enabled_payments_mapping.get(payment_method, [payment_method])
 
             url = "https://app.midtrans.com/snap/v1/transactions" if is_production else "https://app.sandbox.midtrans.com/snap/v1/transactions"
 
@@ -1123,7 +1153,14 @@ class MemberViewSet(viewsets.ViewSet):
 
             snap_token = res_data['token']
             redirect_url = res_data.get('redirect_url', '')
-            raw_data = json.dumps({"snap_token": snap_token})
+            raw_data = json.dumps({
+                "snap_token": snap_token,
+                "payment_method": payment_method,
+                "channel_name": channel_name,
+                "principal_amount": amount,
+                "admin_fee": admin_fee,
+                "gross_amount": gross_amount,
+            })
 
             # Create payment_gateway_transaction + saving_transaction records
             with connection.cursor() as cursor:
@@ -1194,29 +1231,58 @@ class MemberViewSet(viewsets.ViewSet):
 
     @action(detail=True, methods=['get'])
     def principal_payment_status(self, request, pk=None):
-        """Check if member already paid principal saving."""
+        """Check if member already paid principal saving, and surface a pending
+        transaction's snap_token so the frontend can offer 'Lanjutkan Pembayaran'
+        (same pattern as the loan payment_invoice / dashboard pending_bulk_payment)."""
+        import json
+        from api.loan.view import sync_member_pending_payments
+
+        # Settle/expire any stale pending transaction against live Midtrans status first
+        sync_member_pending_payments(pk)
+
         paid = _try_fetchone(
             """
             SELECT id FROM saving_transactions
             WHERE member_id = %s AND saving_type_id = 3 AND transaction_type_id = 1
-              AND status_id NOT IN (32)
+              AND status_id = 34
             LIMIT 1
             """,
             [pk]
         )
         pending = _try_fetchone(
             """
-            SELECT id FROM payment_gateway_transactions
+            SELECT gateway_transaction_id, callback_raw_data
+            FROM payment_gateway_transactions
             WHERE gateway_transaction_id LIKE %s
               AND gateway_status = 'pending'
-              AND created_at > NOW() - INTERVAL '15 minutes'
+            ORDER BY created_at DESC
             LIMIT 1
             """,
             [f'KOP-PRINCIPAL-{pk}-%']
         )
+
+        snap_token = None
+        order_id = None
+        pending_raw = {}
+        if pending:
+            order_id = pending.get('gateway_transaction_id')
+            if pending.get('callback_raw_data'):
+                try:
+                    pending_raw = json.loads(pending['callback_raw_data']) or {}
+                except Exception:
+                    pending_raw = {}
+            snap_token = pending_raw.get('snap_token')
+
         return Response({
             'already_paid': paid is not None,
             'has_pending': pending is not None,
+            'snap_token': snap_token,
+            'order_id': order_id,
+            'payment_method': pending_raw.get('payment_method'),
+            'payment_channel': pending_raw.get('channel_name'),
+            'principal_amount': pending_raw.get('principal_amount'),
+            'admin_fee': pending_raw.get('admin_fee'),
+            'amount': pending_raw.get('gross_amount'),
         })
 
     @action(detail=False, methods=['get'])

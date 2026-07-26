@@ -401,6 +401,8 @@ def my_notifications(request):
 def my_paid_bills(request):
     """Paid monthly_saving_bills (status_id=39) for current member — used for Transaction table."""
     member_id = _get_member_id_from_request(request)
+    from api.loan.view import sync_member_pending_payments
+    sync_member_pending_payments(member_id)
     bills = MonthlySavingBills.objects.filter(
         member_id=member_id,
         status_id=39,
@@ -413,6 +415,8 @@ def my_paid_bills(request):
 def my_payment_schedule(request):
     """PAID (status_id=39) and UNPAID (status_id=38) bills for current member."""
     member_id = _get_member_id_from_request(request)
+    from api.loan.view import sync_member_pending_payments
+    sync_member_pending_payments(member_id)
     bills = MonthlySavingBills.objects.filter(
         member_id=member_id,
         deleted_at__isnull=True,
@@ -1491,14 +1495,17 @@ def admin_member_obligations(request):
         bill_period_start__month=month,
         bill_period_start__year=year,
         deleted_at__isnull=True,
-    ).select_related('status').values('member_id', 'status__status_code')
+    ).select_related('status').values('member_id', 'saving_type_id', 'status__status_code')
 
     bill_status_map = {}
+    pokok_status_map = {}
     for b in bills:
         mid = b['member_id']
         if mid not in bill_status_map:
             bill_status_map[mid] = set()
         bill_status_map[mid].add(b['status__status_code'])
+        if b['saving_type_id'] == 3:
+            pokok_status_map[mid] = b['status__status_code']
 
     dept_map = _get_dept_map(member_ids)
     emp_status_map = _get_employee_status_map(member_ids)
@@ -1515,7 +1522,11 @@ def admin_member_obligations(request):
         pokok = float(obligation_map.get((mid, 3), principal_min if is_new else 0)) if is_new else 0
         wajib = float(obligation_map.get((mid, 1), 0))
         sukarela = float(obligation_map.get((mid, 2), 0))
-        total = pokok + wajib + sukarela
+        # Outsource members pay pokok separately via the Midtrans gateway at
+        # registration, not through this admin bill-generation flow — so it's
+        # shown for reference but excluded from this page's Total.
+        is_outsource = member.employee_status_id == 3
+        total = wajib + sukarela + (0 if is_outsource else pokok)
 
         statuses = bill_status_map.get(mid, set())
         if not statuses:
@@ -1539,6 +1550,7 @@ def admin_member_obligations(request):
             'employee_status_name': emp_status_map.get(mid, '-'),
             'is_new_member': is_new,
             'pokok_amount': pokok,
+            'pokok_paid': pokok_status_map.get(mid) == 'PAID',
             'wajib_amount': wajib,
             'sukarela_amount': sukarela,
             'total_amount': total,

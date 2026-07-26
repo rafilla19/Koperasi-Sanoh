@@ -1,7 +1,36 @@
 import { useState, useEffect, useRef } from "react";
 import { apiUrl, getAuthHeaders } from "../../services/api";
 import "./SavingsDashboard.css";
+import "./AdminPolish.css";
+import "./AdminResponsive.css";
 import SavingsTabNav from "../../components/SavingsTabNav";
+
+const SkeletonApprovalCards = ({ count = 2 }) => (
+  <>
+    {Array.from({ length: count }).map((_, i) => (
+      <div className="approval-card" key={i}>
+        <div className="user-info">
+          <div className="avatar" />
+          <div style={{ flex: 1 }}>
+            <span className="skeleton" style={{ display: 'block', height: 14, width: '55%', marginBottom: 8 }} />
+            <span className="skeleton" style={{ display: 'block', height: 11, width: '35%' }} />
+          </div>
+        </div>
+        <span className="skeleton" style={{ display: 'block', height: 12, width: '45%', margin: '10px 0' }} />
+        <div className="details">
+          <div>
+            <span className="skeleton" style={{ display: 'block', height: 11, width: '70%', marginBottom: 6 }} />
+            <span className="skeleton" style={{ display: 'block', height: 13, width: '85%' }} />
+          </div>
+          <div>
+            <span className="skeleton" style={{ display: 'block', height: 11, width: '70%', marginBottom: 6 }} />
+            <span className="skeleton" style={{ display: 'block', height: 13, width: '85%' }} />
+          </div>
+        </div>
+      </div>
+    ))}
+  </>
+);
 import {
   Chart as ChartJS,
   ArcElement, Tooltip, Legend,
@@ -324,9 +353,9 @@ export default function SavingsDashboard() {
           )}
         </div>
 
-        <div className="card-list">
+        <div className={`card-list${loadingRequests ? '' : ' admin-fade-in'}`}>
           {loadingRequests ? (
-            <p style={{ color: '#94a3b8', fontSize: 13, padding: '16px 0' }}>Memuat...</p>
+            <SkeletonApprovalCards />
           ) : pendingRequests.length === 0 ? (
             <p style={{ color: '#94a3b8', fontSize: 13, padding: '16px 0' }}>
               Tidak ada pengajuan yang menunggu persetujuan
@@ -388,9 +417,9 @@ export default function SavingsDashboard() {
 
       {/* APPROVE MODAL */}
       {approveModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}
+        <div className="admin-modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}
           onClick={(e) => { if (e.target === e.currentTarget && !approveGuard.current) setApproveModal(null); }}>
-          <div style={{ background: '#fff', borderRadius: 20, padding: '32px 28px', maxWidth: 400, width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,0.18)', textAlign: 'center' }}
+          <div className="admin-modal-box" style={{ background: '#fff', borderRadius: 20, padding: '32px 28px', maxWidth: 400, width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,0.18)', textAlign: 'center' }}
             onClick={e => e.stopPropagation()}>
             <div style={{ width: 52, height: 52, borderRadius: '50%', background: '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: 24 }}>✓</div>
             <h3 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 10px', color: '#1e293b' }}>Setujui Pengajuan?</h3>
@@ -407,9 +436,9 @@ export default function SavingsDashboard() {
 
       {/* REJECT MODAL */}
       {rejectModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}
+        <div className="admin-modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}
           onClick={(e) => { if (e.target === e.currentTarget && !rejectGuard.current) setRejectModal(null); }}>
-          <div style={{ background: '#fff', borderRadius: 20, padding: '32px 28px', maxWidth: 420, width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,0.18)', textAlign: 'center' }}
+          <div className="admin-modal-box" style={{ background: '#fff', borderRadius: 20, padding: '32px 28px', maxWidth: 420, width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,0.18)', textAlign: 'center' }}
             onClick={e => e.stopPropagation()}>
             <div style={{ width: 52, height: 52, borderRadius: '50%', background: '#fef2f2', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: 24 }}>✕</div>
             <h3 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 10px', color: '#1e293b' }}>Tolak Pengajuan?</h3>
@@ -432,11 +461,11 @@ export default function SavingsDashboard() {
       )}
 
       {showUpdateConfirm && (
-        <div style={{
+        <div className="admin-modal-overlay" style={{
           position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
         }}>
-          <div style={{
+          <div className="admin-modal-box" style={{
             background: '#fff', borderRadius: 16, padding: '32px 28px', maxWidth: 420, width: '90%',
             boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
           }}>
