@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Wallet, TrendingUp, Users, Clock, CalendarDays, Repeat } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Wallet, TrendingUp, Users, Clock, CalendarDays, Repeat, ChevronLeft, ChevronRight } from 'lucide-react';
 import {
   fetchAdminDashboardOverview,
   fetchAdminDashboardNetSales,
@@ -50,6 +50,22 @@ const AdminDashboard = () => {
   const [weeklyRange, setWeeklyRange] = useState('weekly');
   const [netSalesChart, setNetSalesChart] = useState({ labels: [], data: [] });
   const [weeklyCashflowChart, setWeeklyCashflowChart] = useState({ labels: [], income: [], expense: [] });
+  const approvalsRowRef = useRef(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const updateScrollButtons = () => {
+    const el = approvalsRowRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 4);
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  };
+
+  const scrollApprovals = (direction) => {
+    const el = approvalsRowRef.current;
+    if (!el) return;
+    el.scrollBy({ left: direction * 320, behavior: 'smooth' });
+  };
 
   useEffect(() => {
     const loadDashboard = async () => {
@@ -106,6 +122,13 @@ const AdminDashboard = () => {
   const activeMembers = dashboardData?.active_members || 0;
 
   const pendingRequests = dashboardData?.pending_requests || [];
+
+  useEffect(() => {
+    const el = approvalsRowRef.current;
+    if (!el) return;
+    el.scrollTo({ left: 0 });
+    updateScrollButtons();
+  }, [pendingRequests.length]);
 
   const kpiCards = [
     {
@@ -241,7 +264,30 @@ const AdminDashboard = () => {
         )}
       </div>
 
-      <div className="ad-approvals-row">
+      <div className="ad-approvals-wrap">
+        {canScrollLeft && (
+          <button
+            type="button"
+            className="ad-scroll-btn ad-scroll-btn-left"
+            onClick={() => scrollApprovals(-1)}
+            aria-label="Scroll ke kiri"
+          >
+            <ChevronLeft size={18} />
+          </button>
+        )}
+        {canScrollRight && (
+          <button
+            type="button"
+            className="ad-scroll-btn ad-scroll-btn-right"
+            onClick={() => scrollApprovals(1)}
+            aria-label="Scroll ke kanan"
+          >
+            <ChevronRight size={18} />
+          </button>
+        )}
+        {canScrollLeft && <div className="ad-approvals-fade ad-approvals-fade-left" />}
+        {canScrollRight && <div className="ad-approvals-fade ad-approvals-fade-right" />}
+        <div className="ad-approvals-row" ref={approvalsRowRef} onScroll={updateScrollButtons}>
         {pendingRequests.length > 0 ? (
           pendingRequests.map((request) => {
             const isVoluntary = ['voluntary', 'sukarela'].some((term) =>
@@ -308,6 +354,7 @@ const AdminDashboard = () => {
             <p>Tidak ada permintaan persetujuan saat ini.</p>
           </div>
         )}
+        </div>
       </div>
 
       {/* Charts Row */}
