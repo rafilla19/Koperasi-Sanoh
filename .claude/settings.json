@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(python -c ' *)",
-      "Bash(npx --yes vite build --mode development)"
+      "Bash(npx --yes vite build --mode development)",
+      "Bash(npx --yes vite build)"
     ]
   }
 }

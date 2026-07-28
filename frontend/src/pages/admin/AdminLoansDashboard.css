@@ -503,8 +503,6 @@
   opacity: 0.65;
   cursor: not-allowed;
 }
-  border-color: #3d5fbf;
-}
 
 .ald-send-reminder-btn:disabled {
   background: #ccc;
