@@ -37,6 +37,25 @@ const LoanDetails = () => {
 
   const isImageFile = (url) => /\.(jpg|jpeg|png|gif|bmp|webp|svg)(\?|$)/i.test(url || '');
 
+  const handleDownloadFile = async (url, name) => {
+    if (!url) return;
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = name || url.split('/').filter(Boolean).pop() || 'document';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error('Download failed:', error);
+      window.open(url, '_blank');
+    }
+  };
+
   const handleDownloadSummary = async () => {
     if (isDownloading) return;
     setIsDownloading(true);
@@ -1010,7 +1029,7 @@ const LoanDetails = () => {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
               <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a' }}>{previewDoc.name}</h3>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <button onClick={() => window.open(previewDoc.url, '_blank')} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', border: '1px solid #e2e8f0', background: '#fff', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', color: '#334155' }}>
+                <button onClick={() => handleDownloadFile(previewDoc.url, previewDoc.name)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', border: '1px solid #e2e8f0', background: '#fff', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', color: '#334155' }}>
                   <Download size={14} /> Unduh
                 </button>
                 <button onClick={() => setPreviewDoc(null)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, border: 'none', background: '#f1f5f9', borderRadius: 8, cursor: 'pointer', color: '#64748b' }}>

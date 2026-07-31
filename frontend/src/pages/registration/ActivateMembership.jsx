@@ -290,7 +290,7 @@ const ActivateMembership = () => {
           )}
 
           <div className="activate-methods">
-            {pendingSnapToken ? (
+            {pendingSnapToken && !processing ? (
               <div className="activate-pending-notice">
                 <AlertCircle size={16} />
                 <div>

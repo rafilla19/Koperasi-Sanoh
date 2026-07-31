@@ -1,8 +1,11 @@
 // PayrollSavings.jsx - Updated to match PayrollLoans UI with process, rollback, and calendar filter
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { Search, Calendar, RefreshCw, Upload, CheckCircle, AlertCircle, X, Loader2, RotateCcw, ChevronRight, ChevronLeft, TrendingUp, DollarSign, FileText } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Search, Calendar, RefreshCw, Upload, CheckCircle, AlertCircle, X, Loader2, RotateCcw, ChevronRight, ChevronLeft, TrendingUp, DollarSign, FileText, Paperclip, Eye } from 'lucide-react';
 import './PayrollSummary.css';
-import { apiUrl } from '../../services/api';
+import { apiUrl, getAuthHeaders } from '../../services/api';
+
+const isImageFile = (url) => /\.(jpg|jpeg|png|gif|bmp|webp|svg)(\?|$)/i.test(url || '');
 
 // Toast Notification Component
 const Toast = ({ message, type, onClose }) => (
@@ -46,7 +49,7 @@ const StatusBadge = ({ statusId }) => {
 };
 
 // Confirm Dialog Component
-const ConfirmDialog = ({ isOpen, onClose, onConfirm, count, period, loading }) => {
+const ConfirmDialog = ({ isOpen, onClose, onConfirm, count, period, loading, proofFile, onProofFileChange }) => {
   if (!isOpen) return null;
   return (
     <div className="pl-dialog-overlay" onClick={onClose}>
@@ -55,9 +58,27 @@ const ConfirmDialog = ({ isOpen, onClose, onConfirm, count, period, loading }) =
         <h3>Konfirmasi Pembayaran Simpanan</h3>
         <p>Anda akan mengkonfirmasi <strong>{count}</strong> potongan simpanan untuk siklus penggajian <strong>{period}</strong>.</p>
         <p className="pl-dialog-note">Tindakan ini akan menandai data terpilih sebagai <strong>Lunas</strong> dan tidak dapat dibatalkan.</p>
+
+        <label style={{
+          display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px',
+          border: '1.5px dashed #cbd5e1', borderRadius: 10, cursor: 'pointer',
+          background: proofFile ? '#f0fdf4' : '#f8fafc', margin: '4px 0 16px',
+        }}>
+          <Paperclip size={18} style={{ color: proofFile ? '#16a34a' : '#64748b', flexShrink: 0 }} />
+          <span style={{ fontSize: 13, color: proofFile ? '#166534' : '#475569', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {proofFile ? proofFile.name : 'Unggah bukti transfer payroll dari HRD (wajib)'}
+          </span>
+          <input
+            type="file"
+            accept="image/*,.pdf"
+            style={{ display: 'none' }}
+            onChange={e => onProofFileChange(e.target.files?.[0] || null)}
+          />
+        </label>
+
         <div className="pl-dialog-actions">
           <button className="pl-dialog-btn-cancel" onClick={onClose} disabled={loading}>Batal</button>
-          <button className="pl-dialog-btn-confirm" onClick={onConfirm} disabled={loading}>
+          <button className="pl-dialog-btn-confirm" onClick={onConfirm} disabled={loading || !proofFile}>
             {loading ? <><Loader2 size={16} className="pl-spin" /> Memproses...</> : <><CheckCircle size={16} /> Konfirmasi Pembayaran</>}
           </button>
         </div>
@@ -112,6 +133,8 @@ const PayrollSavings = () => {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [rollbackTarget, setRollbackTarget] = useState(null);
   const [toast, setToast] = useState(null);
+  const [proofFile, setProofFile] = useState(null);
+  const [previewDoc, setPreviewDoc] = useState(null);
 
   const showToast = (msg, type = 'success') => {
     setToast({ message: msg, type });
@@ -150,6 +173,7 @@ const PayrollSavings = () => {
           totalPaid: parseFloat(item.total_paid || 0),
           isPaid: item.is_paid,
           status_id: item.status_id,
+          paymentProof: item.payment_proof,
         })));
       }
     } catch (e) { console.error('Failed to fetch savings', e); }
@@ -194,18 +218,25 @@ const PayrollSavings = () => {
 
   // Confirm action
   const doConfirm = async () => {
+    if (!proofFile) { showToast('Bukti transfer payroll wajib diunggah sebelum konfirmasi.', 'error'); return; }
     setConfirming(true);
     const ids = data.filter(item => selectedIds.includes(item.id) && !item.isPaid).map(item => item.id);
     if (ids.length === 0) { showToast('Tidak ada data belum bayar yang dipilih.', 'error'); setConfirming(false); return; }
     try {
+      const formData = new FormData();
+      formData.append('saving_ids', JSON.stringify(ids));
+      formData.append('period', reportingMonth);
+      formData.append('proof_file', proofFile);
+
       const res = await fetch(apiUrl('/loan/loans/confirm_payroll_savings/'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ saving_ids: ids, period: reportingMonth })
+        headers: { ...getAuthHeaders() },
+        body: formData
       });
       if (res.ok) {
         showToast(`Berhasil mengkonfirmasi ${ids.length} simpanan.`);
         setShowConfirmDialog(false);
+        setProofFile(null);
         await fetchSavings();
       } else {
         const err = await res.json();
@@ -261,7 +292,16 @@ const PayrollSavings = () => {
     <div className="pl-container">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       <RollbackDialog isOpen={!!rollbackTarget} onClose={() => !rollbacking && setRollbackTarget(null)} onConfirm={doRollback} row={rollbackTarget} loading={rollbacking} />
-      <ConfirmDialog isOpen={showConfirmDialog} onClose={() => setShowConfirmDialog(false)} onConfirm={doConfirm} count={selectedIds.length} period={formattedPeriod} loading={confirming} />
+      <ConfirmDialog
+        isOpen={showConfirmDialog}
+        onClose={() => { if (!confirming) { setShowConfirmDialog(false); setProofFile(null); } }}
+        onConfirm={doConfirm}
+        count={selectedIds.length}
+        period={formattedPeriod}
+        loading={confirming}
+        proofFile={proofFile}
+        onProofFileChange={setProofFile}
+      />
       {/* Header */}
       <div className="pl-header">
         <div className="pl-header-left">
@@ -365,6 +405,7 @@ const PayrollSavings = () => {
                   <th>Total Tertunggak</th>
                   <th>Total Terbayar</th>
                   <th>Status</th>
+                  <th>Dokumen</th>
                   <th>Aksi</th>
                 </tr>
               </thead>
@@ -388,10 +429,23 @@ const PayrollSavings = () => {
                     <td className="pl-amount" style={{ color: '#ef4444' }}><strong>{formatRupiah(row.totalOutstanding)}</strong></td>
                     <td className="pl-amount" style={{ color: '#22c55e' }}><strong>{formatRupiah(row.totalPaid)}</strong></td>
                     <td><StatusBadge statusId={row.status_id} /></td>
+                    <td>
+                      {row.isPaid && row.paymentProof ? (
+                        <button
+                          onClick={() => setPreviewDoc({ url: row.paymentProof, name: `Bukti Payroll — ${row.name}` })}
+                          style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', color: '#4f7df3', padding: 0, fontSize: 13, fontWeight: 600 }}
+                          title="Lihat bukti transfer payroll"
+                        >
+                          <Eye size={14} /> Lihat
+                        </button>
+                      ) : (
+                        <span className="pl-action-none">—</span>
+                      )}
+                    </td>
                     <td>{(row.isPaid) ? (<button className="pl-rollback-btn" title="Batalkan ke Belum Bayar" onClick={() => handleRollback(row)}><RotateCcw size={14} /> Batalkan</button>) : (<span className="pl-action-none">—</span>)}</td>
                   </tr>
                 )) : (
-                  <tr><td colSpan="10" style={{ textAlign:'center', padding:'24px' }}>Tidak ada data ditemukan untuk filter yang dipilih.</td></tr>
+                  <tr><td colSpan="11" style={{ textAlign:'center', padding:'24px' }}>Tidak ada data ditemukan untuk filter yang dipilih.</td></tr>
                 )}
               </tbody>
             </table>
@@ -409,6 +463,26 @@ const PayrollSavings = () => {
           </div>
         )}
       </div>
+
+      {previewDoc && createPortal(
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={() => setPreviewDoc(null)}>
+          <div style={{ background: '#fff', borderRadius: 12, width: '90vw', maxWidth: 900, height: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 25px 60px rgba(0,0,0,0.3)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a' }}>{previewDoc.name}</h3>
+              <button onClick={() => setPreviewDoc(null)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, border: 'none', background: '#f1f5f9', borderRadius: 8, cursor: 'pointer', color: '#64748b' }}>
+                <X size={20} />
+              </button>
+            </div>
+            <div style={{ flex: 1, overflow: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f1f5f9', padding: 16 }}>
+              {isImageFile(previewDoc.url)
+                ? <img src={previewDoc.url} alt={previewDoc.name} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: 4, boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }} />
+                : <iframe src={previewDoc.url} title={previewDoc.name} style={{ width: '100%', height: '100%', border: 'none', borderRadius: 4 }} />
+              }
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 };

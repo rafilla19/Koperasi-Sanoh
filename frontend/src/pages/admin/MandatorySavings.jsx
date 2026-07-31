@@ -371,12 +371,7 @@ export default function MandatorySavings() {
                   </span>
                 </td>
                 <td style={{ color: row.is_new_member ? '#0f172a' : '#cbd5e1' }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                    {row.is_new_member ? formatRupiah(row.pokok_amount) : '-'}
-                    {(row.employee_status_name || '').toUpperCase() === 'OUTSOURCE' && row.pokok_paid && (
-                      <span style={{ color: '#16a34a', fontWeight: 700 }} title="Sudah dibayar via gateway">✓</span>
-                    )}
-                  </span>
+                  {row.is_new_member ? formatRupiah(row.pokok_amount) : '-'}
                 </td>
                 <td>{formatRupiah(row.wajib_amount)}</td>
                 <td>{formatRupiah(row.sukarela_amount)}</td>

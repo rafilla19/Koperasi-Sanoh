@@ -7,6 +7,9 @@ import './SHUManagement.css';
 const formatCurrency = (val) =>
   new Intl.NumberFormat('id-ID').format(val ?? 0);
 
+const isImagePath = (name) =>
+  /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(name || '');
+
 const CURRENT_YEAR  = new Date().getFullYear();
 const CURRENT_MONTH = new Date().getMonth() + 1;
 const YEARS  = Array.from({ length: 5 }, (_, i) => String(CURRENT_YEAR - i));
@@ -58,9 +61,21 @@ const SHUIncomeTransaction = () => {
   // Action modal state (annual — upload proof + notes)
   const [actionModal, setActionModal] = useState(null);
   const [actionFile, setActionFile] = useState(null);
+  const [actionFilePreview, setActionFilePreview] = useState(null);
   const [actionNotes, setActionNotes] = useState('');
   const [actionSaving, setActionSaving] = useState(false);
   const [actionError, setActionError] = useState('');
+
+  // Build/revoke a local preview URL whenever a new proof file is picked
+  useEffect(() => {
+    if (!actionFile || !actionFile.type?.startsWith('image/')) {
+      setActionFilePreview(null);
+      return;
+    }
+    const url = URL.createObjectURL(actionFile);
+    setActionFilePreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [actionFile]);
 
   // Edit modal state (monthly)
   const [editModal, setEditModal]               = useState(null);
@@ -217,6 +232,7 @@ const SHUIncomeTransaction = () => {
   const handleOpenAction = (dist) => {
     setActionModal(dist);
     setActionFile(null);
+    setActionFilePreview(null);
     setActionNotes(dist.notes || '');
     setActionError('');
   };
@@ -780,19 +796,35 @@ const SHUIncomeTransaction = () => {
             </p>
 
             {/* Existing proof */}
-            {(actionModal.transfer_proof_url || actionModal.transfer_proof) && (
-              <div style={{ marginBottom: 12, padding: '8px 12px', background: '#f0fdf4', borderRadius: 8, fontSize: 12 }}>
-                <span style={{ color: '#16a34a', fontWeight: 600 }}>Bukti saat ini: </span>
-                <a
-                  href={actionModal.transfer_proof_url || actionModal.transfer_proof}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{ color: '#3b82f6', textDecoration: 'underline' }}
-                >
-                  {actionModal.transfer_proof_name || 'Lihat Bukti'}
-                </a>
-              </div>
-            )}
+            {(actionModal.transfer_proof_url || actionModal.transfer_proof) && (() => {
+              const proofUrl = actionModal.transfer_proof_url || actionModal.transfer_proof;
+              const proofIsImage = isImagePath(actionModal.transfer_proof_name || proofUrl);
+              return (
+                <div style={{ marginBottom: 12, padding: '8px 12px', background: '#f0fdf4', borderRadius: 8, fontSize: 12 }}>
+                  <span style={{ color: '#16a34a', fontWeight: 600, display: 'block', marginBottom: proofIsImage ? 8 : 0 }}>
+                    Bukti saat ini:
+                  </span>
+                  {proofIsImage ? (
+                    <a href={proofUrl} target="_blank" rel="noreferrer">
+                      <img
+                        src={proofUrl}
+                        alt={actionModal.transfer_proof_name || 'Bukti transfer'}
+                        style={{ display: 'block', width: '100%', maxHeight: 220, objectFit: 'contain', borderRadius: 8, border: '1px solid #d1fae5', background: '#fff' }}
+                      />
+                    </a>
+                  ) : (
+                    <a
+                      href={proofUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ color: '#3b82f6', textDecoration: 'underline' }}
+                    >
+                      {actionModal.transfer_proof_name || 'Lihat Bukti'}
+                    </a>
+                  )}
+                </div>
+              );
+            })()}
 
             {actionModal.tf_reference_id && (
               <div style={{ marginBottom: 12, padding: '6px 10px', background: '#f5f3ff', borderRadius: 8, fontSize: 11, color: '#6b7280' }}>
@@ -822,6 +854,13 @@ const SHUIncomeTransaction = () => {
                   onChange={e => { if (e.target.files[0]) setActionFile(e.target.files[0]); }}
                 />
               </label>
+              {actionFilePreview && (
+                <img
+                  src={actionFilePreview}
+                  alt={actionFile?.name || 'Preview bukti transfer'}
+                  style={{ display: 'block', width: '100%', maxHeight: 220, objectFit: 'contain', borderRadius: 8, border: '1px solid #e5e7eb', marginTop: 8, background: '#fff' }}
+                />
+              )}
             </div>
 
             {/* Notes */}

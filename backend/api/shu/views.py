@@ -1,4 +1,5 @@
 # shu/views.py
+import calendar
 from decimal import Decimal, InvalidOperation
 from datetime import datetime
 
@@ -62,6 +63,76 @@ def _get_bank_map(member_ids):
                 'account_holder_name': row[4],
             }
     return bank_map
+
+
+def _member_savings_by_period(period_start, period_end, member_ids=None):
+    """
+    Sum simpanan wajib/sukarela (status_id 34/39) per member for the given date range.
+
+    Keyed by the underlying monthly_saving_bill's bill_period_start when a bill is linked,
+    so a bill paid/processed outside its nominal month (late catch-up payment, or several
+    months' payroll deductions confirmed together on the same day) is still attributed to
+    the month it was actually for. Falls back to transaction_date for transactions with no
+    linked bill (legacy rows, manual/self-service payments).
+    """
+    params = [period_start, period_end]
+    member_filter_sql = ''
+    if member_ids is not None:
+        member_ids = list(member_ids)
+        if not member_ids:
+            return {}
+        member_filter_sql = 'AND st.member_id = ANY(%s)'
+        params.append(member_ids)
+
+    query = f"""
+        SELECT st.member_id, st.saving_type_id, SUM(st.amount)
+        FROM saving_transactions st
+        LEFT JOIN monthly_saving_bills b ON b.id = st.monthly_saving_bill_id
+        WHERE st.status_id IN (34, 39)
+          AND st.saving_type_id IN (1, 2)
+          AND COALESCE(b.bill_period_start, st.transaction_date::date) BETWEEN %s AND %s
+          {member_filter_sql}
+        GROUP BY st.member_id, st.saving_type_id
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+
+    result = {}
+    for member_id, saving_type_id, total in rows:
+        if member_id not in result:
+            result[member_id] = {'wajib': Decimal('0'), 'sukarela': Decimal('0')}
+        if saving_type_id == 1:
+            result[member_id]['wajib'] += total or Decimal('0')
+        elif saving_type_id == 2:
+            result[member_id]['sukarela'] += total or Decimal('0')
+    return result
+
+
+def _member_is_active_in_period(member, year, month):
+    """Return True when the member has joined on or before the given month."""
+    join_date = getattr(member, 'join_date', None)
+    if not join_date:
+        return True
+    return (join_date.year < year) or (join_date.year == year and join_date.month <= month)
+
+
+def _member_eligible_months(member, year, end_month):
+    """Count active months from January up to end_month for yearly SHU calculations."""
+    if end_month <= 0:
+        return 0
+
+    join_date = getattr(member, 'join_date', None)
+    if not join_date:
+        return end_month
+
+    if join_date.year > year:
+        return 0
+    if join_date.year < year:
+        return end_month
+    if join_date.month > end_month:
+        return 0
+    return end_month - join_date.month + 1
 
 
 # ── MASTER CONFIGURATION ─────────────────────────────────────────
@@ -694,37 +765,45 @@ def admin_shu_member_bases(request):
             months_multiplier = Decimal('0')
     else:
         period_month = month or now.month
+        _, last_day = calendar.monthrange(year, period_month)
         period_start = date_cls(year, period_month, 1)
-        period_end = date_cls(year, period_month, 28)
+        period_end = date_cls(year, period_month, last_day)
         months_multiplier = Decimal('1')
 
-    # If obligation values are defined on the member_saving_obligations table,
-    # use those monthly amounts directly for mandatory/voluntary savings.
-    obligations = MemberSavingObligations.objects.filter(
-        member_id__in=members_qs.values_list('id', flat=True),
-        saving_type_id__in=[1, 2],
-        is_active=True,
-        deleted_at__isnull=True,
-    ).values('member_id', 'saving_type_id', 'monthly_amount')
+    members = list(members_qs)
+    member_map = {m.id: m for m in members}
 
-    member_savings = {}
-    for o in obligations:
-        mid = o['member_id']
+    if summary == 'year':
+        if year < now.year:
+            period_end = date_cls(year, 12, 31)
+        elif year == now.year:
+            _, last_day = calendar.monthrange(year, now.month)
+            period_end = date_cls(year, now.month, last_day)
+        else:
+            period_end = date_cls(year, 1, 1)
+        period_start = date_cls(year, 1, 1)
+    else:
+        period_month = month or now.month
+        _, last_day = calendar.monthrange(year, period_month)
+        period_start = date_cls(year, period_month, 1)
+        period_end = date_cls(year, period_month, last_day)
+
+    # Use actual paid saving transactions for mandatory/voluntary savings, attributed to the
+    # month the underlying bill was actually for (not just when it was processed/paid).
+    savings_by_period = _member_savings_by_period(period_start, period_end, member_ids=member_map.keys())
+
+    member_savings = {m.id: {'mandatory': Decimal('0'), 'voluntary': Decimal('0')} for m in members}
+    for mid, sv in savings_by_period.items():
         if mid not in member_savings:
-            member_savings[mid] = {'mandatory': Decimal('0'), 'voluntary': Decimal('0')}
-        if o['saving_type_id'] == 1:
-            member_savings[mid]['mandatory'] += o['monthly_amount'] * months_multiplier
-        elif o['saving_type_id'] == 2:
-            member_savings[mid]['voluntary'] += o['monthly_amount'] * months_multiplier
+            continue
+        member_savings[mid]['mandatory'] = sv['wajib']
+        member_savings[mid]['voluntary'] = sv['sukarela']
 
     # Total simpanan semua member aktif (denominator untuk proporsi jasa modal)
-    all_obligations_agg = MemberSavingObligations.objects.filter(
-        saving_type_id__in=[1, 2],
-        is_active=True,
-        deleted_at__isnull=True,
-        member__deleted_at__isnull=True,
-    ).aggregate(total=Sum('monthly_amount'))
-    total_all_savings = (all_obligations_agg['total'] or Decimal('0')) * months_multiplier
+    total_all_savings = sum(
+        savings['mandatory'] + savings['voluntary']
+        for savings in member_savings.values()
+    )
 
     # Hitung jasa modal pool dari shu_component_allocations (master_configuration_id=1)
     jasa_modal_pool = None
@@ -754,11 +833,11 @@ def admin_shu_member_bases(request):
         pass
 
     results = []
-    for m in members_qs:
+    for m in members:
         savings = member_savings.get(m.id, {'mandatory': Decimal('0'), 'voluntary': Decimal('0')})
         total = savings['mandatory'] + savings['voluntary']
 
-        shu_jasa_modal = None
+        shu_jasa_modal = 0.0
         if jasa_modal_pool is not None and total_all_savings > 0:
             shu_jasa_modal = float(
                 (total / total_all_savings * jasa_modal_pool).quantize(Decimal('0.01'))
@@ -772,7 +851,7 @@ def admin_shu_member_bases(request):
             'mandatory_saving_monthly': float(savings['mandatory']),
             'voluntary_saving_monthly': float(savings['voluntary']),
             'total_saving_amount': float(total),
-            'shu_jasa_modal': shu_jasa_modal,
+            'shu_jasa_modal': float(shu_jasa_modal),
         })
 
     return Response({
@@ -816,16 +895,26 @@ def admin_shu_member_bases_distribute(request):
         return Response({'error': 'ShuResults untuk periode tidak ditemukan'}, status=404)
 
     # Build obligations and totals (same logic as admin_shu_member_bases)
+    members = list(Members.objects.filter(deleted_at__isnull=True))
+    selected_month = month or now.month
+    active_months_map = {
+        m.id: (1 if _member_is_active_in_period(m, year, selected_month) else 0)
+        for m in members
+    }
+
     obligations = MemberSavingObligations.objects.filter(
         saving_type_id__in=[1, 2],
         is_active=True,
         deleted_at__isnull=True,
         member__deleted_at__isnull=True,
+        member_id__in=active_months_map.keys(),
     ).values('member_id', 'saving_type_id', 'monthly_amount')
 
     member_savings = {}
     for o in obligations:
         mid = o['member_id']
+        if active_months_map.get(mid, 0) <= 0:
+            continue
         if mid not in member_savings:
             member_savings[mid] = {'mandatory': Decimal('0'), 'voluntary': Decimal('0')}
         if o['saving_type_id'] == 1:
@@ -833,12 +922,10 @@ def admin_shu_member_bases_distribute(request):
         elif o['saving_type_id'] == 2:
             member_savings[mid]['voluntary'] += o['monthly_amount']
 
-    total_all_savings = MemberSavingObligations.objects.filter(
-        saving_type_id__in=[1, 2],
-        is_active=True,
-        deleted_at__isnull=True,
-        member__deleted_at__isnull=True,
-    ).aggregate(total=Sum('monthly_amount'))['total'] or Decimal('0')
+    total_all_savings = sum(
+        (o['monthly_amount'] or Decimal('0')) * Decimal(str(active_months_map.get(o['member_id'], 0)))
+        for o in obligations
+    )
 
     jasa_modal_cfg = MasterConfiguration.objects.filter(
         component_name__icontains='jasa modal',
@@ -850,13 +937,14 @@ def admin_shu_member_bases_distribute(request):
 
     jasa_modal_pool = (shu_result.net_profit * jasa_modal_cfg.percentage / Decimal('100')).quantize(Decimal('0.01'))
 
-    members = Members.objects.filter(deleted_at__isnull=True)
-
     created = 0
     updated = 0
     with transaction.atomic():
         for m in members:
-            savings = member_savings.get(m.id, {'mandatory': Decimal('0'), 'voluntary': Decimal('0')})
+            if active_months_map.get(m.id, 0) <= 0:
+                savings = {'mandatory': Decimal('0'), 'voluntary': Decimal('0')}
+            else:
+                savings = member_savings.get(m.id, {'mandatory': Decimal('0'), 'voluntary': Decimal('0')})
             total = savings['mandatory'] + savings['voluntary']
 
             shu_jasa_modal = Decimal('0')
@@ -1394,6 +1482,8 @@ def admin_shu_jasa_modal_list(request):
     except ValueError:
         return Response({'error': 'year tidak valid'}, status=400)
 
+    now = timezone.now()
+
     try:
         period = ShuResults.objects.get(period_year=year_int, period_month=13, deleted_at__isnull=True)
     except ShuResults.DoesNotExist:
@@ -1409,6 +1499,53 @@ def admin_shu_jasa_modal_list(request):
             Q(member__full_name__icontains=search) |
             Q(member__nik_employee__icontains=search)
         )
+
+    end_month = 12 if year_int < now.year else (now.month if year_int == now.year else 0)
+    monthly_rows = (
+        ShuMemberDistributionsMonthly.objects
+        .filter(period_year=year_int, member_id__in=qs.values_list('member_id', flat=True))
+        .values('member_id', 'period_month', 'simp_wajib', 'simp_sukarela', 'total_savings', 'total_shu')
+        .order_by('member_id', 'period_month')
+    )
+
+    monthly_map = {}
+    for row in monthly_rows:
+        monthly_map.setdefault(row['member_id'], []).append(row)
+
+    for dist in qs:
+        join_date = dist.member.join_date
+        if end_month <= 0:
+            adjusted_simp_wajib = Decimal('0')
+            adjusted_simp_sukarela = Decimal('0')
+            adjusted_total_savings = Decimal('0')
+            adjusted_total_shu = Decimal('0')
+        else:
+            if not join_date:
+                start_month = 1
+            elif join_date.year > year_int:
+                start_month = end_month + 1
+            elif join_date.year < year_int:
+                start_month = 1
+            else:
+                start_month = join_date.month
+
+            adjusted_simp_wajib = Decimal('0')
+            adjusted_simp_sukarela = Decimal('0')
+            adjusted_total_savings = Decimal('0')
+            adjusted_total_shu = Decimal('0')
+
+            for row in monthly_map.get(dist.member_id, []):
+                period_month = row['period_month'] or 0
+                if start_month <= period_month <= end_month:
+                    adjusted_simp_wajib += row['simp_wajib'] or Decimal('0')
+                    adjusted_simp_sukarela += row['simp_sukarela'] or Decimal('0')
+                    adjusted_total_savings += row['total_savings'] or Decimal('0')
+                    adjusted_total_shu += row['total_shu'] or Decimal('0')
+
+        dist.simp_wajib = adjusted_simp_wajib
+        dist.simp_sukarela = adjusted_simp_sukarela
+        dist.total_savings = adjusted_total_savings
+        dist.total_shu = adjusted_total_shu
 
     member_ids = list(qs.values_list('member_id', flat=True))
     bank_map = _get_bank_map(member_ids)
@@ -1442,7 +1579,7 @@ def admin_shu_annual_from_monthly(request):
 
     monthly_agg = (
         ShuMemberDistributionsMonthly.objects
-        .filter(period_year=year)
+        .filter(period__period_year=year)
         .values('member_id')
         .annotate(
             total_simp_wajib=Sum('simp_wajib'),
@@ -1543,7 +1680,7 @@ def admin_shu_jasa_modal_distribute(request):
     # Aggregate from monthly distributions table
     monthly_agg = (
         ShuMemberDistributionsMonthly.objects
-        .filter(period_year=year)
+        .filter(period__period_year=year)
         .values('member_id')
         .annotate(
             total_simp_wajib=Sum('simp_wajib'),
@@ -1725,7 +1862,7 @@ def _sync_annual_distributions(year: int):
 
     monthly_agg = (
         ShuMemberDistributionsMonthly.objects
-        .filter(period_year=year)
+        .filter(period__period_year=year)
         .values('member_id')
         .annotate(
             total_simp_wajib=Sum('simp_wajib'),
@@ -1825,29 +1962,21 @@ def admin_shu_monthly_distribute(request):
             shu_result.net_profit * jasa_modal_cfg.percentage / Decimal('100')
         ).quantize(Decimal('0.01'))
 
-    # Hitung simpanan per anggota untuk bulan ini (1 bulan)
-    obligations = MemberSavingObligations.objects.filter(
-        saving_type_id__in=[1, 2],
-        is_active=True,
-        deleted_at__isnull=True,
-        member__deleted_at__isnull=True,
-    ).values('member_id', 'saving_type_id', 'monthly_amount')
+    # Hitung simpanan per anggota untuk bulan ini dari transaksi simpanan aktual
+    # (hanya status_id 34/39 yang dihitung; member yang tidak bayar bulan ini = 0)
+    from datetime import date as _date_cls
 
-    member_savings = {}
-    for o in obligations:
-        mid = o['member_id']
-        if mid not in member_savings:
-            member_savings[mid] = {'wajib': Decimal('0'), 'sukarela': Decimal('0')}
-        if o['saving_type_id'] == 1:
-            member_savings[mid]['wajib'] += o['monthly_amount']
-        elif o['saving_type_id'] == 2:
-            member_savings[mid]['sukarela'] += o['monthly_amount']
+    members = list(Members.objects.filter(deleted_at__isnull=True))
+    _, _last_day = calendar.monthrange(year, month)
+    period_start = _date_cls(year, month, 1)
+    period_end = _date_cls(year, month, _last_day)
+
+    member_savings = _member_savings_by_period(period_start, period_end, member_ids=[m.id for m in members])
 
     total_all_savings = sum(
-        v['wajib'] + v['sukarela'] for v in member_savings.values()
+        (v['wajib'] + v['sukarela']) for v in member_savings.values()
     ) or Decimal('0')
 
-    members = Members.objects.filter(deleted_at__isnull=True)
     created = updated = 0
     now_ts = timezone.now()
 
@@ -1945,22 +2074,17 @@ def admin_shu_monthly_distributions(request):
         if cfg:
             jasa_modal_pool = (shu_result.net_profit * cfg.percentage / Decimal('100')).quantize(Decimal('0.01'))
 
-    # Auto-create missing member records
+    # Auto-create missing member records from transaksi simpanan aktual
+    # (hanya status_id 34/39 yang dihitung; member yang tidak bayar bulan ini = 0)
     if jasa_modal_pool is not None:
-        obligations = MemberSavingObligations.objects.filter(
-            saving_type_id__in=[1, 2], is_active=True,
-            deleted_at__isnull=True, member__deleted_at__isnull=True,
-        ).values('member_id', 'saving_type_id', 'monthly_amount')
+        from datetime import date as _date_cls
 
-        member_savings = {}
-        for o in obligations:
-            mid = o['member_id']
-            if mid not in member_savings:
-                member_savings[mid] = {'wajib': Decimal('0'), 'sukarela': Decimal('0')}
-            if o['saving_type_id'] == 1:
-                member_savings[mid]['wajib'] += o['monthly_amount']
-            elif o['saving_type_id'] == 2:
-                member_savings[mid]['sukarela'] += o['monthly_amount']
+        members = list(Members.objects.filter(deleted_at__isnull=True))
+        _, _last_day = calendar.monthrange(year, month)
+        period_start = _date_cls(year, month, 1)
+        period_end = _date_cls(year, month, _last_day)
+
+        member_savings = _member_savings_by_period(period_start, period_end, member_ids=[m.id for m in members])
 
         total_all_savings = sum(
             v['wajib'] + v['sukarela'] for v in member_savings.values()
@@ -1973,7 +2097,7 @@ def admin_shu_monthly_distributions(request):
 
         now_ts = timezone.now()
         new_records = []
-        for m in Members.objects.filter(deleted_at__isnull=True):
+        for m in members:
             if m.id not in existing_ids:
                 sv = member_savings.get(m.id, {'wajib': Decimal('0'), 'sukarela': Decimal('0')})
                 simp_wajib = sv['wajib']
@@ -2059,10 +2183,21 @@ def admin_shu_monthly_distribution_detail(request, pk):
         if cfg:
             jasa_modal_pool = (shu_result.net_profit * cfg.percentage / Decimal('100')).quantize(Decimal('0.01'))
 
-    total_all_savings = MemberSavingObligations.objects.filter(
-        saving_type_id__in=[1, 2], is_active=True,
-        deleted_at__isnull=True, member__deleted_at__isnull=True,
-    ).aggregate(total=Sum('monthly_amount'))['total'] or Decimal('0')
+    # Denominator = total simpanan aktual (status_id 34/39) semua member pada periode ini,
+    # supaya proporsi tetap konsisten dengan data transaksi nyata.
+    from datetime import date as _date_cls
+    period_year = dist.period_year or shu_result.period_year
+    period_month = dist.period_month or shu_result.period_month
+    _, _last_day = calendar.monthrange(period_year, period_month)
+    _period_start = _date_cls(period_year, period_month, 1)
+    _period_end = _date_cls(period_year, period_month, _last_day)
+
+    _others_savings = _member_savings_by_period(_period_start, _period_end)
+    _others_savings.pop(dist.member_id, None)
+    total_all_savings = sum(
+        (sv['wajib'] + sv['sukarela']) for sv in _others_savings.values()
+    ) or Decimal('0')
+    total_all_savings += total_savings
 
     total_shu = Decimal('0')
     if jasa_modal_pool is not None and total_all_savings > 0:
@@ -2252,27 +2387,29 @@ def save_component_allocations(request):
             except ShuComponentAllocation.DoesNotExist:
                 return Response({'error': f'Allocation item with ID {alloc_id} not found for this period'}, status=404)
 
-        # ── Recalculate Member Distributions ──
-        from api.saving.models import MemberSavingObligations
-        obligations = MemberSavingObligations.objects.filter(
-            saving_type_id__in=[1, 2],
-            is_active=True,
-            deleted_at__isnull=True,
-            member__deleted_at__isnull=True,
-        ).values('member_id', 'saving_type_id', 'monthly_amount')
+        # ── Recalculate Member Distributions from actual saving transactions ──
+        # (hanya status_id 34/39 yang dihitung; member yang tidak bayar di periode ini = 0)
+        from datetime import date as _date_cls
 
         now = timezone.now()
         if shu_result.period_month == 13:
-            months_multiplier = Decimal('12') if year < now.year else Decimal(str(now.month))
+            period_start = _date_cls(year, 1, 1)
+            if year < now.year:
+                period_end = _date_cls(year, 12, 31)
+            elif year == now.year:
+                _, _last_day = calendar.monthrange(year, now.month)
+                period_end = _date_cls(year, now.month, _last_day)
+            else:
+                period_end = _date_cls(year, 1, 1)
         else:
-            months_multiplier = Decimal('1')
+            _, _last_day = calendar.monthrange(year, month)
+            period_start = _date_cls(year, month, 1)
+            period_end = _date_cls(year, month, _last_day)
 
-        member_savings = {}
-        for o in obligations:
-            mid = o['member_id']
-            if mid not in member_savings:
-                member_savings[mid] = Decimal('0')
-            member_savings[mid] += o['monthly_amount'] * months_multiplier
+        _savings_by_member = _member_savings_by_period(period_start, period_end)
+        member_savings = {
+            mid: sv['wajib'] + sv['sukarela'] for mid, sv in _savings_by_member.items()
+        }
 
         total_all_savings = sum(member_savings.values()) or Decimal('0')
         members = Members.objects.filter(deleted_at__isnull=True)

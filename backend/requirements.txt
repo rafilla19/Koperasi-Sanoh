@@ -12,5 +12,6 @@ scikit-learn
 xgboost
 imbalanced-learn
 joblib
+openpyxl
 django-storages
 boto3

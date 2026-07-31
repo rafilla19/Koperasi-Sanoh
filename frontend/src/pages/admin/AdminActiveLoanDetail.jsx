@@ -13,6 +13,7 @@ const AdminActiveLoanDetail = () => {
   const [schedule, setSchedule] = useState([]);
   const [loading, setLoading] = useState(true);
   const [previewDoc, setPreviewDoc] = useState(null);
+  const [gatewayDetail, setGatewayDetail] = useState(null);
 
   const resolveFileUrl = (filePath) => {
     if (!filePath) return '';
@@ -24,6 +25,25 @@ const AdminActiveLoanDetail = () => {
   };
 
   const isImageFile = (url) => /\.(jpg|jpeg|png|gif|bmp|webp|svg)(\?|$)/i.test(url || '');
+
+  const handleDownloadFile = async (url, name) => {
+    if (!url) return;
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = name || url.split('/').filter(Boolean).pop() || 'document';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error('Download failed:', error);
+      window.open(url, '_blank');
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -186,13 +206,39 @@ const AdminActiveLoanDetail = () => {
                         </span>
                       </td>
                       <td>
-                        {s.payment_proof ? (
+                        {s.payment_method_name === 'MANUAL' && s.payment_proof ? (
                           <button
                             onClick={() => setPreviewDoc({ url: resolveFileUrl(s.payment_proof), name: `Bukti Pembayaran #${s.installment_number}` })}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#4f7df3', padding: 0 }}
+                            style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', color: '#4f7df3', padding: 0, fontSize: 12, fontWeight: 600 }}
+                            title="Lihat bukti transfer manual"
                           >
-                            <Eye size={16} />
+                            <Eye size={16} /> Manual
                           </button>
+                        ) : s.payment_method_name === 'GATEWAY' ? (
+                          <button
+                            onClick={() => setGatewayDetail({
+                              installmentNumber: s.installment_number,
+                              reference: s.gateway_reference,
+                              status: s.gateway_status,
+                              paymentDate: s.payment_date,
+                            })}
+                            style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', color: '#4f7df3', padding: 0, fontSize: 12, fontWeight: 600 }}
+                            title="Lihat detail transaksi Midtrans"
+                          >
+                            <ExternalLink size={14} /> Midtrans
+                          </button>
+                        ) : s.payment_method_name === 'PAYROLL_DEDUCTION' && s.payment_proof ? (
+                          <button
+                            onClick={() => setPreviewDoc({ url: resolveFileUrl(s.payment_proof), name: `Bukti Transfer Payroll #${s.installment_number}` })}
+                            style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', color: '#4f7df3', padding: 0, fontSize: 12, fontWeight: 600 }}
+                            title="Lihat bukti transfer payroll"
+                          >
+                            <Eye size={16} /> Payroll
+                          </button>
+                        ) : s.payment_method_name === 'PAYROLL_DEDUCTION' ? (
+                          <span style={{ color: '#94a3b8', fontSize: 12, fontStyle: 'italic' }} title="Dipotong otomatis dari gaji, belum ada bukti transfer yang diunggah untuk konfirmasi ini">
+                            Payroll (tanpa bukti)
+                          </span>
                         ) : '-'}
                       </td>
                     </tr>
@@ -271,7 +317,7 @@ const AdminActiveLoanDetail = () => {
             <div className="aald-preview-header">
               <h3>{previewDoc.name}</h3>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <button className="aald-preview-action" onClick={() => window.open(previewDoc.url, '_blank')}>
+                <button className="aald-preview-action" onClick={() => handleDownloadFile(previewDoc.url, previewDoc.name)}>
                   <Download size={14} /> Unduh
                 </button>
                 <button className="aald-preview-close" onClick={() => setPreviewDoc(null)}>
@@ -285,6 +331,37 @@ const AdminActiveLoanDetail = () => {
               ) : (
                 <iframe src={previewDoc.url} title={previewDoc.name} className="aald-preview-iframe" />
               )}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {gatewayDetail && createPortal(
+        <div className="aald-preview-overlay" onClick={() => setGatewayDetail(null)}>
+          <div className="aald-preview-modal" onClick={(e) => e.stopPropagation()} style={{ height: 'auto', maxWidth: 420 }}>
+            <div className="aald-preview-header">
+              <h3>Detail Pembayaran Midtrans #{gatewayDetail.installmentNumber}</h3>
+              <button className="aald-preview-close" onClick={() => setGatewayDetail(null)}>
+                <X size={20} />
+              </button>
+            </div>
+            <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div>
+                <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase' }}>No. Referensi / Order ID</div>
+                <div style={{ fontSize: 14, color: '#0f172a', fontWeight: 600 }}>{gatewayDetail.reference || '-'}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase' }}>Status Gateway</div>
+                <div style={{ fontSize: 14, color: '#0f172a', fontWeight: 600 }}>{gatewayDetail.status || '-'}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase' }}>Tanggal Pembayaran</div>
+                <div style={{ fontSize: 14, color: '#0f172a', fontWeight: 600 }}>{formatDateTime(gatewayDetail.paymentDate)}</div>
+              </div>
+              <p style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>
+                Pembayaran via Midtrans diverifikasi otomatis oleh payment gateway — tidak ada file bukti transfer yang diunggah untuk jalur ini.
+              </p>
             </div>
           </div>
         </div>,

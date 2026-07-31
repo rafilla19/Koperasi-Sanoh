@@ -1028,28 +1028,63 @@ class LoanViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'])
     def schedule(self, request, pk=None):
+        # Each installment can have multiple loan_payments attempts (e.g. a
+        # cancelled/expired gateway attempt followed by a manual payment), so:
+        # 1) only ever look at loan_payments rows with status_id = 34 (the
+        #    successful/settled state) — pending (32), cancelled (36) and
+        #    denied/failed/expired (35) attempts are excluded entirely, and
+        # 2) only surface proof/method/reference at all when the installment
+        #    itself is actually PAID/late-paid (29/30). This guarantees an
+        #    expired or still-pending transfer never shows up as "bukti" on
+        #    a row that is still UNPAID.
         query = """
-        SELECT  
+        SELECT
             li.id,
-            li.installment_number, 
-            li.due_date, 
-            li.amount_principal, 
-            li.amount_interest, 
-            li.amount_total, 
+            li.installment_number,
+            li.due_date,
+            li.amount_principal,
+            li.amount_interest,
+            li.amount_total,
             COALESCE(s.status_code, 'UNPAID') as status_code,
-            NULL as payment_proof
-        FROM loan_installments li 
-        LEFT JOIN statuses s ON s.id = li.status_id 
+            lp.payment_method_name,
+            lp.payment_proof,
+            lp.gateway_reference,
+            lp.gateway_status,
+            lp.payment_date
+        FROM loan_installments li
+        LEFT JOIN statuses s ON s.id = li.status_id
+        LEFT JOIN LATERAL (
+            SELECT
+                pm.name AS payment_method_name,
+                mp.proof_file_path AS payment_proof,
+                pgt.gateway_transaction_id AS gateway_reference,
+                pgt.gateway_status AS gateway_status,
+                lp2.payment_date AS payment_date
+            FROM loan_payments lp2
+            LEFT JOIN payment_methods pm ON pm.id = lp2.payment_method_id
+                        LEFT JOIN manual_payments mp ON pm.id IN (2, 3) AND mp.payment_reference_id = lp2.payment_reference_id
+            LEFT JOIN payment_gateway_transactions pgt ON pm.name = 'GATEWAY' AND CAST(pgt.id AS VARCHAR) = lp2.payment_reference_id
+            WHERE lp2.installment_id = li.id
+              AND lp2.deleted_at IS NULL
+              AND lp2.status_id = 34
+              AND li.status_id IN (29, 30)
+            ORDER BY lp2.id DESC
+            LIMIT 1
+        ) lp ON TRUE
         WHERE li.loan_id = %s
         ORDER BY li.installment_number ASC;
         """
         params = [pk]
-        
+
         with connection.cursor() as cursor:
             cursor.execute(query, params)
             columns = [col[0] for col in cursor.description]
             results = [dict(zip(columns, row)) for row in cursor.fetchall()]
-            
+
+        for r in results:
+            if r.get('payment_proof'):
+                r['payment_proof'] = get_absolute_media_url(request, r['payment_proof'])
+
         return Response(results)
 
     @action(detail=True, methods=['get'])
@@ -1332,7 +1367,7 @@ class LoanViewSet(viewsets.ModelViewSet):
                         })
             
         # 3. Create a new transaction with Midtrans Snap API
-        order_id = f"KOP-LOAN-{pk}-{installment_number}-{int(timezone.now().timestamp())}"
+        order_id = f"GET-LOAN-{pk}-{installment_number}-{int(timezone.now().timestamp())}"
         
         url = "https://app.midtrans.com/snap/v1/transactions" if is_production else "https://app.sandbox.midtrans.com/snap/v1/transactions"
         
@@ -1994,23 +2029,24 @@ class LoanViewSet(viewsets.ModelViewSet):
             COALESCE(current_month_inst.amount_total, 0) AS current_month_amount,
             COALESCE(current_month_inst.inst_status_id, NULL) AS current_month_status_id,
             es.status_name as employee_status,
-        
-            CASE 
-                WHEN COALESCE(li_summary.total_installment, 0) > 0 
+            proof.proof_file_path AS payment_proof,
+
+            CASE
+                WHEN COALESCE(li_summary.total_installment, 0) > 0
                 THEN (li_summary.paid_installment * 100.0 / li_summary.total_installment)
                 ELSE 0
             END AS progress_percent
-        
-        FROM loan_applications la 
+
+        FROM loan_applications la
         INNER JOIN members m ON la.member_id = m.id
         INNER JOIN departments d ON m.department_id = d.id
         INNER JOIN users u ON m.user_id = u.id
         INNER JOIN loan_types lt ON la.loan_type_id = lt.id
-        INNER JOIN loans l ON l.application_id = la.id   
+        INNER JOIN loans l ON l.application_id = la.id
         INNER JOIN statuses s on s.id = l.status_id
         LEFT JOIN employee_statuses es ON es.id = m.employee_status_id
         JOIN (
-            SELECT 
+            SELECT
                 loan_id,
                 COUNT(*) AS total_installment,
                 SUM(CASE WHEN status_id IN (29,30) THEN 1 ELSE 0 END) AS paid_installment
@@ -2018,7 +2054,7 @@ class LoanViewSet(viewsets.ModelViewSet):
             GROUP BY loan_id
         ) li_summary ON li_summary.loan_id = l.id
         LEFT JOIN LATERAL (
-            SELECT 
+            SELECT
                 li.id as inst_id,
                 li.installment_number,
                 li.due_date,
@@ -2030,6 +2066,17 @@ class LoanViewSet(viewsets.ModelViewSet):
             AND EXTRACT(MONTH FROM li.due_date) = %s
             LIMIT 1
         ) current_month_inst ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT mp.proof_file_path
+            FROM loan_payments lp2
+            JOIN payment_methods pm ON pm.id = lp2.payment_method_id
+            JOIN manual_payments mp ON pm.name = 'PAYROLL_DEDUCTION' AND mp.payment_reference_id = lp2.payment_reference_id
+            WHERE lp2.installment_id = current_month_inst.inst_id
+              AND lp2.status_id = 34
+              AND current_month_inst.inst_status_id IN (29, 30)
+            ORDER BY lp2.id DESC
+            LIMIT 1
+        ) proof ON TRUE
         WHERE
             l.status_id IN (25, 26)
             AND u.is_active = true
@@ -2041,7 +2088,11 @@ class LoanViewSet(viewsets.ModelViewSet):
             cursor.execute(query, [year, month])
             columns = [col[0] for col in cursor.description]
             results = [dict(zip(columns, row)) for row in cursor.fetchall()]
-            
+
+        for r in results:
+            if r.get('payment_proof'):
+                r['payment_proof'] = get_absolute_media_url(request, r['payment_proof'])
+
         return Response(results)
 
     @action(detail=False, methods=['get'])
@@ -2084,7 +2135,23 @@ class LoanViewSet(viewsets.ModelViewSet):
 
             -- TOTALS
             COALESCE(SUM(CASE WHEN msb.status_id = 38 THEN msb.amount_due ELSE 0 END), 0) AS total_outstanding,
-            COALESCE(SUM(msb.amount_due), 0) AS total_amount
+            COALESCE(SUM(msb.amount_due), 0) AS total_amount,
+
+            -- Proof of the payroll transfer that paid these bills (any one of
+            -- them, since a single batch confirm attaches the same file to
+            -- every bill it settles) — only ever populated for PAID bills.
+            MAX(
+                CASE WHEN msb.status_id IN (39, 40) THEN (
+                    SELECT mp.proof_file_path
+                    FROM saving_transactions stx
+                    JOIN payment_methods pm ON pm.id = stx.payment_method_id
+                    JOIN manual_payments mp ON pm.name = 'PAYROLL_DEDUCTION' AND mp.payment_reference_id = stx.payment_reference_id
+                    WHERE stx.monthly_saving_bill_id = msb.id
+                      AND stx.status_id = 34
+                    ORDER BY stx.id DESC
+                    LIMIT 1
+                ) END
+            ) AS payment_proof
         FROM monthly_saving_bills msb
         INNER JOIN members m ON m.id = msb.member_id
         INNER JOIN departments d ON d.id = m.department_id
@@ -2116,7 +2183,10 @@ class LoanViewSet(viewsets.ModelViewSet):
             total_paid = total_amount - total_outstanding
             is_paid = total_outstanding == 0
             status_id = 39 if is_paid else 38
-            
+            payment_proof = item.get('payment_proof') if is_paid else None
+            if payment_proof:
+                payment_proof = get_absolute_media_url(request, payment_proof)
+
             formatted_results.append({
                 'id': item['member_id'],
                 'member_id': item['member_id'],
@@ -2138,23 +2208,54 @@ class LoanViewSet(viewsets.ModelViewSet):
                 'mandatory_outstanding': float(item['mandatory_outstanding']),
                 'voluntary_outstanding': float(item['voluntary_outstanding']),
                 'principal_outstanding': float(item['principal_outstanding']),
-                'total_outstanding': total_outstanding
+                'total_outstanding': total_outstanding,
+                'payment_proof': payment_proof
             })
             
         return Response(formatted_results)
 
     @action(detail=False, methods=['post'])
     def confirm_payroll_savings(self, request):
-        saving_ids = request.data.get('saving_ids', []) 
+        import json as _json
+
+        raw_ids = request.data.get('saving_ids', [])
+        if isinstance(raw_ids, str):
+            try:
+                raw_ids = _json.loads(raw_ids)
+            except Exception:
+                return Response({'error': 'Invalid saving_ids format'}, status=400)
+        if not isinstance(raw_ids, (list, tuple)):
+            return Response({'error': 'Invalid saving_ids format'}, status=400)
+        try:
+            saving_ids = [int(member_id) for member_id in raw_ids]
+        except (TypeError, ValueError):
+            return Response({'error': 'Invalid saving_ids format'}, status=400)
         period = request.data.get('period')
 
         if not saving_ids or not period:
             return Response({'error': 'saving_ids and period are required'}, status=400)
 
+        # One shared transfer-proof file covers the whole confirmed batch —
+        # HRD transfers the payroll deduction total in a single transaction.
+        proof_file = request.FILES.get('proof_file')
+        if not proof_file:
+            return Response({'error': 'Bukti transfer payroll wajib diunggah.'}, status=400)
+
         try:
             year, month = period.split('-')
         except ValueError:
             return Response({'error': 'Invalid period format'}, status=400)
+
+        try:
+            admin_id, _ = get_verified_admin(request)
+        except Exception:
+            admin_id = None
+
+        safe_name = os.path.basename(proof_file.name or 'bukti_payroll')
+        safe_name = re.sub(r'[^A-Za-z0-9._-]+', '_', safe_name).strip('._-') or 'bukti_payroll'
+        date_prefix = timezone.now().strftime('%Y/%m/%d')
+        storage_path = f"manual_payments/{date_prefix}/{uuid4().hex}_{safe_name}"
+        file_path = str(default_storage.save(storage_path, proof_file))
 
         results = []
         failed = []
@@ -2163,14 +2264,14 @@ class LoanViewSet(viewsets.ModelViewSet):
             for member_id in saving_ids:
                 # Find unpaid bills for this member in the selected period
                 cursor.execute("""
-                    SELECT id, saving_type_id 
-                    FROM monthly_saving_bills 
+                    SELECT id, saving_type_id
+                    FROM monthly_saving_bills
                     WHERE member_id = %s AND status_id = 38
                       AND EXTRACT(YEAR FROM bill_period_start) = %s
                       AND EXTRACT(MONTH FROM bill_period_start) = %s
                 """, [member_id, year, month])
                 bills = cursor.fetchall()
-                
+
                 if not bills:
                     failed.append({'member_id': member_id, 'reason': 'No pending bills found'})
                     continue
@@ -2179,8 +2280,8 @@ class LoanViewSet(viewsets.ModelViewSet):
                     try:
                         with transaction.atomic():
                             cursor.execute(
-                                "CALL public.sp_savings_payroll_transaction(%s, %s, %s)",
-                                [bill_id, member_id, saving_type_id]
+                                "CALL public.sp_savings_payroll_transaction(%s, %s, %s, %s, %s)",
+                                [bill_id, member_id, saving_type_id, file_path, admin_id]
                             )
                         results.append(bill_id)
                     except Exception as e:
@@ -2257,11 +2358,41 @@ class LoanViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def confirm_payroll_payments(self, request):
-        installment_ids = request.data.get('installment_ids', [])
+        import json as _json
+
+        raw_ids = request.data.get('installment_ids', [])
+        if isinstance(raw_ids, str):
+            try:
+                raw_ids = _json.loads(raw_ids)
+            except Exception:
+                return Response({'error': 'Invalid installment_ids format'}, status=400)
+        if not isinstance(raw_ids, (list, tuple)):
+            return Response({'error': 'Invalid installment_ids format'}, status=400)
+        try:
+            installment_ids = [int(inst_id) for inst_id in raw_ids]
+        except (TypeError, ValueError):
+            return Response({'error': 'Invalid installment_ids format'}, status=400)
         period = request.data.get('period')
 
         if not installment_ids or not period:
             return Response({'error': 'installment_ids and period are required'}, status=400)
+
+        # One shared transfer-proof file covers the whole confirmed batch —
+        # HRD transfers the payroll deduction total in a single transaction.
+        proof_file = request.FILES.get('proof_file')
+        if not proof_file:
+            return Response({'error': 'Bukti transfer payroll wajib diunggah.'}, status=400)
+
+        try:
+            admin_id, _ = get_verified_admin(request)
+        except Exception:
+            admin_id = None
+
+        safe_name = os.path.basename(proof_file.name or 'bukti_payroll')
+        safe_name = re.sub(r'[^A-Za-z0-9._-]+', '_', safe_name).strip('._-') or 'bukti_payroll'
+        date_prefix = timezone.now().strftime('%Y/%m/%d')
+        storage_path = f"manual_payments/{date_prefix}/{uuid4().hex}_{safe_name}"
+        file_path = str(default_storage.save(storage_path, proof_file))
 
         results = []
         failed = []
@@ -2269,13 +2400,13 @@ class LoanViewSet(viewsets.ModelViewSet):
         with connection.cursor() as cursor:
             for inst_id in installment_ids:
                 try:
-                    # Menggunakan subtransaksi atomic (Savepoint) agar jika satu cicilan error (RAISE EXCEPTION), 
-                    # koneksi database tidak rusak dan bisa melanjutkan ke cicilan berikutnya
                     with transaction.atomic():
-                        cursor.execute("CALL public.sp_loan_payroll_installment(%s)", [inst_id])
+                        cursor.execute(
+                            "CALL public.sp_loan_payroll_installment(%s, %s, %s)",
+                            [inst_id, file_path, admin_id],
+                        )
                     results.append(inst_id)
                 except Exception as e:
-                    # Tangkap pesan exception dari PostgreSQL (seperti 'INSTALLMENT NOT FOUND' atau 'INSTALLMENT ALREADY PAID')
                     error_msg = str(e).split('\n')[0].strip()
                     failed.append({'installment_id': inst_id, 'reason': error_msg})
 
@@ -3660,7 +3791,7 @@ class LoanViewSet(viewsets.ModelViewSet):
                 "name": fee_label
             })
 
-        order_id = f"KOP-BULK-{member_id}-{int(timezone.now().timestamp())}"
+        order_id = f"GET-SAV-{member_id}-{int(timezone.now().timestamp())}"
         url = "https://app.midtrans.com/snap/v1/transactions" if is_production else "https://app.sandbox.midtrans.com/snap/v1/transactions"
         
         first_name = ""

@@ -81,9 +81,23 @@ const ApprovalDetail = () => {
     return `${baseOrigin}/${path}`;
   };
 
-  const handleDownloadFile = (filePath) => {
-    if (filePath) {
-      window.open(resolveFileUrl(filePath), '_blank');
+  const handleDownloadFile = async (filePath) => {
+    if (!filePath) return;
+    const url = resolveFileUrl(filePath);
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = getFileName(filePath) || 'document';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error('Download failed:', error);
+      window.open(url, '_blank');
     }
   };
 
@@ -334,7 +348,7 @@ const ApprovalDetail = () => {
                 <label className="lbl">Email</label>
                 <input type="email" className="add-input" value={data.email || ''} disabled />
               </div>
-              <div className="add-form-group">
+              <div className="add-form-group" style={{ gridColumn: '1 / -1' }}>
                 <label className="lbl">Nomor Telepon</label>
                 <div className="add-input-group">
                   <span className="add-input-prefix">+62</span>
@@ -492,10 +506,6 @@ const ApprovalDetail = () => {
                     <p className="doc-path">{getFileName(data.npwp_file)}</p>
                   </div>
                   <div className="doc-actions">
-                    <button className="doc-action-btn" onClick={() => handleDownloadFile(data.npwp_file)}>
-                      <span className="doc-action-icon"><Download size={14} /></span>
-                      Unduh
-                    </button>
                     <button className="doc-action-btn" onClick={() => handlePreviewDoc(data.npwp_file, 'NPWP')}>
                       <span className="doc-action-icon"><Eye size={14} /></span>
                       Lihat
@@ -514,10 +524,6 @@ const ApprovalDetail = () => {
                     <p className="doc-path">{getFileName(data.ktp_file)}</p>
                   </div>
                   <div className="doc-actions">
-                    <button className="doc-action-btn" onClick={() => handleDownloadFile(data.ktp_file)}>
-                      <span className="doc-action-icon"><Download size={14} /></span>
-                      Unduh
-                    </button>
                     <button className="doc-action-btn" onClick={() => handlePreviewDoc(data.ktp_file, 'KTP')}>
                       <span className="doc-action-icon"><Eye size={14} /></span>
                       Lihat

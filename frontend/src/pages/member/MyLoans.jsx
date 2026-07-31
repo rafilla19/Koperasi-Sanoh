@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Info, ChevronRight, Loader } from 'lucide-react';
-import { apiUrl } from '../../services/api';
+import { Plus, Info, ChevronRight, Loader, Banknote, X } from 'lucide-react';
+import { apiUrl, getAuthHeaders } from '../../services/api';
 import './MyLoans.css';
 
 const ViewDetailsButton = ({ loanId, navigate }) => {
@@ -36,9 +37,14 @@ const MyLoans = () => {
     rejected: []
   });
   const [hasPendingClosure, setHasPendingClosure] = useState(false);
-  const [hasNoBankAccount, setHasNoBankAccount] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
   const [isDataLoading, setIsDataLoading] = useState(true);
+  const [checkingBankAccount, setCheckingBankAccount] = useState(false);
+  const [showBankPopup, setShowBankPopup] = useState(false);
+  const [banksList, setBanksList] = useState([]);
+  const [bankFormData, setBankFormData] = useState({ bank_id: '', account_number: '', account_holder_name: '' });
+  const [bankFormError, setBankFormError] = useState('');
+  const [bankFormLoading, setBankFormLoading] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -179,7 +185,6 @@ const MyLoans = () => {
         if (profileResponse.ok) {
           const profileData = await profileResponse.json();
           setHasPendingClosure((profileData.pending_closure_count || 0) > 0);
-          setHasNoBankAccount(!profileData.bank_id || !profileData.account_number);
         }
       } catch (error) {
         console.error('Failed to fetch data:', error);
@@ -199,13 +204,8 @@ const MyLoans = () => {
     }).format(number).replace(',00', '');
   };
 
-  const handleApplyLoan = () => {
-    if (isNavigating) return;
-    if (hasPendingClosure) {
-      alert('Anda tidak dapat mengajukan pinjaman baru karena akun Anda dalam proses penutupan.');
-    } else if (hasNoBankAccount) {
-      alert('Lengkapi data rekening bank Anda terlebih dahulu sebelum mengajukan pinjaman.');
-    } else if (hasPendingLoan) {
+  const proceedToApply = () => {
+    if (hasPendingLoan) {
       alert('Anda tidak dapat mengajukan pinjaman baru karena masih ada pengajuan pinjaman yang menunggu persetujuan.');
     } else if (hasActiveLoan) {
       alert('Anda tidak dapat mengajukan pinjaman baru karena masih ada pinjaman yang aktif.');
@@ -214,6 +214,89 @@ const MyLoans = () => {
       navigate('/dashboard/loans/application');
     }
   };
+
+  const handleApplyLoan = async () => {
+    if (isNavigating || checkingBankAccount) return;
+    if (hasPendingClosure) {
+      alert('Anda tidak dapat mengajukan pinjaman baru karena akun Anda dalam proses penutupan.');
+      return;
+    }
+
+    setCheckingBankAccount(true);
+    try {
+      const res = await fetch(apiUrl('/my-savings/bank-account-status/'), { headers: getAuthHeaders() });
+      const data = await res.json();
+      if (data?.is_complete) {
+        proceedToApply();
+        return;
+      }
+      setBankFormData({
+        bank_id: data?.bank_id ? String(data.bank_id) : '',
+        account_number: data?.account_number || '',
+        account_holder_name: data?.account_holder_name || '',
+      });
+      setBankFormError('');
+      if (banksList.length === 0) {
+        fetch(apiUrl('/master/banks/'), { headers: getAuthHeaders() })
+          .then(r => r.json())
+          .then(list => setBanksList(Array.isArray(list) ? list : []))
+          .catch(() => {});
+      }
+      setShowBankPopup(true);
+    } catch (err) {
+      console.error('Failed to check bank account:', err);
+      alert('Gagal mengecek rekening bank. Coba lagi.');
+    } finally {
+      setCheckingBankAccount(false);
+    }
+  };
+
+  const handleBankFormSubmit = async () => {
+    setBankFormError('');
+    if (!bankFormData.bank_id || !bankFormData.account_number.trim() || !bankFormData.account_holder_name.trim()) {
+      setBankFormError('Semua field wajib diisi');
+      return;
+    }
+    setBankFormLoading(true);
+    try {
+      const userStr = localStorage.getItem('user');
+      const user = userStr ? JSON.parse(userStr) : null;
+      const memberId = user?.member_id || 1;
+
+      const res = await fetch(apiUrl('/member/members/update_profile/'), {
+        method: 'POST',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, getAuthHeaders()),
+        body: JSON.stringify({
+          member_id: memberId,
+          bank_id: parseInt(bankFormData.bank_id, 10),
+          acc_name: bankFormData.account_holder_name,
+          acc_no: bankFormData.account_number,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setShowBankPopup(false);
+        proceedToApply();
+      } else {
+        setBankFormError(data?.error || 'Gagal menyimpan. Coba lagi.');
+      }
+    } catch (err) {
+      setBankFormError('Gagal menyimpan. Coba lagi.');
+    } finally {
+      setBankFormLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (showBankPopup) {
+      document.body.classList.add('has-global-modal');
+    } else {
+      document.body.classList.remove('has-global-modal');
+    }
+    return () => {
+      document.body.classList.remove('has-global-modal');
+    };
+  }, [showBankPopup]);
 
   const tabs = [
     { id: 'active', label: 'Pinjaman Aktif' },
@@ -250,14 +333,14 @@ const MyLoans = () => {
         <button
           className="btn-apply-loan"
           onClick={handleApplyLoan}
-          disabled={isDataLoading || hasActiveLoan || hasPendingLoan || hasPendingClosure || hasNoBankAccount || isNavigating}
-          style={(isDataLoading || hasActiveLoan || hasPendingLoan || hasPendingClosure || hasNoBankAccount) ? {
+          disabled={isDataLoading || hasActiveLoan || hasPendingLoan || hasPendingClosure || isNavigating || checkingBankAccount}
+          style={(isDataLoading || hasActiveLoan || hasPendingLoan || hasPendingClosure) ? {
             background: '#94a3b8',
             cursor: 'not-allowed',
             color: '#f1f5f9'
           } : {}}
         >
-          {isDataLoading ? <><Loader size={16} className="spinner" /> Memuat...</> : isNavigating ? <><Loader size={16} className="spinner" /> Memuat...</> : <><Plus size={16} strokeWidth={2.5} /> Ajukan Pinjaman Baru</>}
+          {isDataLoading || isNavigating || checkingBankAccount ? <><Loader size={16} className="spinner" /> Memuat...</> : <><Plus size={16} strokeWidth={2.5} /> Ajukan Pinjaman Baru</>}
         </button>
       </div>
 
@@ -396,6 +479,91 @@ const MyLoans = () => {
           </div>
         )}
       </div>
+
+      {showBankPopup && createPortal(
+        <div className="modal-overlay global-modal-overlay">
+          <div className="sv-bank-popup">
+            <div className="sv-bank-popup-header">
+              <div className="sv-bank-popup-icon">
+                <Banknote size={22} />
+              </div>
+              <div className="sv-bank-popup-heading">
+                <p className="sv-bank-popup-kicker">Rekening pencairan belum lengkap</p>
+                <h3 className="sv-bank-popup-title">Isi Rekening Bank Tujuan</h3>
+                <p className="sv-bank-popup-subtitle">
+                  Data rekening bank wajib diisi sebelum mengajukan pinjaman. Informasi ini digunakan untuk proses pencairan dana.
+                </p>
+              </div>
+              <button
+                className="sv-bank-popup-close"
+                onClick={() => setShowBankPopup(false)}
+                aria-label="Close"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="sv-bank-form">
+              <div className="inp-group">
+                <label className="inp-label">Bank Tujuan</label>
+                <select
+                  className="prof-input"
+                  value={bankFormData.bank_id}
+                  onChange={e => setBankFormData(d => ({ ...d, bank_id: e.target.value }))}
+                >
+                  <option value="">— Pilih Bank —</option>
+                  {banksList.map(b => (
+                    <option key={b.id} value={b.id}>{b.bank_name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="inp-group">
+                <label className="inp-label">Nomor Rekening</label>
+                <input
+                  className="prof-input"
+                  type="text"
+                  placeholder="Contoh: 1234567890"
+                  value={bankFormData.account_number}
+                  onChange={e => setBankFormData(d => ({ ...d, account_number: e.target.value }))}
+                />
+              </div>
+
+              <div className="inp-group">
+                <label className="inp-label">Nama Pemilik Rekening</label>
+                <input
+                  className="prof-input"
+                  type="text"
+                  placeholder="Sesuai buku tabungan"
+                  value={bankFormData.account_holder_name}
+                  onChange={e => setBankFormData(d => ({ ...d, account_holder_name: e.target.value }))}
+                />
+              </div>
+
+              {bankFormError && (
+                <p style={{ color: '#E11D48', fontSize: 12, margin: '0 0 12px' }}>{bankFormError}</p>
+              )}
+            </div>
+
+            <div className="sv-bank-popup-actions">
+              <button
+                className="btn btn-navy"
+                onClick={handleBankFormSubmit}
+                disabled={bankFormLoading}
+              >
+                {bankFormLoading ? 'Menyimpan...' : 'Simpan & Lanjutkan'}
+              </button>
+              <button
+                className="sv-bank-popup-secondary"
+                onClick={() => setShowBankPopup(false)}
+              >
+                Batal
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 };

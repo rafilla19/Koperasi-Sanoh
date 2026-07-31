@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import * as XLSX from 'xlsx';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Wallet,
@@ -356,57 +357,58 @@ const AdminLoansDashboard = () => {
   const handleExportExcel = () => {
     if (isExporting) return;
     setIsExporting(true);
-    const headers = ['ID', 'Nama', 'NIK', 'Tujuan', 'Jenis', 'Departemen', 'Tgl Mulai', 'Tgl Akhir', 'Pokok', 'Bunga', 'Total', 'Sisa Saldo', 'Progres', 'Jatuh Tempo Bulan Ini', 'Angsuran Bulan Ini', 'Status'];
-    const csvRows = [headers.join(',')];
+    try {
+      const headers = ['ID', 'Nama', 'NIK', 'Tujuan', 'Jenis', 'Departemen', 'Tgl Mulai', 'Tgl Akhir', 'Pokok', 'Bunga', 'Total', 'Sisa Saldo', 'Progres (%)', 'Jatuh Tempo Bulan Ini', 'Angsuran Bulan Ini', 'Status'];
 
-    filteredLoans.forEach(loan => {
-      let statusDisplay = 'Aktif';
-      if (loan.current_month_status_id === 27) {
-        statusDisplay = 'Macet';
-      } else if (loan.current_month_status_id === 30) {
-        statusDisplay = 'Terlambat';
-      } else if (loan.status_code && (loan.status_code.toLowerCase().includes('paid') || loan.status_code.toLowerCase() === 'paid_off')) {
-        statusDisplay = 'Lunas';
-      }
+      const rows = filteredLoans.map(loan => {
+        let statusDisplay = 'Aktif';
+        if (loan.current_month_status_id === 27) {
+          statusDisplay = 'Macet';
+        } else if (loan.current_month_status_id === 30) {
+          statusDisplay = 'Terlambat';
+        } else if (loan.status_code && (loan.status_code.toLowerCase().includes('paid') || loan.status_code.toLowerCase() === 'paid_off')) {
+          statusDisplay = 'Lunas';
+        }
 
-      const dueDate = loan.current_month_due_date
-        ? new Date(loan.current_month_due_date).toLocaleDateString('id-ID')
-        : '-';
+        const dueDate = loan.current_month_due_date
+          ? new Date(loan.current_month_due_date).toLocaleDateString('id-ID')
+          : '-';
 
-      const installmentInfo = loan.current_month_installment > 0
-        ? `#${loan.current_month_installment} (Rp ${loan.current_month_amount})`
-        : '-';
+        const installmentInfo = loan.current_month_installment > 0
+          ? `#${loan.current_month_installment} (Rp ${new Intl.NumberFormat('id-ID').format(loan.current_month_amount)})`
+          : '-';
 
-      const row = [
-        loan.member_id,
-        `"${loan.full_name}"`,
-        `"${loan.nik_employee}"`,
-        `"${loan.purpose}"`,
-        `"${loan.type_name}"`,
-        `"${loan.department_name}"`,
-        loan.start_date,
-        loan.due_date,
-        loan.principal_amount,
-        loan.interest_amount,
-        loan.amount,
-        loan.remaining_balance,
-        `"${Math.round(loan.progress_percent)}%"`,
-        `"${dueDate}"`,
-        `"${installmentInfo}"`,
-        statusDisplay
-      ];
-      csvRows.push(row.join(','));
-    });
+        return [
+          loan.member_id,
+          loan.full_name || '',
+          loan.nik_employee || '',
+          loan.purpose || '',
+          loan.type_name || '',
+          loan.department_name || '',
+          loan.start_date ? new Date(loan.start_date).toLocaleDateString('id-ID') : '-',
+          loan.due_date ? new Date(loan.due_date).toLocaleDateString('id-ID') : '-',
+          Number(loan.principal_amount) || 0,
+          Number(loan.interest_amount) || 0,
+          Number(loan.amount) || 0,
+          Number(loan.remaining_balance) || 0,
+          Math.round(loan.progress_percent) || 0,
+          dueDate,
+          installmentInfo,
+          statusDisplay,
+        ];
+      });
 
-    const csvContent = "data:text/csv;charset=utf-8," + csvRows.join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "admin_loans_export.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    setTimeout(() => setIsExporting(false), 1000);
+      const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      worksheet['!cols'] = headers.map(h => ({ wch: Math.max(h.length + 2, 14) }));
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Pinjaman');
+
+      const monthLabel = MONTHS.find(m => m.value === selectedMonth)?.label || selectedMonth;
+      XLSX.writeFile(workbook, `admin_loans_export_${monthLabel}_${selectedYear}.xlsx`);
+    } finally {
+      setTimeout(() => setIsExporting(false), 500);
+    }
   };
 
   return (
@@ -586,7 +588,7 @@ const AdminLoansDashboard = () => {
               <option value="Close">Tutup</option>
             </select>
           </div>
-          <button className="ald-print-btn" onClick={handleExportExcel} title="Ekspor ke Excel (CSV)" disabled={isExporting}>
+          <button className="ald-print-btn" onClick={handleExportExcel} title="Ekspor ke Excel (.xlsx)" disabled={isExporting}>
             {isExporting ? <Loader size={16} className="spinner" /> : <Printer size={16} />}
           </button>
           <div style={{ display: 'flex', gap: '8px' }}>

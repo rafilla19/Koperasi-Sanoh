@@ -1084,7 +1084,7 @@ class MemberViewSet(viewsets.ViewSet):
             email = member_row.get('email', '') if member_row else ''
 
             # Generate order ID
-            order_id = f"KOP-PRINCIPAL-{member_id}-{int(timezone.now().timestamp())}"
+            order_id = f"GET-PRINCIPAL-{member_id}-{int(timezone.now().timestamp())}"
 
             # Build Snap API request
             auth_str = f"{server_key}:"
