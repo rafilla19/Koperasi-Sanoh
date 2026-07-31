@@ -1791,7 +1791,9 @@ class LoanViewSet(viewsets.ModelViewSet):
 
             ) combined_transactions
 
-            WHERE 1=1
+            -- Hide pending gateway/withdrawal attempts and failed/cancelled
+            -- gateway transactions — only show completed transactions.
+            WHERE status NOT IN ('PENDING', 'FAILED', 'CANCELLED', 'REQUESTED', 'PENDING_VERIFICATION')
         """
         # Base query with placeholders for filtering
         # query = f"""
@@ -3554,7 +3556,7 @@ class LoanViewSet(viewsets.ModelViewSet):
                     ), '[]'::json
                 ) as unpaid_bills_list
             FROM monthly_saving_bills
-            WHERE member_id = %s AND status_id IN (38, 40)
+            WHERE member_id = %s AND status_id IN (38)
               AND saving_type_id IN (1, 2, 3)
               AND deleted_at IS NULL
         )
@@ -4022,7 +4024,11 @@ class LoanViewSet(viewsets.ModelViewSet):
             "INNER JOIN transaction_types tt ON tt.id = st.transaction_type_id",
             "INNER JOIN statuses s ON s.id = st.status_id",
             "LEFT JOIN payment_gateway_transactions pgt ON st.payment_method_id = 1 AND CAST(pgt.id AS VARCHAR) = st.payment_reference_id",
-            "WHERE st.member_id = %s"
+            "WHERE st.member_id = %s",
+            # Hide pending/expired/cancelled gateway attempts — only show a
+            # gateway transaction once it has actually settled (status_id=34).
+            # Non-gateway methods (manual/payroll) are inserted already-paid.
+            "AND (st.payment_method_id != 1 OR st.status_id = 34)"
         ]
         savings_params = [member_id]
         if start_date:
@@ -4037,7 +4043,9 @@ class LoanViewSet(viewsets.ModelViewSet):
             "SELECT w.request_date AS transaction_date, 'WITHDRAWAL' AS transaction_type, w.amount, s.status_name AS status, w.payment_reference_id AS reference",
             "FROM withdrawals w",
             "INNER JOIN statuses s ON s.id = w.status_id",
-            "WHERE w.member_id = %s"
+            "WHERE w.member_id = %s",
+            # Hide withdrawals still awaiting admin approval/verification.
+            "AND s.status_code NOT IN ('REQUESTED', 'PENDING_VERIFICATION')"
         ]
         withdrawal_params = [member_id]
         if start_date:
@@ -4063,7 +4071,10 @@ class LoanViewSet(viewsets.ModelViewSet):
             "INNER JOIN loan_installments li ON li.id = lp.installment_id",
             "INNER JOIN loans l ON l.id = li.loan_id",
             "LEFT JOIN payment_gateway_transactions pgt ON lp.payment_method_id = 1 AND CAST(pgt.id AS VARCHAR) = lp.payment_reference_id",
-            "WHERE l.member_id = %s"
+            "WHERE l.member_id = %s",
+            # Hide pending/expired/cancelled gateway attempts — only show a
+            # gateway transaction once it has actually settled (status_id=34).
+            "AND (lp.payment_method_id != 1 OR lp.status_id = 34)"
         ]
         loan_params = [member_id]
         if start_date:
