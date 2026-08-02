@@ -112,17 +112,6 @@ const LoanApplication = () => {
     checkBankAccount();
   }, []);
 
-  useEffect(() => {
-    if (showBankPopup) {
-      document.body.classList.add('has-global-modal');
-    } else {
-      document.body.classList.remove('has-global-modal');
-    }
-    return () => {
-      document.body.classList.remove('has-global-modal');
-    };
-  }, [showBankPopup]);
-
   const handleContinue = async (e) => {
     e.preventDefault();
     setLoadingAi(true);
@@ -254,7 +243,7 @@ const LoanApplication = () => {
         </div>
       </div>
 
-      <div className="la-content-grid">
+      <div className={`la-content-grid ${!showSimulation ? 'la-content-grid--single' : ''}`}>
         <form className="la-form" onSubmit={handleContinue}>
           <div className="la-form-group">
             <label>JENIS ANGSURAN</label>
@@ -311,9 +300,11 @@ const LoanApplication = () => {
 
           <div className="la-form-group">
             <label>TUJUAN</label>
-            <input
-              type="text"
+            <textarea
+              className="la-purpose-textarea"
               required
+              rows={3}
+              placeholder="Jelaskan tujuan pengajuan pinjaman..."
               value={form.purpose}
               onChange={(e) => setForm({ ...form, purpose: e.target.value })}
             />

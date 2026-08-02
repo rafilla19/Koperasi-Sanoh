@@ -44,7 +44,7 @@ export default function WhatsAppSettings() {
         setEmail(cfg.email || '');
         setEditEmail(cfg.email || '');
         setPhone(cfg.phone_number || '');
-        setEditPhone(cfg.phone_number || '');
+        setEditPhone((cfg.phone_number || '').replace(/^62/, ''));
         setQuestions(Array.isArray(qs) ? qs : []);
       })
       .catch(() => showToast('error', 'Gagal memuat data'))
@@ -87,12 +87,14 @@ export default function WhatsAppSettings() {
     if (!editPhone.trim()) return;
     setSavingPhone(true);
     try {
+      const fullPhone = `62${editPhone.trim()}`;
       const res = await fetch(apiUrl('/whatsapp/config/'), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone_number: editPhone.trim() }),
+        body: JSON.stringify({ phone_number: fullPhone }),
       }).then(r => r.json());
       setPhone(res.phone_number);
+      setEditPhone((res.phone_number || '').replace(/^62/, ''));
       setEditingPhone(false);
       showToast('success', 'Nomor WhatsApp berhasil diperbarui');
     } catch {
@@ -244,20 +246,20 @@ export default function WhatsAppSettings() {
 
               {editingPhone ? (
                 <div className="wa-phone-edit">
-                  <div className="wa-phone-hint">Format: 62xxxxxxxxxx (tanpa + atau tanda hubung)</div>
+                  <div className="wa-phone-hint">Format: xxxxxxxxxx (tanpa 62, +, atau tanda hubung — awalan 62 sudah otomatis)</div>
                   <div className="wa-phone-row">
-                    <span className="wa-phone-prefix">+</span>
+                    <span className="wa-phone-prefix">+62</span>
                     <input
                       className="wa-input"
                       value={editPhone}
-                      onChange={e => setEditPhone(e.target.value.replace(/\D/g, ''))}
-                      placeholder="6281234567890"
-                      maxLength={15}
+                      onChange={e => setEditPhone(e.target.value.replace(/\D/g, '').replace(/^62/, ''))}
+                      placeholder="81234567890"
+                      maxLength={13}
                     />
                     <button className="wa-btn wa-btn--primary" onClick={handleSavePhone} disabled={savingPhone}>
                       {savingPhone ? 'Menyimpan...' : 'Simpan'}
                     </button>
-                    <button className="wa-btn wa-btn--ghost" onClick={() => { setEditPhone(phone); setEditingPhone(false); }}>
+                    <button className="wa-btn wa-btn--ghost" onClick={() => { setEditPhone(phone.replace(/^62/, '')); setEditingPhone(false); }}>
                       Batal
                     </button>
                   </div>

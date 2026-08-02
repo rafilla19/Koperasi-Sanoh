@@ -578,7 +578,7 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
                 return Response({'error': 'Silakan unggah gambar bukti transfer.'}, status=400)
 
             safe_name = os.path.basename(proof_image.name or 'bukti_verifikasi')
-            safe_name = safe_name.replace(' ', '_')
+            safe_name = re.sub(r'[^A-Za-z0-9._-]+', '_', safe_name).strip('._-') or 'bukti_verifikasi'
             storage_path = f"loan/verifikasi/{timezone.now():%Y%m%d_%H%M%S}_{uuid4().hex}_{safe_name}"
             saved_path = default_storage.save(storage_path, proof_image)
             proof_url = get_absolute_media_url(request, saved_path)
@@ -1894,10 +1894,17 @@ class LoanViewSet(viewsets.ModelViewSet):
                 columns = [col[0] for col in cursor.description]
                 results = [dict(zip(columns, row)) for row in cursor.fetchall()]
 
+            # Normalize every "this succeeded" status code/label to a single
+            # display string, regardless of which source table/category it
+            # came from (SUCCESS from saving_transactions/loan_payments,
+            # PAID from withdrawals, COMPLETED from SHU distributions).
+            SUCCESS_STATUS_LABELS = {'SUCCESS', 'PAID', 'COMPLETED'}
             for r in results:
                 if 'salary_statement_file' in r:
                     r['salary_statement_file'] = get_absolute_media_url(request, r['salary_statement_file'])
-            
+                if r.get('status') in SUCCESS_STATUS_LABELS:
+                    r['status'] = 'Berhasil'
+
             return Response(results)
         except Exception as e:
             return Response({'error': str(e)}, status=400)
@@ -3208,6 +3215,13 @@ class LoanViewSet(viewsets.ModelViewSet):
         admin_id, _ = get_verified_admin(request)
         member_id = request.data.get('member_id')
         notes = request.data.get('notes', '')
+        # The period the admin has selected in the UI (whose "Detail Tunggakan"
+        # panel they're looking at) — used below to target the bill/installment
+        # for THAT period specifically, instead of blindly grabbing whichever
+        # is oldest-unpaid overall (which silently pays off unrelated backlog
+        # and leaves the period being viewed looking untouched).
+        sel_month = request.data.get('month')
+        sel_year = request.data.get('year')
 
         if member_id:
             with connection.cursor() as cursor:
@@ -3230,12 +3244,19 @@ class LoanViewSet(viewsets.ModelViewSet):
         file_path = None
         file_url = None
         if proof_file:
-            # Save to 'manual_payments/YYYY/MM/DD/' with a unique file name.
-            safe_name = os.path.basename(proof_file.name or 'proof_transfer')
-            date_prefix = timezone.now().strftime('%Y/%m/%d')
-            storage_path = f"manual_payments/{date_prefix}/{uuid4().hex}_{safe_name}"
-            filename = default_storage.save(storage_path, proof_file)
-            file_path = str(filename)
+            try:
+                # Save to 'manual_payments/YYYY/MM/DD/' with a unique file name.
+                # Strip characters like '#', spaces, etc. that break S3-style
+                # object keys (they cause HeadObject/PutObject 400 errors on
+                # the Supabase storage backend if left un-sanitized).
+                safe_name = os.path.basename(proof_file.name or 'proof_transfer')
+                safe_name = re.sub(r'[^A-Za-z0-9._-]+', '_', safe_name).strip('._-') or 'proof_transfer'
+                date_prefix = timezone.now().strftime('%Y/%m/%d')
+                storage_path = f"manual_payments/{date_prefix}/{uuid4().hex}_{safe_name}"
+                filename = default_storage.save(storage_path, proof_file)
+                file_path = str(filename)
+            except Exception as e:
+                return Response({'error': f'Gagal mengunggah bukti transfer: {str(e)}'}, status=400)
             try:
                 file_url = default_storage.url(file_path)
             except Exception:
@@ -3256,15 +3277,31 @@ class LoanViewSet(viewsets.ModelViewSet):
                         try:
                             # 1. LOAN REPAYMENT
                             if p_type == 'loan':
-                                # Find oldest unpaid installment
-                                cursor.execute("""
-                                    SELECT li.id FROM loan_installments li
-                                    INNER JOIN loans l ON l.id = li.loan_id
-                                    WHERE l.member_id = %s AND l.status_id = 25 
-                                      AND li.status_id IN (27, 28)
-                                    ORDER BY li.due_date ASC LIMIT 1
-                                """, [member_id])
-                                inst = cursor.fetchone()
+                                # Prefer the installment matching the period the
+                                # admin is currently viewing; fall back to the
+                                # oldest unpaid one if that period has none
+                                # (e.g. period not supplied, or already settled).
+                                inst = None
+                                if sel_month and sel_year:
+                                    cursor.execute("""
+                                        SELECT li.id FROM loan_installments li
+                                        INNER JOIN loans l ON l.id = li.loan_id
+                                        WHERE l.member_id = %s AND l.status_id = 25
+                                          AND li.status_id IN (27, 28)
+                                          AND EXTRACT(YEAR FROM li.due_date) = %s
+                                          AND EXTRACT(MONTH FROM li.due_date) = %s
+                                        ORDER BY li.due_date ASC LIMIT 1
+                                    """, [member_id, sel_year, sel_month])
+                                    inst = cursor.fetchone()
+                                if not inst:
+                                    cursor.execute("""
+                                        SELECT li.id FROM loan_installments li
+                                        INNER JOIN loans l ON l.id = li.loan_id
+                                        WHERE l.member_id = %s AND l.status_id = 25
+                                          AND li.status_id IN (27, 28)
+                                        ORDER BY li.due_date ASC LIMIT 1
+                                    """, [member_id])
+                                    inst = cursor.fetchone()
                                 if inst:
                                     cursor.execute("CALL public.sp_manual_loan_installment(%s, %s, %s, %s, %s)", 
                                                  [inst[0], member_id, file_path, admin_id, notes])
@@ -3276,12 +3313,24 @@ class LoanViewSet(viewsets.ModelViewSet):
                             # 2. SAVINGS
                             elif p_type in ['mandatory', 'voluntary']:
                                 s_type_id = 1 if p_type == 'mandatory' else 2
-                                cursor.execute("""
-                                    SELECT id FROM monthly_saving_bills 
-                                    WHERE member_id = %s AND saving_type_id = %s AND status_id = 38
-                                    ORDER BY bill_period_start ASC LIMIT 1
-                                """, [member_id, s_type_id])
-                                bill = cursor.fetchone()
+                                # Same period-first, oldest-unpaid-fallback logic as loans above.
+                                bill = None
+                                if sel_month and sel_year:
+                                    cursor.execute("""
+                                        SELECT id FROM monthly_saving_bills
+                                        WHERE member_id = %s AND saving_type_id = %s AND status_id = 38
+                                          AND EXTRACT(YEAR FROM bill_period_start) = %s
+                                          AND EXTRACT(MONTH FROM bill_period_start) = %s
+                                        ORDER BY bill_period_start ASC LIMIT 1
+                                    """, [member_id, s_type_id, sel_year, sel_month])
+                                    bill = cursor.fetchone()
+                                if not bill:
+                                    cursor.execute("""
+                                        SELECT id FROM monthly_saving_bills
+                                        WHERE member_id = %s AND saving_type_id = %s AND status_id = 38
+                                        ORDER BY bill_period_start ASC LIMIT 1
+                                    """, [member_id, s_type_id])
+                                    bill = cursor.fetchone()
                                 if bill:
                                     cursor.execute("CALL public.sp_manual_savings_transaction(%s, %s, %s, %s, %s, %s)", 
                                                  [bill[0], member_id, s_type_id, file_path, admin_id, notes])
@@ -4138,7 +4187,17 @@ class LoanViewSet(viewsets.ModelViewSet):
                 columns = [col[0] for col in cursor.description]
                 rows = cursor.fetchall()
                 results = [dict(zip(columns, row)) for row in rows]
-                return Response(results)
+
+            # Normalize every "this succeeded" label to a single display
+            # string — withdrawals use status_name 'Sudah Dibayar' while
+            # deposits/loan installments use 'Berhasil' for the same
+            # underlying "completed successfully" outcome.
+            SUCCESS_STATUS_LABELS = {'Berhasil', 'Sudah Dibayar', 'COMPLETED'}
+            for r in results:
+                if r.get('status') in SUCCESS_STATUS_LABELS:
+                    r['status'] = 'Berhasil'
+
+            return Response(results)
         except Exception as e:
             return Response({'error': str(e)}, status=400)
 

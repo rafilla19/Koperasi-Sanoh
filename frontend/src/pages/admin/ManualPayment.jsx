@@ -87,7 +87,7 @@ const ManualPayment = () => {
         setPayments(prev => prev.map(p => {
           if (!p.type) return p;
           const pt = PAYMENT_TYPES.find(t => t.value === p.type);
-          return { ...p, amount: pt ? (data[pt.detailKey] || 0) : p.amount };
+          return { ...p, amount: pt ? String(roundAmount(data[pt.detailKey])) : p.amount };
         }));
       } else {
         setMemberDetail(null);
@@ -118,10 +118,12 @@ const ManualPayment = () => {
 
   const usedTypes = payments.map(p => p.type).filter(Boolean);
 
+  const roundAmount = (value) => Math.round(Number(value) || 0);
+
   const getAutoAmount = (type) => {
     if (!memberDetail) return '';
     const pt = PAYMENT_TYPES.find(t => t.value === type);
-    return pt ? String(memberDetail[pt.detailKey] || 0) : '';
+    return pt ? String(roundAmount(memberDetail[pt.detailKey])) : '';
   };
 
   const handleTypeChange = (idx, newType) => {
@@ -234,6 +236,12 @@ const ManualPayment = () => {
     formData.append('member_id', selectedMemberId);
     formData.append('notes', notes);
     formData.append('payments', JSON.stringify(activePayments));
+    // So the backend settles THIS period's bill/installment (the one shown
+    // in "Detail Tunggakan" above) instead of whichever is oldest-unpaid
+    // overall — otherwise a payment here can silently clear old backlog and
+    // leave the period being viewed still showing as outstanding.
+    formData.append('month', selectedMonth);
+    formData.append('year', selectedYear);
     if (proofFile) {
       formData.append('proof_file', proofFile);
     }
@@ -450,7 +458,7 @@ const ManualPayment = () => {
             return (
               <div key={idx} className="mp-payment-row">
                 {/* Type */}
-                <div className="mp-input-wrap" style={{ flex: 2 }}>
+                <div className="mp-input-wrap mp-input-wrap--type">
                   <select
                     className="mp-clean-input"
                     value={pay.type}
@@ -464,7 +472,7 @@ const ManualPayment = () => {
                 </div>
 
                 {/* Amount — auto-filled, editable */}
-                <div className="mp-input-wrap" style={{ flex: 2, position: 'relative' }}>
+                <div className="mp-input-wrap mp-input-wrap--amount">
                   <span className="mp-currency-prefix">Rp</span>
                   <input
                     type="number"
@@ -472,6 +480,8 @@ const ManualPayment = () => {
                     placeholder="0"
                     value={pay.amount}
                     onChange={e => handleAmountChange(idx, e.target.value)}
+                    readOnly={pay.type !== 'withdrawal'}
+                    title={pay.type !== 'withdrawal' ? 'Jumlah otomatis, tidak dapat diedit' : ''}
                   />
                   {pay.type && memberDetail && pay.type !== 'withdrawal' && (
                     <span className="mp-auto-label">otomatis</span>

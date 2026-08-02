@@ -196,7 +196,9 @@ const AdminActiveLoanDetail = () => {
                   {schedule.map(s => (
                     <tr key={s.installment_number}>
                       <td>#{s.installment_number}</td>
-                      <td>{formatDate(s.due_date)}</td>
+                      <td style={(s.status_code === 'PAID' || s.status_code === 'OVERDUE') ? { color: '#16a34a', fontWeight: 600 } : undefined}>
+                        {formatDate(s.due_date)}
+                      </td>
                       <td>{formatRupiah(s.amount_principal)}</td>
                       <td>{formatRupiah(s.amount_interest)}</td>
                       <td className="bold">{formatRupiah(s.amount_total)}</td>

@@ -311,6 +311,11 @@
   position: relative;
 }
 
+.mp-input-wrap--type,
+.mp-input-wrap--amount {
+  flex: 2;
+}
+
 .mp-clean-input {
   width: 100%;
   padding: 11px 14px;
@@ -351,6 +356,14 @@
 
 .mp-amount-input {
   padding-left: 34px !important;
+  padding-right: 78px !important;
+}
+
+.mp-amount-input[readonly] {
+  background-color: #F1F5F9;
+  color: #64748B;
+  cursor: not-allowed;
+  border-color: #E2E8F0;
 }
 
 /* "auto-filled" hint */
@@ -683,4 +696,5 @@
   .mp-grid { grid-template-columns: 1fr; gap: 24px; }
   .mp-payment-extra { grid-template-columns: 1fr; }
   .mp-payment-row { flex-wrap: wrap; }
+  .mp-payment-row .mp-input-wrap { flex: 1 1 100%; }
 }

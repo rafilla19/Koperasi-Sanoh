@@ -143,11 +143,13 @@
   border-radius: 16px;
   box-shadow: 0 4px 15px rgba(0,0,0,0.03);
   border: 1px solid #f1f5f9;
-  overflow: hidden;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .th-table {
   width: 100%;
+  min-width: 820px;
   border-collapse: collapse;
 }
 

@@ -97,13 +97,15 @@
   border-radius: 20px;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
   border: 1px solid #f1f5f9;
-  overflow: hidden;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   padding: 24px;
 }
 
 /* TABLE STYLING */
 .shum-table {
   width: 100%;
+  min-width: 640px;
   border-collapse: separate;
   border-spacing: 0 8px;
 }
@@ -261,6 +263,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 16px;
   z-index: 1000;
 }
 
@@ -913,5 +916,50 @@
 
   .shu-section-block {
     margin-top: 16px;
+  }
+}
+
+/* Responsive: SHU Master Data (tabs/table/form on shu-master page) */
+@media (max-width: 768px) {
+  .shum-container {
+    padding: 16px;
+  }
+
+  .shum-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+  }
+
+  .shum-add-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .shum-tabs {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    flex-wrap: nowrap;
+  }
+
+  .shum-tab {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .shum-card {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .shum-form-card {
+    padding: 22px;
+    max-width: 100%;
+  }
+
+  .shum-form-actions {
+    grid-template-columns: 1fr;
   }
 }

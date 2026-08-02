@@ -217,9 +217,16 @@ const AdminLoansDashboard = () => {
   const filteredLoans = activeLoans.filter((loan) => {
     const isPaid = loan.status_code && (loan.status_code.toLowerCase().includes('paid') || loan.status_code.toLowerCase() === 'paid_off');
     const loanStatus = isPaid ? 'Close' : 'Active';
+    const isPaidThisMonth = loan.current_month_status_id === 29 || loan.current_month_status_id === 30;
 
     // Status Filter
-    if (statusFilter !== 'All' && loanStatus !== statusFilter) {
+    if (statusFilter === 'PaidThisMonth' && !isPaidThisMonth) {
+      return false;
+    }
+    if (statusFilter === 'UnpaidThisMonth' && isPaidThisMonth) {
+      return false;
+    }
+    if ((statusFilter === 'Active' || statusFilter === 'Close') && loanStatus !== statusFilter) {
       return false;
     }
 
@@ -586,6 +593,8 @@ const AdminLoansDashboard = () => {
               <option value="All">Semua</option>
               <option value="Active">Aktif</option>
               <option value="Close">Tutup</option>
+              <option value="PaidThisMonth">Sudah Bayar (Bulan Ini)</option>
+              <option value="UnpaidThisMonth">Belum Bayar (Bulan Ini)</option>
             </select>
           </div>
           <button className="ald-print-btn" onClick={handleExportExcel} title="Ekspor ke Excel (.xlsx)" disabled={isExporting}>
@@ -619,7 +628,7 @@ const AdminLoansDashboard = () => {
                   { label: 'Progres', key: 'progress' },
                   { label: 'Jatuh Tempo Bulan Ini', key: 'due' },
                   { label: 'Angsuran Bulan Ini', key: 'inst' },
-                  { label: 'Status', key: 'status' },
+                  ...(statusFilter === 'All' ? [{ label: 'Status', key: 'status' }] : []),
                 ].map(({ label, key }) => (
                   <th
                     key={key}
@@ -641,28 +650,16 @@ const AdminLoansDashboard = () => {
             </thead>
             <tbody>
               {currentLoans.map((loan, idx) => {
-                // Determine status display
-                let statusDisplay = 'Aktif';
-                let statusClass = 'active';
-
-                if (loan.current_month_status_id === 27) {
-                  statusDisplay = 'Macet';
-                  statusClass = 'macet';
-                }
-                else if (loan.current_month_status_id === 30) {
-                  statusDisplay = 'Terlambat';
-                  statusClass = 'late-paid';
-                }
-                else if (loan.status_code && (loan.status_code.toLowerCase().includes('paid') || loan.status_code.toLowerCase() === 'paid_off')) {
-                  statusDisplay = 'Lunas';
-                  statusClass = 'close';
-                }
+                // Row highlight + the status-filter dropdown above the table
+                // (Sudah Bayar/Belum Bayar options) now cover what a dedicated
+                // Status column used to show — no separate column needed.
+                const isPaidThisMonth = loan.current_month_status_id === 29 || loan.current_month_status_id === 30;
 
                 return (
                   <tr
                     key={idx}
                     onDoubleClick={() => handleActiveLoanDetails(loan.loan_id)}
-                    style={{ cursor: 'pointer' }}
+                    style={{ cursor: 'pointer', background: isPaidThisMonth ? '#f0fdf4' : undefined }}
                     title="Klik dua kali untuk lihat detail pinjaman"
                   >
                     <td className="ald-checkbox-cell">
@@ -715,7 +712,7 @@ const AdminLoansDashboard = () => {
                       <div style={{ fontSize: '12px' }}>{loan.paid_installment}/{loan.total_installment}</div>
                       <div style={{ fontWeight: 'bold', color: '#10b981' }}>{Math.round(loan.progress_percent)}%</div>
                     </td>
-                    <td>
+                    <td style={(loan.current_month_status_id === 29 || loan.current_month_status_id === 30) ? { color: '#16a34a', fontWeight: 600 } : undefined}>
                       {loan.current_month_due_date ? new Date(loan.current_month_due_date).toLocaleDateString('id-ID') : '-'}
                     </td>
                     <td>
@@ -724,11 +721,13 @@ const AdminLoansDashboard = () => {
                         : '-'
                       }
                     </td>
-                    <td>
-                      <span className={`ald-status ${statusClass}`}>
-                        {statusDisplay}
-                      </span>
-                    </td>
+                    {statusFilter === 'All' && (
+                      <td>
+                        <span className={`ald-status ${loan.status_code && (loan.status_code.toLowerCase().includes('paid') || loan.status_code.toLowerCase() === 'paid_off') ? 'unpaid' : 'active'}`}>
+                          {loan.status_code && (loan.status_code.toLowerCase().includes('paid') || loan.status_code.toLowerCase() === 'paid_off') ? 'Tidak Aktif' : 'Aktif'}
+                        </span>
+                      </td>
+                    )}
                   </tr>
                 );
               })}

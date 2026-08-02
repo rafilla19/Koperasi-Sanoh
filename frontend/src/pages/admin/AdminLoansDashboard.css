@@ -137,17 +137,32 @@
 
 .ald-pending-list {
   display: flex;
+  flex-wrap: wrap;
   gap: 16px;
-  overflow-x: auto;
 }
 
 .ald-pending-card {
   background: white;
-  border-radius: 12px;
+  border: 1px solid #eef0f3;
+  border-radius: 14px;
   padding: 20px;
-  min-width: 280px;
-  flex: 1;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+  width: 320px;
+  flex: 0 0 320px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+}
+
+.ald-pending-card:hover {
+  border-color: #dbe4ff;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+  transform: translateY(-2px);
+}
+
+@media (max-width: 480px) {
+  .ald-pending-card {
+    width: 100%;
+    flex: 1 1 100%;
+  }
 }
 
 .ald-pc-top {
@@ -169,57 +184,71 @@
 }
 
 .ald-pc-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: #1a1a1a;
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.3;
 }
 
-.ald-pc-dept,
+.ald-pc-dept {
+  font-size: 12px;
+  font-weight: 600;
+  color: #4f7df3;
+  margin-top: 2px;
+}
+
 .ald-pc-id {
   font-size: 12px;
-  color: #666;
-}
-
-.ald-pc-id {
-  font-weight: 600;
-  color: #1a1a1a;
+  font-weight: 500;
+  color: #94a3b8;
+  margin-top: 2px;
 }
 
 .ald-pc-mid {
   display: flex;
-  gap: 16px;
+  gap: 20px;
   margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f1f5f9;
 }
 
 .ald-pc-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: #1a1a1a;
-  margin-bottom: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 5px;
 }
 
 .ald-pc-desc {
-  font-size: 12px;
-  color: #666;
+  font-size: 13px;
+  font-weight: 500;
+  color: #334155;
   line-height: 1.4;
 }
 
 .ald-pc-col.term {
-  min-width: 60px;
+  min-width: 70px;
 }
 
 .ald-pc-amount {
   display: flex;
   justify-content: space-between;
-  padding: 12px;
-  border: 1px solid #eaeaea;
-  border-radius: 8px;
+  align-items: center;
+  padding: 12px 14px;
+  background: #f8fafc;
+  border: 1px solid #eef0f3;
+  border-radius: 10px;
   margin-bottom: 16px;
   font-size: 13px;
+  color: #64748b;
 }
 
 .ald-pc-amount span:last-child {
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
 }
 
 .ald-pc-actions {
@@ -581,6 +610,10 @@
 
 .ald-status.late-paid::before {
   background: #faad14;
+}
+
+.ald-status.unpaid::before {
+  background: #9ca3af;
 }
 
 @media (max-width: 768px) {
