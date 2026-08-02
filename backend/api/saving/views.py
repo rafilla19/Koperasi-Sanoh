@@ -1799,6 +1799,8 @@ def admin_upload_transfer(request, pk):
         msg = str(exc)
         if 'tidak ditemukan' in msg.lower():
             return Response({'error': 'Withdrawal tidak ditemukan'}, status=404)
+        if 'sudah berstatus paid' in msg.lower():
+            return Response({'error': 'Withdrawal ini sudah dibayar sebelumnya, tidak bisa diproses ulang.'}, status=400)
         if 'Saldo tidak mencukupi' in msg:
             return Response({'error': 'Saldo tidak mencukupi untuk dikurangi'}, status=400)
         return Response({'error': msg}, status=400)

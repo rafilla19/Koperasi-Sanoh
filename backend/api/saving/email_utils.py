@@ -9,6 +9,7 @@ from api.utils.email import send_styled_email
 logger = logging.getLogger(__name__)
 
 WIB = ZoneInfo('Asia/Jakarta')
+UTC = ZoneInfo('UTC')
 
 
 def _format_wib(dt, fmt='%d %B %Y, %H:%M WIB'):
@@ -16,9 +17,16 @@ def _format_wib(dt, fmt='%d %B %Y, %H:%M WIB'):
     Format an aware datetime as Asia/Jakarta (WIB, UTC+7) local time.
     Project TIME_ZONE is UTC, so a plain .strftime() on a stored datetime
     prints the UTC clock time while labelling it "WIB" -- wrong by 7 hours.
+
+    Some legacy/unmanaged tables (e.g. withdrawals) come back from the ORM
+    as naive datetimes even with USE_TZ=True. The stored value is UTC
+    (project TIME_ZONE), so make it aware before converting to WIB --
+    otherwise dj_timezone.localtime() raises ValueError.
     """
     if dt is None:
         return None
+    if dj_timezone.is_naive(dt):
+        dt = dj_timezone.make_aware(dt, UTC)
     return dj_timezone.localtime(dt, WIB).strftime(fmt)
 
 def _get_member_email(member):

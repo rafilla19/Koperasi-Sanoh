@@ -853,7 +853,7 @@ def admin_shu_member_bases(request):
     except (ValueError, TypeError):
         month = None
 
-    members_qs = Members.objects.filter(deleted_at__isnull=True)
+    members_qs = Members.objects.filter(deleted_at__isnull=True, user__is_active=True)
     if search:
         members_qs = members_qs.filter(
             Q(full_name__icontains=search) |
@@ -1720,7 +1720,7 @@ def admin_shu_annual_from_monthly(request):
     }
 
     search = request.query_params.get('search', '')
-    members_qs = Members.objects.filter(deleted_at__isnull=True)
+    members_qs = Members.objects.filter(deleted_at__isnull=True, user__is_active=True)
     if search:
         members_qs = members_qs.filter(
             Q(full_name__icontains=search) |
