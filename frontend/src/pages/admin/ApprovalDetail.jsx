@@ -271,7 +271,7 @@ const ApprovalDetail = () => {
   const hasComment = !!(comment && comment.trim());
   const hasTransferFile = !!transferFile || !!selectedFile;
   const canApprove = type === 'close' ? (hasComment && hasTransferFile) : hasComment;
-  const canReject = hasComment;
+  const canReject = type === 'close' ? (hasComment && !hasTransferFile) : hasComment;
 
   return (
     <div className="ad-detail-container">
@@ -344,7 +344,7 @@ const ApprovalDetail = () => {
           <div className="form-section">
             <h3 className="section-title">Informasi Kontak & Alamat</h3>
             <div className="add-form">
-              <div className="add-form-group">
+              <div className="add-form-group" style={{ gridColumn: '1 / -1' }}>
                 <label className="lbl">Email</label>
                 <input type="email" className="add-input" value={data.email || ''} disabled />
               </div>
@@ -562,6 +562,40 @@ const ApprovalDetail = () => {
                       Lihat
                     </button>
                   </div>
+                </div>
+              )}
+
+              {!isNewRegistration && !(data.transfer_file_path || data.transfer_file || transferFile) && (
+                <div className="upload-file-container">
+                  <label className="upload-file-label">
+                    <div className="upload-file-box">
+                      {uploadLoading ? (
+                        <>
+                          <Loader2 size={24} className="spinner" />
+                          <p>Uploading...</p>
+                        </>
+                      ) : selectedFile ? (
+                        <>
+                          <FileText size={24} />
+                          <p>{selectedFile.name}</p>
+                          <span>File dipilih — klik Setujui untuk menyimpan</span>
+                        </>
+                      ) : (
+                        <>
+                          <Upload size={24} />
+                          <p>Upload Bukti Transfer</p>
+                          <span>Klik untuk upload atau drag file (Maks 10MB)</span>
+                        </>
+                      )}
+                    </div>
+                    <input
+                      type="file"
+                      onChange={handleTransferFileUpload}
+                      disabled={uploadLoading}
+                      style={{ display: 'none' }}
+                      accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+                    />
+                  </label>
                 </div>
               )}
 

@@ -101,7 +101,8 @@ const MyProfile = () => {
   const hasOutstandingMonthlySavingDue = parseFloat(profile.outstandingMonthlySavingDue) > 0;
   const isNotMinus = netBalance >= 0;
   const hasNoBankAccount = !profile.bankId || !profile.accNo;
-  const canProcess = isNotMinus && !hasOutstandingMonthlySavingDue && !hasNoBankAccount && isAgreed;
+  const hasReason = reason.trim().length > 0;
+  const canProcess = isNotMinus && !hasOutstandingMonthlySavingDue && !hasNoBankAccount && hasReason && isAgreed;
 
   const handleProcessClosure = async () => {
     if (!canProcess || isProcessingClosure) return;
@@ -344,7 +345,12 @@ const MyProfile = () => {
         </div>
 
         <div className="pf-actions">
-          <button className="btn btn-outline" onClick={() => setIsEditing(!isEditing)}>
+          <button
+            className="btn btn-outline"
+            onClick={() => setIsEditing(!isEditing)}
+            disabled={profile.hasPendingClosure}
+            style={{ opacity: profile.hasPendingClosure ? 0.6 : 1, cursor: profile.hasPendingClosure ? 'not-allowed' : 'pointer' }}
+          >
             <Edit2 size={16} /> {isEditing ? 'Batal Edit' : 'Edit Profil'}
           </button>
           <button className="btn btn-navy" onClick={handleSaveProfile} disabled={!isEditing || isSaving} style={{ opacity: (isEditing && !isSaving) ? 1 : 0.6, cursor: (isEditing && !isSaving) ? 'pointer' : 'not-allowed' }}>

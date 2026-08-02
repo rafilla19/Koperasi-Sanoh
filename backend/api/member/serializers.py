@@ -60,7 +60,7 @@ class MemberProfileUpdateSerializer(serializers.Serializer):
 
 class MemberClosureRequestSerializer(serializers.Serializer):
     member_id = serializers.IntegerField()
-    reason = serializers.CharField(required=False, allow_blank=True)
+    reason = serializers.CharField(required=True, allow_blank=False, trim_whitespace=True)
 
 
 class VoluntarySavingRequestSerializer(serializers.Serializer):

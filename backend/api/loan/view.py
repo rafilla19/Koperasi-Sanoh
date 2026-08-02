@@ -2092,6 +2092,7 @@ class LoanViewSet(viewsets.ModelViewSet):
             AND m.employee_status_id IN (1,2)
             AND NOT EXISTS (SELECT 1 FROM close_account_requests car WHERE car.member_id = m.id AND car.status_id = 44 AND car.deleted_at IS NULL)
             AND current_month_inst.inst_id IS NOT NULL
+            AND EXISTS (SELECT 1 FROM loan_fund_allocations lfa WHERE lfa.loan_id = l.id)
         """
         with connection.cursor() as cursor:
             cursor.execute(query, [year, month])
@@ -2169,6 +2170,7 @@ class LoanViewSet(viewsets.ModelViewSet):
         LEFT JOIN employee_statuses es ON es.id = m.employee_status_id
         WHERE EXTRACT(YEAR FROM msb.bill_period_start) = %s
           AND EXTRACT(MONTH FROM msb.bill_period_start) = %s
+          AND msb.deleted_at IS NULL
           AND u.is_active = true
           AND m.employee_status_id IN (1,2)
           AND NOT EXISTS (SELECT 1 FROM close_account_requests car WHERE car.member_id = m.id AND car.status_id = 44 AND car.deleted_at IS NULL)
@@ -2276,6 +2278,7 @@ class LoanViewSet(viewsets.ModelViewSet):
                     SELECT id, saving_type_id
                     FROM monthly_saving_bills
                     WHERE member_id = %s AND status_id = 38
+                      AND deleted_at IS NULL
                       AND EXTRACT(YEAR FROM bill_period_start) = %s
                       AND EXTRACT(MONTH FROM bill_period_start) = %s
                 """, [member_id, year, month])
@@ -3100,6 +3103,7 @@ class LoanViewSet(viewsets.ModelViewSet):
                         FROM monthly_saving_bills msb2
                         CROSS JOIN params p
                         WHERE msb2.member_id = m.id and msb2.status_id=38
+                          AND msb2.deleted_at IS NULL
                           AND msb2.saving_type_id = st.id
                           AND msb2.bill_period_start < p.end_date
                           AND msb2.bill_period_end >= p.start_date
@@ -3125,6 +3129,7 @@ class LoanViewSet(viewsets.ModelViewSet):
                         FROM monthly_saving_bills msb2
                         CROSS JOIN params p
                         WHERE msb2.member_id = m.id and msb2.status_id=38
+                          AND msb2.deleted_at IS NULL
                           AND msb2.saving_type_id = st.id
                           AND msb2.bill_period_start < p.end_date
                           AND msb2.bill_period_end >= p.start_date
@@ -3319,6 +3324,7 @@ class LoanViewSet(viewsets.ModelViewSet):
                                     cursor.execute("""
                                         SELECT id FROM monthly_saving_bills
                                         WHERE member_id = %s AND saving_type_id = %s AND status_id = 38
+                                          AND deleted_at IS NULL
                                           AND EXTRACT(YEAR FROM bill_period_start) = %s
                                           AND EXTRACT(MONTH FROM bill_period_start) = %s
                                         ORDER BY bill_period_start ASC LIMIT 1
@@ -3328,6 +3334,7 @@ class LoanViewSet(viewsets.ModelViewSet):
                                     cursor.execute("""
                                         SELECT id FROM monthly_saving_bills
                                         WHERE member_id = %s AND saving_type_id = %s AND status_id = 38
+                                          AND deleted_at IS NULL
                                         ORDER BY bill_period_start ASC LIMIT 1
                                     """, [member_id, s_type_id])
                                     bill = cursor.fetchone()

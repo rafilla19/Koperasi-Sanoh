@@ -1,3 +1,4 @@
+import re
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -473,12 +474,19 @@ class AuthViewSet(viewsets.ViewSet):
         close_account_id = request.data.get('id')
         notes = request.data.get('comment', '')
         transfer_file = request.data.get('transfer_file', '')
+        # When the request is multipart, DRF merges request.FILES into
+        # request.data under the same key, so transfer_file above may
+        # actually be the uploaded file object rather than a URL string —
+        # never pass that straight to the DB.
+        if not isinstance(transfer_file, str):
+            transfer_file = ''
         # If an actual uploaded file is sent in multipart, persist it to storage now
         uploaded_transfer = request.FILES.get('transfer_file')
         if uploaded_transfer:
             try:
-                filename = uploaded_transfer.name.replace(' ', '_')
-                storage_path = f'transfer/{timezone.now():%Y%m%d_%H%M%S}_{filename}'
+                safe_name = os.path.basename(uploaded_transfer.name or 'bukti_transfer')
+                safe_name = re.sub(r'[^A-Za-z0-9._-]+', '_', safe_name).strip('._-') or 'bukti_transfer'
+                storage_path = f'transfer/{timezone.now():%Y%m%d_%H%M%S}_{safe_name}'
                 saved_path = default_storage.save(storage_path, uploaded_transfer)
                 # build absolute URL depending on MEDIA_URL configuration
                 if str(settings.MEDIA_URL).startswith('http'):
@@ -486,9 +494,9 @@ class AuthViewSet(viewsets.ViewSet):
                 else:
                     media_base = request.build_absolute_uri(settings.MEDIA_URL)
                     transfer_file = f"{media_base.rstrip('/')}/{str(saved_path).lstrip('/')}"
-            except Exception:
-                pass
-        
+            except Exception as e:
+                return Response({'error': f'Gagal mengunggah bukti transfer: {str(e)}'}, status=400)
+
         if not close_account_id or not admin_id:
             return Response({'error': 'id and admin_id are required'}, status=400)
         # require at least comment or transfer_file for approval

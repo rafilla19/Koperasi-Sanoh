@@ -161,10 +161,15 @@ const ManualPayment = () => {
   const availableTypes = (currentType) => {
     // If other types already exist, don't show withdrawal in the list
     const hasOtherTypes = payments.some(p => p.type && p.type !== 'withdrawal');
+    // Loan has no allocation source to draw the principal back from (see
+    // pr-loans filter) — hide it from selection instead of letting the
+    // admin pick it and hit "Allocation return mismatch" on submit.
+    const hasLoanDeduction = Number(memberDetail?.loan_deduction) > 0;
     return PAYMENT_TYPES.filter(pt => {
       const isUsed = usedTypes.includes(pt.value) && pt.value !== currentType;
       const isWithdrawalConflict = hasOtherTypes && pt.value === 'withdrawal';
-      return !isUsed && !isWithdrawalConflict;
+      const isLoanUnavailable = pt.value === 'loan' && !hasLoanDeduction && pt.value !== currentType;
+      return !isUsed && !isWithdrawalConflict && !isLoanUnavailable;
     });
   };
 

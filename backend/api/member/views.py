@@ -201,10 +201,11 @@ def _member_profile_query(member_id):
                 AND member_id = m.id
         ) shu ON TRUE
         LEFT JOIN LATERAL (
-            SELECT COALESCE(SUM(amount_due), 0) AS outstanding_amount_due
+            SELECT COALESCE(SUM(amount_due - COALESCE(amount_paid, 0)), 0) AS outstanding_amount_due
             FROM monthly_saving_bills
             WHERE member_id = m.id
                 AND status_id = 38
+                AND deleted_at IS NULL
         ) monthly_bill ON TRUE
         LEFT JOIN LATERAL (
             SELECT monthly_amount
@@ -773,6 +774,14 @@ class MemberViewSet(viewsets.ViewSet):
             member_id = request.user.member.id
         if not member_id:
             return Response({'error': 'member_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT COUNT(*) FROM close_account_requests WHERE member_id = %s AND status_id = 44 AND deleted_at IS NULL",
+                [member_id],
+            )
+            if cursor.fetchone()[0] > 0:
+                return Response({'error': 'Akun Anda sedang dalam proses penutupan. Profil tidak dapat diubah.'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             with transaction.atomic():
@@ -1436,10 +1445,11 @@ class MemberViewSet(viewsets.ViewSet):
                     AND member_id = m.id
             ) shu ON TRUE
             LEFT JOIN LATERAL (
-                SELECT COALESCE(SUM(amount_due), 0) AS outstanding_amount_due
+                SELECT COALESCE(SUM(amount_due - COALESCE(amount_paid, 0)), 0) AS outstanding_amount_due
                 FROM monthly_saving_bills
                 WHERE member_id = m.id
                     AND status_id = 38
+                    AND deleted_at IS NULL
             ) monthly_bill ON TRUE
             WHERE cr.deleted_at IS NULL
             ORDER BY cr.request_date DESC
