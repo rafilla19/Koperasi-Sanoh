@@ -3842,7 +3842,13 @@ class LoanViewSet(viewsets.ModelViewSet):
                 "name": fee_label
             })
 
-        order_id = f"GET-SAV-{member_id}-{int(timezone.now().timestamp())}"
+        if loan_installments and saving_bills:
+            ref_prefix = "GET-LOAN-SAV"
+        elif loan_installments:
+            ref_prefix = "GET-LOAN"
+        else:
+            ref_prefix = "GET-SAV"
+        order_id = f"{ref_prefix}-{member_id}-{int(timezone.now().timestamp())}"
         url = "https://app.midtrans.com/snap/v1/transactions" if is_production else "https://app.sandbox.midtrans.com/snap/v1/transactions"
         
         first_name = ""

@@ -155,6 +155,7 @@ class Notifications(models.Model):
         ('voluntary_approved', 'Voluntary Savings Approved'),
         ('voluntary_rejected', 'Voluntary Savings Rejected'),
         ('bill_generated', 'Bill Generated'),
+        ('mandatory_savings_updated', 'Mandatory Savings Amount Updated'),
     ]
 
     member = models.ForeignKey(Members, models.DO_NOTHING)

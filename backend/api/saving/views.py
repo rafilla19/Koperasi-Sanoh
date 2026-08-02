@@ -387,12 +387,20 @@ def my_voluntary_request(request):
 
 @api_view(['GET', 'PATCH'])
 def my_notifications(request):
-    """GET notifikasi member; PATCH?mark_read=true untuk tandai semua sudah dibaca."""
+    """
+    GET notifikasi member.
+    PATCH { "ids": [1,2] } → tandai notifikasi tertentu sudah dibaca.
+    PATCH tanpa "ids" (atau ?mark_read=true) → tandai semua sudah dibaca.
+    """
     member_id = _get_member_id_from_request(request)
     notifs = Notifications.objects.filter(member_id=member_id).order_by('-created_at')
 
-    if request.method == 'PATCH' or request.query_params.get('mark_read') == 'true':
-        notifs.filter(is_read=False).update(is_read=True)
+    if request.method == 'PATCH':
+        ids = request.data.get('ids')
+        if ids:
+            notifs.filter(id__in=ids).update(is_read=True)
+        else:
+            notifs.filter(is_read=False).update(is_read=True)
 
     return Response(NotificationSerializer(notifs, many=True).data)
 
@@ -620,7 +628,16 @@ def admin_mandatory_amount(request):
     except (InvalidOperation, ValueError):
         return Response({'error': 'new_amount harus berupa angka positif'}, status=400)
 
+    old_amount = mandatory_type.minimum_amount
+
     with db_transaction.atomic():
+        affected_member_ids = list(
+            MemberSavingObligations.objects.filter(
+                saving_type_id=mandatory_type.id,
+                is_active=True,
+            ).values_list('member_id', flat=True)
+        )
+
         updated_count = MemberSavingObligations.objects.filter(
             saving_type_id=mandatory_type.id,
             is_active=True,
@@ -629,6 +646,22 @@ def admin_mandatory_amount(request):
         mandatory_type.minimum_amount = new_amount
         mandatory_type.updated_at = timezone.now()
         mandatory_type.save(update_fields=['minimum_amount', 'updated_at'])
+
+        if affected_member_ids:
+            message = (
+                f'Jumlah simpanan wajib bulanan Anda berubah dari '
+                f'Rp {int(old_amount or 0):,} menjadi Rp {int(new_amount):,}.'
+            )
+            Notifications.objects.bulk_create([
+                Notifications(
+                    member_id=member_id,
+                    title='Simpanan Wajib Diperbarui',
+                    message=message,
+                    notification_type='mandatory_savings_updated',
+                    reference_id=mandatory_type.id,
+                )
+                for member_id in affected_member_ids
+            ])
 
     return Response({
         'message': 'Jumlah simpanan wajib berhasil diperbarui',

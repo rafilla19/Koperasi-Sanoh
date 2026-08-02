@@ -168,6 +168,42 @@ const DashboardHome = () => {
     setCurrentPage(1); // Reset to first page when filter changes
   }, [txTypeFilter, searchTrigger]);
 
+  // Show a one-time popup when the admin has changed the mandatory savings
+  // amount since the member's last visit. Runs once on mount so it only
+  // appears the first time the member sees the dashboard after the change.
+  useEffect(() => {
+    const checkMandatorySavingsNotification = async () => {
+      const userStr = localStorage.getItem('user');
+      const userData = userStr ? JSON.parse(userStr) : null;
+      if (!userData?.member_id) return;
+
+      try {
+        const res = await fetch(apiUrl('/my-savings/notifications/'), { headers: getAuthHeaders() });
+        if (!res.ok) return;
+        const notifs = await res.json();
+        const unread = Array.isArray(notifs)
+          ? notifs.filter(n => n.notification_type === 'mandatory_savings_updated' && !n.is_read)
+          : [];
+        if (unread.length === 0) return;
+
+        await window.appAlert({
+          title: unread[0].title || 'Simpanan Wajib Diperbarui',
+          message: unread[0].message,
+          variant: 'info',
+        });
+
+        await fetch(apiUrl('/my-savings/notifications/'), {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+          body: JSON.stringify({ ids: unread.map(n => n.id) }),
+        });
+      } catch (error) {
+        console.error('Error checking mandatory savings notification:', error);
+      }
+    };
+    checkMandatorySavingsNotification();
+  }, []);
+
   const handleClearFilters = () => {
     setTxTypeFilter('all');
     setStartDate('');
