@@ -98,7 +98,7 @@ export default function WithdrawalRequests() {
       {/* FILTER */}
       <div className="admin-toolbar" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, marginBottom: 20 }}>
         {/* Status filter */}
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <div className="admin-toolbar-search" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {[
             { key: 'pending',  label: 'Menunggu' },
             { key: 'approved', label: 'Disetujui' },
@@ -130,10 +130,10 @@ export default function WithdrawalRequests() {
         </div>
 
         {/* Separator */}
-        <div style={{ width: 1, height: 28, background: '#e2e8f0' }} />
+        <div className="admin-toolbar-divider" style={{ width: 1, height: 28, background: '#e2e8f0' }} />
 
         {/* Date filter */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div className="admin-toolbar-select" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 13, color: '#6b7280', whiteSpace: 'nowrap' }}>Tanggal:</span>
           <input
             type="date"

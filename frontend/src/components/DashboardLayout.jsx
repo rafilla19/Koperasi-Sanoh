@@ -83,6 +83,16 @@ const DashboardLayout = () => {
     setOpenSections(prev => ({ ...prev, [sec]: !prev[sec] }));
   };
 
+  // Prepend the logged-in member's identity to a WA quick-question template so
+  // the admin immediately knows who's asking, without editing the templates
+  // themselves (those are admin-authored and vary in wording).
+  const buildWaMessage = (message) => {
+    const identityLines = [];
+    if (user?.full_name) identityLines.push(`Nama: ${user.full_name}`);
+    if (user?.nik_employee) identityLines.push(`NIK: ${user.nik_employee}`);
+    return identityLines.length ? `${identityLines.join('\n')}\n\n${message}` : message;
+  };
+
   const handleLogout = () => {
     localStorage.removeItem('user');
     navigate('/login');
@@ -390,7 +400,7 @@ const DashboardLayout = () => {
                   {waQuestions.map((q) => (
                     <li key={q.id}>
                       <a
-                        href={`https://wa.me/${waPhone}?text=${encodeURIComponent(q.message)}`}
+                        href={`https://wa.me/${waPhone}?text=${encodeURIComponent(buildWaMessage(q.message))}`}
                         target="_blank"
                         rel="noreferrer"
                         onClick={() => setShowWAMenu(false)}

@@ -62,6 +62,10 @@
     width: 100%;
   }
 
+  .admin-toolbar-divider {
+    display: none;
+  }
+
   .admin-toolbar-export button {
     width: 100%;
     justify-content: center;

@@ -67,13 +67,8 @@ def _get_bank_map(member_ids):
 
 def _member_savings_by_period(period_start, period_end, member_ids=None):
     """
-    Sum simpanan wajib/sukarela (status_id 34/39) per member for the given date range.
-
-    Keyed by the underlying monthly_saving_bill's bill_period_start when a bill is linked,
-    so a bill paid/processed outside its nominal month (late catch-up payment, or several
-    months' payroll deductions confirmed together on the same day) is still attributed to
-    the month it was actually for. Falls back to transaction_date for transactions with no
-    linked bill (legacy rows, manual/self-service payments).
+    Sum simpanan wajib/sukarela (status_id 39 = PAID) per member for the given date range,
+    read directly from monthly_saving_bills.amount_paid and keyed by bill_period_end.
     """
     params = [period_start, period_end]
     member_filter_sql = ''
@@ -81,18 +76,18 @@ def _member_savings_by_period(period_start, period_end, member_ids=None):
         member_ids = list(member_ids)
         if not member_ids:
             return {}
-        member_filter_sql = 'AND st.member_id = ANY(%s)'
+        member_filter_sql = 'AND b.member_id = ANY(%s)'
         params.append(member_ids)
 
     query = f"""
-        SELECT st.member_id, st.saving_type_id, SUM(st.amount)
-        FROM saving_transactions st
-        LEFT JOIN monthly_saving_bills b ON b.id = st.monthly_saving_bill_id
-        WHERE st.status_id IN (34, 39)
-          AND st.saving_type_id IN (1, 2)
-          AND COALESCE(b.bill_period_start, st.transaction_date::date) BETWEEN %s AND %s
+        SELECT b.member_id, b.saving_type_id, SUM(b.amount_paid)
+        FROM monthly_saving_bills b
+        WHERE b.status_id = 39
+          AND b.saving_type_id IN (1, 2)
+          AND b.deleted_at IS NULL
+          AND b.bill_period_end BETWEEN %s AND %s
           {member_filter_sql}
-        GROUP BY st.member_id, st.saving_type_id
+        GROUP BY b.member_id, b.saving_type_id
     """
     with connection.cursor() as cursor:
         cursor.execute(query, params)
@@ -107,6 +102,123 @@ def _member_savings_by_period(period_start, period_end, member_ids=None):
         elif saving_type_id == 2:
             result[member_id]['sukarela'] += total or Decimal('0')
     return result
+
+
+def _auto_sync_monthly_distribution(year, month):
+    """
+    Upsert baris shu_member_distributions_monthly untuk satu bulan, dihitung live dari
+    monthly_saving_bills (status PAID) — dipanggil otomatis dari tampilan/distribusi
+    tahunan supaya admin tidak perlu klik "Distribusikan" bulanan satu-satu dulu
+    sebelum totalnya kelihatan di rekap tahunan.
+
+    No-op kalau ShuResults bulan itu belum ada (net profit bulan itu belum ditutup) —
+    tidak ada pool jasa modal yang valid untuk dihitung. Hanya anggota yang benar-benar
+    bayar (wajib/sukarela > 0) yang dicatat, sama seperti admin_shu_monthly_distribute.
+    """
+    from datetime import date as _date_cls
+
+    try:
+        shu_result = ShuResults.objects.get(
+            period_year=year, period_month=month, deleted_at__isnull=True,
+        )
+    except ShuResults.DoesNotExist:
+        return
+
+    try:
+        jasa_modal_alloc = ShuComponentAllocation.objects.get(
+            shu_result=shu_result, master_configuration_id=1, deleted_at__isnull=True,
+        )
+        jasa_modal_pool = jasa_modal_alloc.allocated_amount
+    except ShuComponentAllocation.DoesNotExist:
+        jasa_modal_cfg = MasterConfiguration.objects.filter(pk=1, deleted_at__isnull=True).first()
+        if not jasa_modal_cfg:
+            return
+        jasa_modal_pool = (
+            shu_result.net_profit * jasa_modal_cfg.percentage / Decimal('100')
+        ).quantize(Decimal('0.01'))
+
+    _, last_day = calendar.monthrange(year, month)
+    period_start = _date_cls(year, month, 1)
+    period_end = _date_cls(year, month, last_day)
+
+    member_savings = _member_savings_by_period(period_start, period_end)
+    if not member_savings:
+        return
+
+    total_all_savings = sum((v['wajib'] + v['sukarela']) for v in member_savings.values())
+    if total_all_savings <= 0:
+        return
+
+    member_map = {m.id: m for m in Members.objects.filter(id__in=member_savings.keys())}
+    now_ts = timezone.now()
+
+    # Bulk read + bulk write instead of a per-member get/save-or-create loop --
+    # with ~100 members that loop was up to ~200 individual DB round trips per
+    # month (much worse over a remote/pooled connection), which is what made the
+    # annual tab (12 months synced per request) slow.
+    existing_by_member = {
+        d.member_id: d
+        for d in ShuMemberDistributionsMonthly.objects.filter(
+            period=shu_result, member_id__in=member_savings.keys(),
+        )
+    }
+
+    to_create = []
+    to_update = []
+    for member_id, sv in member_savings.items():
+        simp_wajib = sv['wajib']
+        simp_sukarela = sv['sukarela']
+        total = simp_wajib + simp_sukarela
+        if total <= 0:
+            continue
+        m = member_map.get(member_id)
+        if not m:
+            continue
+        shu_jasa_modal = (total / total_all_savings * jasa_modal_pool).quantize(Decimal('0.01'))
+        dist = existing_by_member.get(member_id)
+        if dist:
+            dist.simp_wajib = simp_wajib
+            dist.simp_sukarela = simp_sukarela
+            dist.total_savings = total
+            dist.total_shu = shu_jasa_modal
+            dist.status_shu = True
+            dist.updated_at = now_ts
+            to_update.append(dist)
+        else:
+            to_create.append(ShuMemberDistributionsMonthly(
+                period=shu_result,
+                member=m,
+                simp_wajib=simp_wajib,
+                simp_sukarela=simp_sukarela,
+                total_savings=total,
+                total_shu=shu_jasa_modal,
+                status_shu=True,
+                period_month=month,
+                period_year=year,
+                created_at=now_ts,
+                updated_at=now_ts,
+            ))
+
+    with transaction.atomic():
+        if to_create:
+            ShuMemberDistributionsMonthly.objects.bulk_create(to_create)
+        if to_update:
+            ShuMemberDistributionsMonthly.objects.bulk_update(
+                to_update,
+                ['simp_wajib', 'simp_sukarela', 'total_savings', 'total_shu', 'status_shu', 'updated_at'],
+            )
+
+
+def _sync_year_monthly_distributions(year):
+    """
+    Auto-sync semua bulan (1..12) untuk satu tahun. Tidak dibatasi terhadap tanggal
+    server saat ini — kalau ShuResults untuk bulan itu memang ada (net profit sudah
+    ditutup admin, termasuk untuk tahun berjalan/mendatang di data uji), bulan itu
+    akan disinkronkan. _auto_sync_monthly_distribution sendiri no-op kalau ShuResults
+    bulan itu belum ada.
+    """
+    for month in range(1, 13):
+        _auto_sync_monthly_distribution(year, month)
 
 
 def _member_is_active_in_period(member, year, month):
@@ -836,6 +948,10 @@ def admin_shu_member_bases(request):
     for m in members:
         savings = member_savings.get(m.id, {'mandatory': Decimal('0'), 'voluntary': Decimal('0')})
         total = savings['mandatory'] + savings['voluntary']
+
+        # Only list members who actually paid (wajib and/or sukarela) in this period.
+        if summary != 'year' and total <= 0:
+            continue
 
         shu_jasa_modal = 0.0
         if jasa_modal_pool is not None and total_all_savings > 0:
@@ -1577,6 +1693,10 @@ def admin_shu_annual_from_monthly(request):
     except (ValueError, TypeError):
         return Response({'error': 'year tidak valid'}, status=400)
 
+    # Auto-sync tiap bulan (Jan..bulan berjalan) supaya SHU bulan yang belum pernah
+    # di-"Distribusikan" manual tetap ikut terhitung di rekap tahunan.
+    _sync_year_monthly_distributions(year)
+
     monthly_agg = (
         ShuMemberDistributionsMonthly.objects
         .filter(period__period_year=year)
@@ -1621,6 +1741,12 @@ def admin_shu_annual_from_monthly(request):
             'total_savings': Decimal('0'),
             'total_shu': Decimal('0'),
         })
+
+        # Hanya anggota yang punya simpanan/SHU di tahun ini (dari akumulasi bulanan
+        # yang sudah didistribusikan) yang ditampilkan — konsisten dengan tampilan bulanan.
+        if d['total_savings'] <= 0 and d['total_shu'] <= 0:
+            continue
+
         bank_info = bank_map.get(m.id)
 
         results.append({
@@ -1676,6 +1802,10 @@ def admin_shu_jasa_modal_distribute(request):
             {'error': f'SHU Result tahunan untuk tahun {year} belum ada. Buat SHU Result terlebih dahulu.'},
             status=404,
         )
+
+    # Auto-sync tiap bulan supaya distribusi tahunan tidak bergantung pada admin
+    # sudah/belum klik "Distribusikan" bulanan satu-satu terlebih dahulu.
+    _sync_year_monthly_distributions(year)
 
     # Aggregate from monthly distributions table
     monthly_agg = (
@@ -1987,6 +2117,12 @@ def admin_shu_monthly_distribute(request):
                 simp_wajib = sv['wajib']
                 simp_sukarela = sv['sukarela']
                 total = simp_wajib + simp_sukarela
+
+                # Hanya anggota yang sudah bayar (wajib dan/atau sukarela) bulan ini
+                # yang dicatat ke shu_member_distributions_monthly.
+                if total <= 0:
+                    continue
+
                 shu_jasa_modal = (
                     (total / total_all_savings * jasa_modal_pool).quantize(Decimal('0.01'))
                     if total_all_savings > 0 else Decimal('0')

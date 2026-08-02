@@ -37,6 +37,11 @@
 
 @media (max-width: 768px) {
 	.savings-tab-nav {
+		/* Without a width cap, this row just grows to fit its 4 nowrap tabs and
+		   pushes the whole page into horizontal scroll instead of scrolling
+		   internally -- max-width clamps it to its flex parent's width so
+		   overflow-x below actually has something to do. */
+		max-width: 100%;
 		overflow-x: auto;
 		flex-wrap: nowrap;
 		padding: 8px;

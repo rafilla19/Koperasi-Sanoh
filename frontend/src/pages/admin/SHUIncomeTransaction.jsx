@@ -12,7 +12,6 @@ const isImagePath = (name) =>
 
 const CURRENT_YEAR  = new Date().getFullYear();
 const CURRENT_MONTH = new Date().getMonth() + 1;
-const YEARS  = Array.from({ length: 5 }, (_, i) => String(CURRENT_YEAR - i));
 const MONTHS = [
   { value: 1,  label: 'Januari' },
   { value: 2,  label: 'Februari' },
@@ -52,7 +51,7 @@ const SHUIncomeTransaction = () => {
   const [distributions, setDistributions]             = useState([]);
   const [distributionLoading, setDistributionLoading] = useState(false);
   const [distributing, setDistributing]               = useState(false);
-  const [distributeError, setDistributeError]         = useState('');
+  const [, setDistributeError]                        = useState('');
 
   // Checkbox selection for annual distribute
   const [selectedIds, setSelectedIds]   = useState(new Set());
@@ -223,7 +222,9 @@ const SHUIncomeTransaction = () => {
       await fetchDistributions(year);
       setSelectedIds(new Set());
     } catch (err) {
-      setDistributeError(err?.error || 'Gagal mendistribusikan SHU. Pastikan SHU Result tahunan sudah dibuat.');
+      const message = err?.error || 'Gagal mendistribusikan SHU. Pastikan SHU Result tahunan sudah dibuat.';
+      setDistributeError(message);
+      window.appAlert({ title: 'Gagal', message, variant: 'danger' });
     } finally {
       setDistributing(false);
     }
@@ -306,8 +307,8 @@ const SHUIncomeTransaction = () => {
   const filteredMembers = summary === 'year' && statusFilter !== 'all'
     ? members.filter(m => {
         const dist = annualDistMap[m.member_id];
-        if (statusFilter === 'selesai') return dist && dist.status_shu;
-        if (statusFilter === 'pending') return dist && !dist.status_shu;
+        if (statusFilter === 'selesai') return dist && dist.distributed_status;
+        if (statusFilter === 'pending') return dist && !dist.distributed_status;
         if (statusFilter === 'belum') return !dist;
         return true;
       })
@@ -430,9 +431,14 @@ const SHUIncomeTransaction = () => {
             ))}
           </select>
         )}
-        <select style={filterSelect} value={year} onChange={e => setYear(e.target.value)}>
-          {YEARS.map(y => <option key={y}>{y}</option>)}
-        </select>
+        <input
+          type="number"
+          style={{ ...filterSelect, width: 90 }}
+          value={year}
+          min={2000}
+          max={2100}
+          onChange={e => setYear(e.target.value)}
+        />
         {summary === 'year' && (
           <select style={filterSelect} value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setCurrentPage(1); }}>
             <option value="all">Semua Status</option>
@@ -494,10 +500,6 @@ const SHUIncomeTransaction = () => {
           </div>
         </div>
       )}
-      {summary === 'year' && distributeError && (
-        <p style={{ color: '#dc2626', fontSize: 13, marginBottom: 8 }}>{distributeError}</p>
-      )}
-
       {/* Table */}
       <div className="shu-data-panel shu-section-block">
         {error && (
@@ -553,7 +555,7 @@ const SHUIncomeTransaction = () => {
                 paginated.map((row, idx) => {
                   const dist = annualDistMap[row.member_id];
                   const isDistributed = Boolean(dist);
-                  const isStatusDone = isDistributed && dist.status_shu;
+                  const isStatusDone = isDistributed && dist.distributed_status;
                   const isSelected = selectedIds.has(row.member_id);
                   const bankInfo = row.bank_info || (isDistributed && dist.bank_info) || null;
 
@@ -682,7 +684,7 @@ const SHUIncomeTransaction = () => {
                 // ── MONTHLY TABLE ROWS ──
                 paginated.map((row, idx) => {
                   const savedDist = distMap[row.member_id];
-                  const displayShu = savedDist ? savedDist.total_shu : row.shu_jasa_modal;
+                  const displayShu = row.shu_jasa_modal;
                   const isSaved = Boolean(savedDist);
 
                   return (
@@ -694,9 +696,9 @@ const SHUIncomeTransaction = () => {
                       <td style={{ padding: 12, fontSize: 13, color: '#0f172a', fontWeight: 500 }}>{row.full_name}</td>
                       <td style={{ padding: 12, fontSize: 13, color: '#374151' }}>{row.nik_employee}</td>
                       <td style={{ padding: 12, fontSize: 13, color: '#374151' }}>{row.department_name}</td>
-                      <td style={{ padding: 12, fontSize: 13, color: '#374151' }}>Rp {formatCurrency(savedDist ? savedDist.simp_wajib : row.mandatory_saving_monthly)}</td>
-                      <td style={{ padding: 12, fontSize: 13, color: '#374151' }}>Rp {formatCurrency(savedDist ? savedDist.simp_sukarela : row.voluntary_saving_monthly)}</td>
-                      <td style={{ padding: 12, fontSize: 13, color: '#374151', fontWeight: 600 }}>Rp {formatCurrency(savedDist ? savedDist.total_savings : row.total_saving_amount)}</td>
+                      <td style={{ padding: 12, fontSize: 13, color: '#374151' }}>Rp {formatCurrency(row.mandatory_saving_monthly)}</td>
+                      <td style={{ padding: 12, fontSize: 13, color: '#374151' }}>Rp {formatCurrency(row.voluntary_saving_monthly)}</td>
+                      <td style={{ padding: 12, fontSize: 13, color: '#374151', fontWeight: 600 }}>Rp {formatCurrency(row.total_saving_amount)}</td>
                       <td style={{ padding: 12, fontSize: 13, color: displayShu !== null ? '#7c3aed' : '#9ca3af', fontWeight: displayShu !== null ? 600 : 400, fontStyle: displayShu !== null ? 'normal' : 'italic' }}>
                         {displayShu !== null ? `Rp ${formatCurrency(displayShu)}` : '—'}
                       </td>

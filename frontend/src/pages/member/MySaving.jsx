@@ -265,8 +265,12 @@ const MySaving = () => {
   const latestWithdrawal = withdrawals[0];
   const memberName = memberProfile?.full_name || memberProfile?.username || 'Member';
   const memberEmail = memberProfile?.email || '-';
-  const todayDay = new Date().getDate();
-  const isVoluntaryChangeAllowed = todayDay === 22 || todayDay === 23;
+  // Demo: date-window restriction (normally only allowed on the 22nd-23rd)
+  // temporarily disabled so the request can be submitted any day. The
+  // informational note below stays visible regardless (see render below) per
+  // explicit request not to remove it.
+  // Revert to: const today = new Date().getDate(); today === 22 || today === 23;
+  const isVoluntaryChangeAllowed = true;
 
   const handleTabChange = (tab) => {
     setActiveTab(tab);
@@ -604,7 +608,10 @@ const MySaving = () => {
               <p className="sv-vr-note" style={{ marginTop: 12, color: '#64748B', fontSize: 13 }}>
                 Akun Anda sedang dalam proses penutupan, permintaan perubahan simpanan sukarela tidak dapat diajukan.
               </p>
-            ) : !isVoluntaryChangeAllowed && (
+            ) : (
+              // Always shown (not gated on isVoluntaryChangeAllowed) -- the date
+              // restriction itself is disabled for demo purposes, but this note
+              // must stay visible regardless.
               <p className="sv-vr-note" style={{ marginTop: 12, color: '#64748B', fontSize: 13 }}>
                 Perubahan simpanan sukarela hanya bisa diajukan pada tanggal 22-23 setiap bulan.
               </p>
