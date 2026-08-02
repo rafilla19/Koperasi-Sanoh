@@ -1,10 +1,25 @@
 import logging
+from zoneinfo import ZoneInfo
 from django.conf import settings
 from django.db import connection
+from django.utils import timezone as dj_timezone
 from api.models import Members, MemberBankAccounts
 from api.utils.email import send_styled_email
 
 logger = logging.getLogger(__name__)
+
+WIB = ZoneInfo('Asia/Jakarta')
+
+
+def _format_wib(dt, fmt='%d %B %Y, %H:%M WIB'):
+    """
+    Format an aware datetime as Asia/Jakarta (WIB, UTC+7) local time.
+    Project TIME_ZONE is UTC, so a plain .strftime() on a stored datetime
+    prints the UTC clock time while labelling it "WIB" -- wrong by 7 hours.
+    """
+    if dt is None:
+        return None
+    return dj_timezone.localtime(dt, WIB).strftime(fmt)
 
 def _get_member_email(member):
     """Resolve email address from a Member instance."""
@@ -73,13 +88,8 @@ def send_withdrawal_paid_email(withdrawal, proof_url):
             except Exception:
                 pass
 
-    paid_date = '-'
-    if withdrawal.paid_date:
-        paid_date = withdrawal.paid_date.strftime('%d %B %Y, %H:%M WIB')
-
-    request_date = '-'
-    if withdrawal.request_date:
-        request_date = withdrawal.request_date.strftime('%d %B %Y')
+    paid_date = _format_wib(withdrawal.paid_date) or '-'
+    request_date = _format_wib(withdrawal.request_date, '%d %B %Y') or '-'
 
     subject = 'Penarikan Simpanan Anda Telah Dibayar'
     intro = (
@@ -156,9 +166,7 @@ def send_voluntary_request_submitted_email(voluntary_request):
     current_formatted = f"Rp {int(voluntary_request.current_amount):,}".replace(',', '.')
     requested_formatted = f"Rp {int(voluntary_request.requested_amount):,}".replace(',', '.')
 
-    request_date = '-'
-    if voluntary_request.created_at:
-        request_date = voluntary_request.created_at.strftime('%d %B %Y, %H:%M WIB')
+    request_date = _format_wib(voluntary_request.created_at) or '-'
 
     subject = 'Permintaan Perubahan Simpanan Sukarela Telah Diajukan'
     intro = (
@@ -237,9 +245,7 @@ def send_shu_paid_email(dist, proof_url):
             except Exception:
                 pass
 
-    paid_date = '-'
-    if dist.paid_at:
-        paid_date = dist.paid_at.strftime('%d %B %Y, %H:%M WIB')
+    paid_date = _format_wib(dist.paid_at) or '-'
 
     subject = 'SHU Jasa Modal Anda Telah Ditransfer'
     intro = (

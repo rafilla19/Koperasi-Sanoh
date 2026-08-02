@@ -35,7 +35,6 @@ const MONTHS = [
 ];
 
 const currentYear = new Date().getFullYear();
-const YEARS = Array.from({ length: 6 }, (_, i) => currentYear - i);
 
 const ALLOC_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4', '#f97316'];
 
@@ -297,14 +296,20 @@ const SHUDashboard = () => {
           <select className="shu-filter-select" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)}>
             {MONTHS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
           </select>
-          <select className="shu-filter-select" value={selectedYear} onChange={e => setSelectedYear(e.target.value)}>
-            {YEARS.map(y => <option key={y} value={String(y)}>{y}</option>)}
-          </select>
+          <input
+            type="number"
+            className="shu-filter-select"
+            style={{ width: 90 }}
+            value={selectedYear}
+            min={2000}
+            max={2100}
+            onChange={e => setSelectedYear(e.target.value)}
+          />
         </div>
       </div>
 
       {/* KPI Cards */}
-      <div className="shu-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 16, width: '100%' }}>
+      <div className="shu-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, width: '100%' }}>
         <KpiCard
           label="Total Pendapatan"
           value={shuResult?.total_revenue}
@@ -377,7 +382,7 @@ const SHUDashboard = () => {
             Belum ada data SHU untuk {periodLabel}. Simpan hasil SHU melalui halaman Outcome Transaction.
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 12, width: '100%' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, width: '100%' }}>
             {allocations.length === 0 && !loading ? (
               <p style={{ fontSize: 13, color: '#9ca3af', gridColumn: '1/-1' }}>
                 Belum ada konfigurasi komponen SHU.
@@ -430,7 +435,7 @@ const SHUDashboard = () => {
         </div>
 
         <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 0 }}>
             {/* Simpanan Wajib */}
             <div style={{ padding: '22px 28px', borderRight: '1px solid #f3f4f6' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
@@ -518,7 +523,7 @@ const SHUDashboard = () => {
         ) : forecastData ? (
           <>
             {/* Insight Cards */}
-            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${forecastData.insights?.length || 1}, 1fr)`, gap: 12, marginBottom: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 16 }}>
               {forecastData.insights?.map((insight, i) => (
                 <div key={i} style={{
                   background: insight.sentiment === 'positive' ? '#f0fdf4' : insight.sentiment === 'negative' ? '#fef2f2' : '#f0f9ff',
@@ -732,16 +737,15 @@ const SHUDashboard = () => {
                 )}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 120 }}>
                   <label style={{ fontWeight: 600, fontSize: 12, color: '#4b5563' }}>Tahun</label>
-                  <select
+                  <input
+                    type="number"
                     value={modalYear}
                     onChange={e => setModalYear(e.target.value)}
                     className="shu-filter-select"
                     style={{ width: '100%' }}
-                  >
-                    {YEARS.map(y => (
-                      <option key={y} value={y}>{y}</option>
-                    ))}
-                  </select>
+                    min={2000}
+                    max={2100}
+                  />
                 </div>
               </div>
 

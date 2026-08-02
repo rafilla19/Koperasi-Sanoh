@@ -24,8 +24,6 @@ const MONTH_NAMES = [
   'Juli','Agustus','September','Oktober','November','Desember',
 ];
 
-const YEARS = ['2024', '2025', '2026'];
-
 const formatRupiah = (num) => "Rp " + Number(num || 0).toLocaleString("id-ID");
 
 const exportToExcel = (headers, rows, filename) => {
@@ -203,14 +201,15 @@ export default function MandatorySavings() {
         >
           {MONTH_NAMES.map(m => <option key={m}>{m}</option>)}
         </select>
-        <select
+        <input
+          type="number"
           className="admin-toolbar-select"
-          style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid #e5e7eb', fontSize: 13, cursor: 'pointer' }}
+          style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid #e5e7eb', fontSize: 13, width: 90 }}
           value={year}
+          min={2000}
+          max={2100}
           onChange={e => setYear(e.target.value)}
-        >
-          {YEARS.map(y => <option key={y}>{y}</option>)}
-        </select>
+        />
         <select
           className="admin-toolbar-select"
           style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid #e5e7eb', fontSize: 13, cursor: 'pointer' }}

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { apiUrl, getAuthHeaders } from "../../services/api";
 import "./WithdrawalRequests.css";
+import "./AdminResponsive.css";
 
 const formatRupiah = (num) => "Rp " + Number(num || 0).toLocaleString("id-ID");
 

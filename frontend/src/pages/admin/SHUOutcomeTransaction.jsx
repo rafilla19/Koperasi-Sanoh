@@ -24,7 +24,6 @@ const MONTH_NAMES = [
 ];
 
 const CURRENT_YEAR = new Date().getFullYear();
-const YEARS = Array.from({ length: 5 }, (_, i) => String(CURRENT_YEAR - i));
 const DAYS = Array.from({ length: 31 }, (_, i) => String(i + 1));
 
 const emptyForm = {
@@ -396,10 +395,15 @@ const SHUOutcomeTransaction = () => {
           <option value="">Semua Bulan</option>
           {MONTH_NAMES.map(m => <option key={m}>{m}</option>)}
         </select>
-        <select style={filterSelect} value={year} onChange={e => setYear(e.target.value)}>
-          <option value="">Semua Tahun</option>
-          {YEARS.map(y => <option key={y}>{y}</option>)}
-        </select>
+        <input
+          type="number"
+          style={{ ...filterSelect, width: 110 }}
+          placeholder="Semua Tahun"
+          value={year}
+          min={2000}
+          max={2100}
+          onChange={e => setYear(e.target.value)}
+        />
         <select style={filterSelect} value={filterType} onChange={e => setFilterType(e.target.value)}>
           <option value="">Semua Tipe</option>
           <option value="INCOME">INCOME</option>
@@ -414,7 +418,7 @@ const SHUOutcomeTransaction = () => {
       </div>
 
       {/* Action bar */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, alignItems: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
         <button
           onClick={() => { setForm(emptyForm); setFormError(null); setShowManualModal(true); }}
           style={{ padding: '8px 18px', borderRadius: 10, border: '1px solid #d1d5db', background: '#fff', color: '#374151', fontSize: 13, fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
@@ -434,7 +438,8 @@ const SHUOutcomeTransaction = () => {
         {error && (
           <p style={{ color: '#dc2626', fontSize: 13, marginBottom: 8 }}>{error}</p>
         )}
-        <table style={{ width: '100%', borderCollapse: 'collapse', background: '#f9fafb', borderRadius: 12, overflow: 'hidden' }}>
+        <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', minWidth: 900, borderCollapse: 'collapse', background: '#f9fafb', borderRadius: 12, overflow: 'hidden' }}>
           <thead style={{ background: 'linear-gradient(135deg, #3b82f6, #2563eb)' }}>
             <tr>
               {['No','Transaction Date','Jenis Transaksi','Type','Invoice Number','Supplier/Customer','Quantity','Amount Payment','Aksi'].map(h => (
@@ -496,6 +501,7 @@ const SHUOutcomeTransaction = () => {
             )}
           </tbody>
         </table>
+        </div>
 
         {/* Pagination */}
         {!loading && filteredTransactions.length > 0 && (

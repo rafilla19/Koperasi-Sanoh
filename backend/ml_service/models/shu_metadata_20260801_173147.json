@@ -1,0 +1,22 @@
+{
+  "version": "20260801_173147",
+  "model_file": "shu_model_20260801_173147.pkl",
+  "saved_at": "2026-08-01T17:31:47.804730",
+  "feature_names": [
+    "month_ordinal",
+    "total_savings",
+    "net_profit"
+  ],
+  "model_info": {
+    "r_squared": 0.9747,
+    "mae": 344.44,
+    "rmse": 473.54,
+    "training_samples": 977,
+    "coef": {
+      "month_ordinal": -37.2312,
+      "total_savings": 0.0279,
+      "net_profit": 0.0024
+    },
+    "intercept": 897915.8677
+  }
+}

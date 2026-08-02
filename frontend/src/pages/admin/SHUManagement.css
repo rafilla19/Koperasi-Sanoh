@@ -262,6 +262,9 @@
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  padding: 20px;
+  box-sizing: border-box;
+  overflow-y: auto;
 }
 
 .shum-form-card {
@@ -793,6 +796,57 @@
 
   .shu-toolbar {
     padding: 14px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .shu-toolbar > * {
+    width: 100%;
+  }
+}
+
+/* SHU Master Data (.shum-*) had no responsive rules at all -- the tab row in
+   particular has no wrap/overflow safety net and pushes the whole page into
+   horizontal scroll on phones, and the table has no scroll wrapper so it just
+   gets clipped by .shum-card's overflow:hidden instead of scrolling. */
+@media (max-width: 768px) {
+  .shum-container {
+    padding: 16px;
+  }
+
+  .shum-header {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .shum-title {
+    font-size: 22px;
+  }
+
+  .shum-tabs {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .shum-tab {
+    white-space: nowrap;
+  }
+
+  .shum-card {
+    overflow-x: auto;
+    padding: 16px;
+  }
+
+  .shum-table {
+    min-width: 560px;
+  }
+
+  .shum-form-card {
+    max-width: 92vw;
+    padding: 24px 20px;
   }
 }
 

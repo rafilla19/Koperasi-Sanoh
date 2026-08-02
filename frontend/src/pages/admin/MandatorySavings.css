@@ -320,10 +320,39 @@
   .card {
     overflow-x: auto;
   }
-  table {
-    min-width: 600px;
+  /* .mandatory-savings table{min-width:900px} (unconditional, above) beats a bare
+     `table` selector on specificity, so this override needs the same specificity
+     to actually take effect. Also drop the least-essential columns (Departemen,
+     Status Karyawan, Simp. Pokok) so the remaining scroll is much shorter. */
+  .mandatory-savings table {
+    min-width: 640px;
+  }
+  .mandatory-savings th:nth-child(5),
+  .mandatory-savings td:nth-child(5),
+  .mandatory-savings th:nth-child(6),
+  .mandatory-savings td:nth-child(6),
+  .mandatory-savings th:nth-child(7),
+  .mandatory-savings td:nth-child(7) {
+    display: none;
   }
   .pagination {
     flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Down to the essentials: checkbox, nama, total, status. */
+  .mandatory-savings table {
+    min-width: 420px;
+  }
+  .mandatory-savings th:nth-child(2),
+  .mandatory-savings td:nth-child(2),
+  .mandatory-savings th:nth-child(4),
+  .mandatory-savings td:nth-child(4),
+  .mandatory-savings th:nth-child(8),
+  .mandatory-savings td:nth-child(8),
+  .mandatory-savings th:nth-child(9),
+  .mandatory-savings td:nth-child(9) {
+    display: none;
   }
 }
