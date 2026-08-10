@@ -133,6 +133,25 @@ from api.utils.auth import get_verified_admin
 
 
 def _member_profile_query(member_id):
+    # Same lazy snapshot used in the loan app — locks in penalty_due for any
+    # newly-overdue installment using the current active penalty setting, so
+    # outstanding_penalty below is accurate even if nobody has opened this
+    # member's loan detail page yet.
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            UPDATE loan_installments li
+            SET penalty_due = (SELECT monthly_limit FROM funding_settings WHERE id = 2 AND is_active = TRUE AND effective_date <= CURRENT_DATE ORDER BY effective_date DESC LIMIT 1),
+                updated_at = NOW()
+            FROM loans l2
+            WHERE l2.id = li.loan_id
+              AND l2.member_id = %s
+              AND (li.penalty_due IS NULL OR li.penalty_due = 0)
+              AND (li.status_id = 30 OR (li.status_id IN (27, 28) AND li.due_date < CURRENT_DATE))
+            """,
+            [member_id],
+        )
+
     return _try_fetchone(
         """
         SELECT
@@ -161,6 +180,7 @@ def _member_profile_query(member_id):
             COALESCE(sb.total_saving_balance, 0) AS saving_balance,
             COALESCE(loan.remaining_balance, 0) AS loan_balance,
             COALESCE(loan.remaining_balance, 0) AS current_loan,
+            COALESCE(penalty.outstanding_penalty, 0) AS outstanding_penalty,
             COALESCE(mso_mandatory.monthly_amount, 0) AS mandatory_amount,
             COALESCE(mso_voluntary.monthly_amount, 0) AS voluntary_amount,
             COALESCE(mso_voluntary.monthly_amount, 0) AS monthly_amount,
@@ -194,6 +214,14 @@ def _member_profile_query(member_id):
             WHERE status_id = 25
             GROUP BY member_id
         ) loan ON loan.member_id = m.id
+        LEFT JOIN LATERAL (
+            SELECT COALESCE(SUM(li.penalty_due), 0) AS outstanding_penalty
+            FROM loan_installments li
+            INNER JOIN loans l ON l.id = li.loan_id
+            WHERE l.member_id = m.id
+              AND li.status_id = 28
+              AND COALESCE(li.penalty_paid, 0) = 0
+        ) penalty ON TRUE
         LEFT JOIN LATERAL (
             SELECT COALESCE(SUM(total_shu), 0) AS current_shu
             FROM shu_member_distributions_monthly

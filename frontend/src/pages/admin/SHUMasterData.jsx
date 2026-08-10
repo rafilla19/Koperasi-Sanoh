@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Save, X, Building, Percent, CreditCard, Wallet, Tags } from 'lucide-react';
+import { Plus, Edit2, Trash2, Save, X, Building, Percent, CreditCard, Wallet, Tags, Landmark } from 'lucide-react';
 import { apiUrl } from '../../services/api';
 import './SHUManagement.css';
 
@@ -9,6 +9,7 @@ const TABS = [
   { id: 'loan_type', label: 'Jenis Pinjaman', icon: CreditCard, apiUrl: apiUrl('/loan/loan-types/') },
   { id: 'payment_channel', label: 'Kanal Pembayaran', icon: Wallet, apiUrl: apiUrl('/master/payment-channels/') },
   { id: 'inc_exp_cat', label: 'Kategori Masuk/Keluar', icon: Tags, apiUrl: apiUrl('/master/income-expense-categories/') },
+  { id: 'loans', label: 'Funding', icon: Landmark, apiUrl: apiUrl('/loan/loan-funding-settings-list/') },
 ];
 
 const SHUMasterData = () => {
@@ -36,6 +37,10 @@ const SHUMasterData = () => {
     // Income/Expense Category fields
     category_name: '',
     type: 'INCOME',
+    // Loan funding setting fields
+    description: '',
+    monthly_limit: '',
+    effective_date: '',
   });
 
   const currentTab = TABS.find(t => t.id === activeTab);
@@ -107,6 +112,12 @@ const SHUMasterData = () => {
         category_name: formData.category_name,
         type: formData.type,
       };
+    } else if (activeTab === 'loans') {
+      payload = {
+        description: formData.description,
+        monthly_limit: formData.monthly_limit,
+        effective_date: formData.effective_date,
+      };
     }
 
     try {
@@ -176,6 +187,12 @@ const SHUMasterData = () => {
         category_name: item.category_name,
         type: item.type || 'INCOME',
       });
+    } else if (activeTab === 'loans') {
+      setFormData({
+        description: item.description || '',
+        monthly_limit: item.monthly_limit,
+        effective_date: item.effective_date || '',
+      });
     }
     setShowForm(true);
   };
@@ -185,7 +202,8 @@ const SHUMasterData = () => {
       component_name: '', percentage: '', distributed_member: false,
       department_name: '', name: '',
       channel_code: '', channel_name: '', fee_percentage: '', fee_fixed: '', is_active: true,
-      category_name: '', type: 'INCOME'
+      category_name: '', type: 'INCOME',
+      description: '', monthly_limit: '', effective_date: ''
     });
     setEditingId(null);
     setShowForm(false);
@@ -328,8 +346,8 @@ const SHUMasterData = () => {
                   <>
                     <div className="shum-form-group">
                       <label>Nama Kategori</label>
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         value={formData.category_name}
                         onChange={(e) => setFormData({...formData, category_name: e.target.value})}
                         required
@@ -345,6 +363,40 @@ const SHUMasterData = () => {
                         <option value="INCOME">Pemasukan</option>
                         <option value="EXPENSE">Pengeluaran</option>
                       </select>
+                    </div>
+                  </>
+                )}
+
+                {activeTab === 'loans' && (
+                  <>
+                    <div className="shum-form-group">
+                      <label>Deskripsi</label>
+                      <input
+                        type="text"
+                        value={formData.description}
+                        onChange={(e) => setFormData({...formData, description: e.target.value})}
+                        disabled={!!editingId}
+                        required
+                      />
+                    </div>
+                    <div className="shum-form-group">
+                      <label>Batas Bulanan (Rp)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={formData.monthly_limit}
+                        onChange={(e) => setFormData({...formData, monthly_limit: e.target.value})}
+                        required
+                      />
+                    </div>
+                    <div className="shum-form-group">
+                      <label>Tanggal Efektif</label>
+                      <input
+                        type="date"
+                        value={formData.effective_date}
+                        onChange={(e) => setFormData({...formData, effective_date: e.target.value})}
+                        required
+                      />
                     </div>
                   </>
                 )}
@@ -385,6 +437,12 @@ const SHUMasterData = () => {
                   <th>Nama Kategori</th>
                   <th>Jenis</th>
                 </>
+              ) : activeTab === 'loans' ? (
+                <>
+                  <th>Deskripsi</th>
+                  <th>Batas Bulanan</th>
+                  <th>Tanggal Efektif</th>
+                </>
               ) : (
                 <th>Nama Kategori</th>
               )}
@@ -399,10 +457,11 @@ const SHUMasterData = () => {
             ) : data.map((item) => (
               <tr key={item.id}>
                 <td className="font-bold">
-                  {activeTab === 'shu' ? item.component_name 
-                    : activeTab === 'dept' ? item.department_name 
-                    : activeTab === 'loan_type' ? item.name 
+                  {activeTab === 'shu' ? item.component_name
+                    : activeTab === 'dept' ? item.department_name
+                    : activeTab === 'loan_type' ? item.name
                     : activeTab === 'payment_channel' ? item.channel_code
+                    : activeTab === 'loans' ? item.description
                     : item.category_name}
                 </td>
                 {activeTab === 'shu' && (
@@ -427,10 +486,16 @@ const SHUMasterData = () => {
                     <span className="shum-badge blue">{item.type === 'EXPENSE' ? 'Pengeluaran' : 'Pemasukan'}</span>
                   </td>
                 )}
+                {activeTab === 'loans' && (
+                  <>
+                    <td>Rp {parseFloat(item.monthly_limit || 0).toLocaleString('id-ID')}</td>
+                    <td>{item.effective_date ? new Date(item.effective_date).toLocaleDateString('id-ID') : '-'}</td>
+                  </>
+                )}
                 <td>
                   <div className="shum-table-actions">
                     <button className="action-edit" onClick={() => startEdit(item)}><Edit2 size={16} /></button>
-                    {activeTab !== 'payment_channel' && (
+                    {activeTab !== 'payment_channel' && activeTab !== 'loans' && (
                       <button className="action-delete" onClick={() => handleDelete(item.id)}><Trash2 size={16} /></button>
                     )}
                   </div>

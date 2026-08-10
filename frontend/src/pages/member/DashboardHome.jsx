@@ -3,7 +3,7 @@ import {
   Wallet, PiggyBank, Briefcase, CreditCard,
   Download, Copy, HandCoins, ArrowUpRight, TrendingUp,
   PieChart, Calendar, Search, FileText, Filter,
-  ArrowRightLeft, AlertCircle, Info, CheckCircle2,
+  ArrowRightLeft, AlertCircle, AlertTriangle, Info, CheckCircle2,
   ChevronDown, TrendingDown, X, Check, UserCircle, Loader
 } from 'lucide-react';
 import {
@@ -334,6 +334,18 @@ const DashboardHome = () => {
       summary.unpaid_installments_list.forEach(inst => {
         if (selectedPayments.loanIds.includes(inst.id)) {
           total += Number(inst.amount_total);
+        }
+      });
+    }
+    return total;
+  };
+
+  const calculatePenaltyTotal = () => {
+    let total = 0;
+    if (summary?.unpaid_installments_list) {
+      summary.unpaid_installments_list.forEach(inst => {
+        if (selectedPayments.loanIds.includes(inst.id)) {
+          total += Number(inst.penalty) || 0;
         }
       });
     }
@@ -1182,6 +1194,14 @@ const DashboardHome = () => {
                   : '-'}
               </p>
             </div>
+            {Number(summary?.total_unpaid_penalty) > 0 && (
+              <div style={{ textAlign: 'center' }}>
+                <p className="due-chip-label">Total Pinalti</p>
+                <p className="due-chip-val danger">
+                  {formatRupiah(summary.total_unpaid_penalty)}
+                </p>
+              </div>
+            )}
             <div style={{ textAlign: 'right' }}>
               <p className="due-chip-label">Jumlah Tagihan</p>
               <p className="due-chip-val danger">
@@ -1446,7 +1466,14 @@ const DashboardHome = () => {
                         </div>
                         <div>
                           <span className="option-label">Angsuran #{inst.installment_number}</span>
-                          <span className="option-desc">Jatuh Tempo: {new Date(inst.due_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                          <span className="option-desc" style={{ display: 'block' }}>
+                            Jatuh Tempo: {new Date(inst.due_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </span>
+                          {Number(inst.penalty) > 0 && (
+                            <span className="option-desc" style={{ display: 'block', color: '#dc2626', fontWeight: 600 }}>
+                              Pinalti: {formatRupiah(inst.penalty)}
+                            </span>
+                          )}
                         </div>
                       </div>
                       <span className="option-amount">{formatRupiah(inst.amount_total)}</span>
@@ -1493,7 +1520,9 @@ const DashboardHome = () => {
                 const selectedChannel = paymentChannels.find(ch => ch.channel_code === selectedPaymentMethod);
                 const feePercentage = selectedChannel ? Number(selectedChannel.fee_percentage) : 0;
                 const feeFixed = selectedChannel ? Number(selectedChannel.fee_fixed) : 0;
-                const subtotal = calculateTotal();
+                const totalPokok = calculateTotal();
+                const totalPinalti = calculatePenaltyTotal();
+                const subtotal = totalPokok + totalPinalti;
                 const feeTotal = Math.round((subtotal * feePercentage) / 100) + feeFixed;
                 const totalAmount = subtotal + feeTotal;
 
@@ -1501,11 +1530,19 @@ const DashboardHome = () => {
                   <>
                     <div className="payment-summary-box" style={{ background: '#F8FAFC', borderRadius: '12px', padding: '16px', marginBottom: '20px' }}>
                       <div className="summary-row" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#64748B', marginBottom: '8px' }}>
-                        <span>Subtotal Terpilih</span>
+                        <span>Total Pokok</span>
                         <span className="summary-val" style={{ fontWeight: '500', color: '#1E293B' }}>
-                          {formatRupiah(subtotal)}
+                          {formatRupiah(totalPokok)}
                         </span>
                       </div>
+                      {totalPinalti > 0 && (
+                        <div className="summary-row" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#64748B', marginBottom: '8px' }}>
+                          <span>Total Pinalti</span>
+                          <span className="summary-val" style={{ fontWeight: '600', color: '#dc2626' }}>
+                            {formatRupiah(totalPinalti)}
+                          </span>
+                        </div>
+                      )}
                       {selectedPaymentMethod && (
                         <div className="summary-row" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#64748B', marginBottom: '8px' }}>
                           <span>Biaya Layanan</span>
@@ -1612,6 +1649,20 @@ const DashboardHome = () => {
             </div>
 
             <hr className="modal-dashed-divider" />
+
+            {Number(selectedTx.penalty) > 0 && (
+              <div style={{
+                display: 'flex', gap: 8, alignItems: 'flex-start',
+                backgroundColor: '#fff1f2', border: '1px solid #fecaca',
+                padding: '10px 14px', borderRadius: 8, marginBottom: 14,
+                color: '#be123c', fontSize: 12.5, fontWeight: 500,
+              }}>
+                <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 1 }} />
+                <span>
+                  Pembayaran ini mencakup pinalti keterlambatan sebesar <strong>{formatRupiah(selectedTx.penalty)}</strong>, bukan hanya pokok dan bunga angsuran.
+                </span>
+              </div>
+            )}
 
             <div className="modal-total-row">
               <span className="modal-total-label">Total Pembayaran</span>

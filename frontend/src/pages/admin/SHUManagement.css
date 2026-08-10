@@ -312,20 +312,30 @@
 
 .shum-form-group input[type="text"],
 .shum-form-group input[type="number"],
+.shum-form-group input[type="date"],
 .shum-form-group select {
   width: 100%;
   padding: 12px 16px;
   border: 2px solid #f1f5f9;
   border-radius: 12px;
   font-size: 15px;
+  font-family: inherit;
+  color: #1e293b;
   transition: border-color 0.2s;
   outline: none;
   background: #ffffff;
+  box-sizing: border-box;
 }
 
 .shum-form-group input:focus,
 .shum-form-group select:focus {
   border-color: #3b82f6;
+}
+
+.shum-form-group input:disabled {
+  background: #f8fafc;
+  color: #94a3b8;
+  cursor: not-allowed;
 }
 
 .shum-form-group select {

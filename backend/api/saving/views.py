@@ -1195,6 +1195,16 @@ def admin_dashboard_overview(request):
             )
             total_principle_saving = cursor.fetchone()[0] or 0
 
+            # 4. Total Penalty Paid
+            cursor.execute(
+                """
+                SELECT COALESCE(SUM(penalty_paid), 0)
+                FROM loan_installments
+                WHERE penalty_paid > 0
+                """
+            )
+            total_penalty_paid = cursor.fetchone()[0] or 0
+
             # SHU Cooperative Portion is NO LONGER included in total_assets based on user request,
             # but we keep the logic here if it's still needed in the breakdown
             cursor.execute(
@@ -1224,11 +1234,12 @@ def admin_dashboard_overview(request):
         )
 
         # Formula baru sesuai request user:
-        # total_assets = total_interest + total_admin_fee + total_principle_saving
+        # total_assets = total_interest + total_admin_fee + total_principle_saving + total_penalty_paid
         total_assets = (
             float(total_interest_paid)
             + float(total_admin_fee)
             + float(total_principle_saving)
+            + float(total_penalty_paid)
         )
 
         return Response({
@@ -1237,6 +1248,7 @@ def admin_dashboard_overview(request):
                 'total_interest': float(total_interest_paid),
                 'total_admin_fee': float(total_admin_fee),
                 'total_principle_saving': float(total_principle_saving),
+                'total_penalty_paid': float(total_penalty_paid),
                 'shu_cooperative_portion': round(shu_cooperative_portion, 2),
                 'shu_non_distributed_pct': shu_non_distributed_pct,
                 'shu_total_net_profit': total_shu_net_profit,

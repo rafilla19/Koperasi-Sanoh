@@ -155,6 +155,12 @@ const AdminActiveLoanDetail = () => {
               <div className="label">Suku Bunga</div>
               <div className="value">{(loanData.interest_amount / loanData.principal_amount * 100).toFixed(1)}% Total</div>
             </div>
+            <div className="stat-item">
+              <div className="label">Total Pinalti</div>
+              <div className="value" style={loanData.penalty_due > 0 ? { color: '#dc2626' } : undefined}>
+                {formatRupiah(loanData.penalty_due)}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -187,8 +193,10 @@ const AdminActiveLoanDetail = () => {
                     <th>JATUH TEMPO</th>
                     <th>POKOK</th>
                     <th>BUNGA</th>
+                    <th>PINALTI</th>
                     <th>TOTAL</th>
                     <th>STATUS</th>
+                    <th>TGL PEMBAYARAN</th>
                     <th>BUKTI</th>
                   </tr>
                 </thead>
@@ -201,11 +209,19 @@ const AdminActiveLoanDetail = () => {
                       </td>
                       <td>{formatRupiah(s.amount_principal)}</td>
                       <td>{formatRupiah(s.amount_interest)}</td>
-                      <td className="bold">{formatRupiah(s.amount_total)}</td>
+                      <td style={s.penalty ? { color: '#dc2626', fontWeight: 600 } : undefined}>
+                        {s.penalty ? formatRupiah(s.penalty) : '-'}
+                      </td>
+                      <td className="bold">
+                        {formatRupiah((Number(s.amount_principal) || 0) + (Number(s.amount_interest) || 0) + (Number(s.penalty) || 0))}
+                      </td>
                       <td>
                         <span className={`status-badge ${s.status_code?.toLowerCase()}`}>
                           {s.status_code}
                         </span>
+                      </td>
+                      <td>
+                        {s.payment_date ? formatDate(s.payment_date) : '-'}
                       </td>
                       <td>
                         {s.payment_method_name === 'MANUAL' && s.payment_proof ? (

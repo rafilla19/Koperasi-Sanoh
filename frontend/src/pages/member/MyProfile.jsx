@@ -39,6 +39,7 @@ const MyProfile = () => {
     loanBal: 0,
     accruedShu: 0,
     outstandingMonthlySavingDue: 0,
+    outstandingPenalty: 0,
     hasPendingClosure: false
   });
 
@@ -66,6 +67,7 @@ const MyProfile = () => {
           loanBal: data.loan_balance || data.current_loan || 0,
           accruedShu: data.accrued_shu || data.current_shu || 0,
           outstandingMonthlySavingDue: data.outstanding_monthly_saving_due || 0,
+          outstandingPenalty: data.outstanding_penalty || 0,
           hasPendingClosure: (data.pending_closure_count || 0) > 0
         });
         setIsValidated(true);
@@ -99,10 +101,11 @@ const MyProfile = () => {
   const reasonLength = reason.length;
   const netBalance = (parseFloat(profile.mandatoryBal) + parseFloat(profile.voluntaryBal) + parseFloat(profile.accruedShu)) - parseFloat(profile.loanBal) - parseFloat(profile.outstandingMonthlySavingDue);
   const hasOutstandingMonthlySavingDue = parseFloat(profile.outstandingMonthlySavingDue) > 0;
+  const hasOutstandingPenalty = parseFloat(profile.outstandingPenalty) > 0;
   const isNotMinus = netBalance >= 0;
   const hasNoBankAccount = !profile.bankId || !profile.accNo;
   const hasReason = reason.trim().length > 0;
-  const canProcess = isNotMinus && !hasOutstandingMonthlySavingDue && !hasNoBankAccount && hasReason && isAgreed;
+  const canProcess = isNotMinus && !hasOutstandingMonthlySavingDue && !hasOutstandingPenalty && !hasNoBankAccount && hasReason && isAgreed;
 
   const handleProcessClosure = async () => {
     if (!canProcess || isProcessingClosure) return;
@@ -457,6 +460,19 @@ const MyProfile = () => {
                       </div>
                     </div>
                     <div className="eli-item">
+                      <div className={`eli-icon ${hasOutstandingPenalty ? 'red' : 'green'}`}>
+                        {hasOutstandingPenalty ? <XCircle size={14} strokeWidth={3} /> : <CheckCircle size={14} strokeWidth={3} />}
+                      </div>
+                      <div className="eli-text">
+                        <strong>Pinalti Pinjaman</strong>
+                        {hasOutstandingPenalty ? (
+                          <span>Tertunggak Rp {parseFloat(profile.outstandingPenalty).toLocaleString('id-ID')}.</span>
+                        ) : (
+                          <span>Lunas.</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="eli-item">
                       <div className="eli-icon green"><CheckCircle size={14} strokeWidth={3} /></div>
                       <div className="eli-text">
                         <strong>Transaksi Tertunda</strong>
@@ -504,10 +520,10 @@ const MyProfile = () => {
                 />
               </div>
 
-              {(netBalance < 0 || hasOutstandingMonthlySavingDue) && (
+              {(netBalance < 0 || hasOutstandingMonthlySavingDue || hasOutstandingPenalty) && (
                 <div style={{ display: 'flex', gap: '10px', alignItems: 'center', backgroundColor: '#fff1f2', border: '1px solid #fecaca', padding: '12px 16px', borderRadius: '8px', color: '#be123c', fontSize: '13px', fontWeight: '500', marginBottom: '15px' }}>
                   <AlertTriangle size={18} strokeWidth={2.5} style={{ flexShrink: 0 }} />
-                  <span>Penutupan diblokir sampai pinjaman dan tagihan simpanan bulanan dilunasi.</span>
+                  <span>Penutupan diblokir sampai pinjaman, tagihan simpanan bulanan, dan pinalti dilunasi.</span>
                 </div>
               )}
 

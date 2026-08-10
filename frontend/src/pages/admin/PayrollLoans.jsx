@@ -177,6 +177,7 @@ const PayrollLoans = () => {
           type: item.type_name,
           progressStr: `${item.paid_installment}/${item.total_installment}`,
           cicilan: item.current_month_amount,
+          penalty: item.current_month_penalty,
           sisa: item.remaining_balance,
           status_id: item.current_month_status_id,
           installment_number: item.current_month_installment,
@@ -326,11 +327,11 @@ const PayrollLoans = () => {
       ? data.filter(i => selectedIds.includes(i.id))
       : filteredData;
     if (rows.length === 0) { showToast('Tidak ada data untuk diekspor.', 'error'); return; }
-    const headers = ['ID Pinjaman', 'Anggota', 'NIK', 'Departemen', 'Status Karyawan', 'Jenis', 'No Angsuran', 'Potongan', 'Sisa', 'Status'];
+    const headers = ['ID Pinjaman', 'Anggota', 'NIK', 'Departemen', 'Status Karyawan', 'Jenis', 'No Angsuran', 'Potongan', 'Pinalti', 'Total Payment', 'Sisa', 'Status'];
     const statusLabel = (id) => id === 29 ? 'Lunas' : id === 30 ? 'Terlambat' : 'Belum Bayar';
     const csv = "data:text/csv;charset=utf-8,"
       + headers.join(',') + '\n'
-      + rows.map(r => `${r.id},"${r.name}","${r.nik}","${r.department}","${r.employeeStatus || '-'}","${r.type}",${r.installment_number},${r.cicilan},${r.sisa},"${statusLabel(r.status_id)}"`).join('\n');
+      + rows.map(r => `${r.id},"${r.name}","${r.nik}","${r.department}","${r.employeeStatus || '-'}","${r.type}",${r.installment_number},${r.cicilan},${r.penalty || 0},${(parseFloat(r.cicilan) || 0) + (parseFloat(r.penalty) || 0)},${r.sisa},"${statusLabel(r.status_id)}"`).join('\n');
     const link = document.createElement('a');
     link.href = encodeURI(csv);
     link.download = `payroll_${reportingMonth}.csv`;
@@ -511,6 +512,8 @@ const PayrollLoans = () => {
                   <th>Jenis Pinjaman</th>
                   <th>Angsuran</th>
                   <th>Potongan</th>
+                  <th>Pinalti</th>
+                  <th>Total Payment</th>
                   <th>Sisa</th>
                   <th>Progres</th>
                   <th>Status</th>
@@ -547,6 +550,12 @@ const PayrollLoans = () => {
                       <span className="pl-inst-of"> dari {row.total_installment}</span>
                     </td>
                     <td><strong className="pl-amount">{formatRupiah(row.cicilan)}</strong></td>
+                    <td>
+                      <span style={Number(row.penalty) > 0 ? { color: '#dc2626', fontWeight: 600 } : undefined}>
+                        {Number(row.penalty) > 0 ? formatRupiah(row.penalty) : '-'}
+                      </span>
+                    </td>
+                    <td><strong className="pl-amount">{formatRupiah((parseFloat(row.cicilan) || 0) + (parseFloat(row.penalty) || 0))}</strong></td>
                     <td><span className="pl-remaining">{formatRupiah(row.sisa)}</span></td>
                     <td>
                       <div className="pl-progress-cell">
@@ -587,7 +596,7 @@ const PayrollLoans = () => {
                   </tr>
                 )) : (
                   <tr>
-                    <td colSpan="11">
+                    <td colSpan="13">
                       <div className="pl-empty">
                         <FileText size={40} />
                         <p>Tidak ada data ditemukan untuk filter yang dipilih.</p>

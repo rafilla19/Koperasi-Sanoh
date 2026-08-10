@@ -34,9 +34,9 @@ import mimetypes
 from uuid import uuid4
 from urllib.request import urlopen
 from html import escape
-from .models import LoanApplication, LoanType, Loan, LoanInstallment
+from .models import LoanApplication, LoanType, Loan, LoanInstallment, LoanFundingSetting
 from api.master.models import Status
-from .serializers import LoanApplicationSerializer, LoanTypeSerializer, LoanSerializer, LoanInstallmentSerializer
+from .serializers import LoanApplicationSerializer, LoanTypeSerializer, LoanSerializer, LoanInstallmentSerializer, LoanFundingSettingSerializer
 from ml_service.trainer import get_prediction
 from api.utils.auth import get_verified_admin, get_verified_member
 
@@ -439,7 +439,7 @@ class LoanApplicationViewSet(viewsets.ModelViewSet):
             sel_year = now.year
 
             with connection.cursor() as cursor:
-                cursor.execute("SELECT monthly_limit FROM loan_funding_settings WHERE is_active = TRUE ORDER BY effective_date DESC LIMIT 1")
+                cursor.execute("SELECT monthly_limit FROM funding_settings WHERE is_active = TRUE AND effective_date <= CURRENT_DATE ORDER BY effective_date DESC LIMIT 1")
                 ml_row = cursor.fetchone()
                 monthly_limit = float(ml_row[0]) if ml_row and ml_row[0] is not None else 0.0
 
@@ -728,6 +728,20 @@ class LoanTypeViewSet(viewsets.ModelViewSet):
         instance.deleted_at = timezone.now()
         instance.save()
 
+class LoanFundingSettingViewSet(viewsets.ModelViewSet):
+    queryset = LoanFundingSetting.objects.all().order_by('-id')
+    serializer_class = LoanFundingSettingSerializer
+
+    def perform_create(self, serializer):
+        serializer.save(
+            is_active=True,
+            created_at=timezone.now(),
+            updated_at=timezone.now(),
+        )
+
+    def perform_update(self, serializer):
+        serializer.save(updated_at=timezone.now())
+
 def sync_member_pending_payments(member_id):
     from django.db import connection
     import requests
@@ -883,8 +897,24 @@ class LoanViewSet(viewsets.ModelViewSet):
         member_id = request.query_params.get('member_id', 1)
         sync_member_pending_payments(member_id)
 
+        # Same lazy snapshot used elsewhere, scoped to this member's loans so
+        # total_penalty below is accurate even if nobody has opened this
+        # loan's schedule yet.
+        snapshot_query = """
+        UPDATE loan_installments li
+        SET penalty_due = (SELECT monthly_limit FROM funding_settings WHERE id = 2 AND is_active = TRUE AND effective_date <= CURRENT_DATE ORDER BY effective_date DESC LIMIT 1),
+            updated_at = NOW()
+        FROM loans l2
+        WHERE l2.id = li.loan_id
+          AND l2.member_id = %s
+          AND (li.penalty_due IS NULL OR li.penalty_due = 0)
+          AND (li.status_id = 30 OR (li.status_id IN (27, 28) AND li.due_date < CURRENT_DATE))
+        """
+        with connection.cursor() as cursor:
+            cursor.execute(snapshot_query, [member_id])
+
         query = """
-        SELECT 
+        SELECT
             la.id AS loan_application_id,
             l.id AS loan_id,
             l.status_id,
@@ -901,7 +931,14 @@ class LoanViewSet(viewsets.ModelViewSet):
             ni.id AS next_installment_id,
             ni.amount_total AS next_installment_balance,
             ni.due_date AS next_installment_due_date,
-            lt.name AS type_name
+            lt.name AS type_name,
+            (
+                SELECT COALESCE(SUM(li3.penalty_due), 0)
+                FROM loan_installments li3
+                WHERE li3.loan_id = l.id
+                  AND li3.status_id = 28
+                  AND COALESCE(li3.penalty_paid, 0) = 0
+            ) AS total_penalty
         FROM loans l
         JOIN loan_applications la ON l.application_id = la.id
         LEFT JOIN loan_types lt ON la.loan_type_id = lt.id
@@ -1037,6 +1074,24 @@ class LoanViewSet(viewsets.ModelViewSet):
         #    itself is actually PAID/late-paid (29/30). This guarantees an
         #    expired or still-pending transfer never shows up as "bukti" on
         #    a row that is still UNPAID.
+        # Penalty amounts are snapshotted onto loan_installments.penalty_due the
+        # first time an installment is detected overdue, instead of being read
+        # live from funding_settings on every request. If that were read
+        # live, editing the "Penalty" master setting later would retroactively
+        # change the penalty shown on installments that were already overdue
+        # (including ones the member already paid) — the snapshot locks each
+        # installment's penalty to whatever the setting was at the time it went
+        # overdue, so later edits only affect installments that go overdue after
+        # the edit.
+        snapshot_query = """
+        UPDATE loan_installments li
+        SET penalty_due = (SELECT monthly_limit FROM funding_settings WHERE id = 2 AND is_active = TRUE AND effective_date <= CURRENT_DATE ORDER BY effective_date DESC LIMIT 1),
+            updated_at = NOW()
+        WHERE li.loan_id = %s
+          AND (li.penalty_due IS NULL OR li.penalty_due = 0)
+          AND (li.status_id = 30 OR (li.status_id IN (27, 28) AND li.due_date < CURRENT_DATE))
+        """
+
         query = """
         SELECT
             li.id,
@@ -1050,7 +1105,8 @@ class LoanViewSet(viewsets.ModelViewSet):
             lp.payment_proof,
             lp.gateway_reference,
             lp.gateway_status,
-            lp.payment_date
+            lp.payment_date,
+            li.penalty_due AS penalty
         FROM loan_installments li
         LEFT JOIN statuses s ON s.id = li.status_id
         LEFT JOIN LATERAL (
@@ -1077,6 +1133,7 @@ class LoanViewSet(viewsets.ModelViewSet):
         params = [pk]
 
         with connection.cursor() as cursor:
+            cursor.execute(snapshot_query, [pk])
             cursor.execute(query, params)
             columns = [col[0] for col in cursor.description]
             results = [dict(zip(columns, row)) for row in cursor.fetchall()]
@@ -1091,12 +1148,15 @@ class LoanViewSet(viewsets.ModelViewSet):
     def payment_invoice(self, request, pk=None):
         # 1. Query for any PENDING payment for this loan
         query = """
-        SELECT  
+        SELECT
             pm.name AS payment_method,
             pgt.gateway_status,
             lp.amount_paid,
             lp.payment_date,
             li.installment_number,
+            li.amount_principal,
+            li.amount_interest,
+            li.penalty_due AS penalty,
             l.member_id,
             s.status_code,
             pgt.callback_raw_data AS raw_gateway_data,
@@ -1178,12 +1238,15 @@ class LoanViewSet(viewsets.ModelViewSet):
         # 2. If no pending payment, query the earliest unpaid installment
         if not results:
             unpaid_query = """
-            SELECT 
+            SELECT
                 'GATEWAY' AS payment_method,
                 'PENDING' AS gateway_status,
                 li.amount_total AS amount_paid,
                 NULL AS payment_date,
                 li.installment_number,
+                li.amount_principal,
+                li.amount_interest,
+                li.penalty_due AS penalty,
                 l.member_id,
                 'UNPAID' AS status_code,
                 NULL AS snap_token
@@ -1366,22 +1429,22 @@ class LoanViewSet(viewsets.ModelViewSet):
                             'amount': gross_amount
                         })
             
-        # 3. Create a new transaction with Midtrans Snap API
-        order_id = f"GET-LOAN-{pk}-{installment_number}-{int(timezone.now().timestamp())}"
-        
-        url = "https://app.midtrans.com/snap/v1/transactions" if is_production else "https://app.sandbox.midtrans.com/snap/v1/transactions"
-        
-        # Determine customer first name and email from the loan's member data
-        first_name = ""
-        email = ""
-        
-        with connection.cursor() as cursor:
-            cursor.execute("""
-                SELECT m.full_name, u.email
-                FROM loans l
-                inner join members m on l.member_id = m.id
-                inner join users u on m.user_id = u.id
-                WHERE l.id = %s
+            # 3. Create a new transaction with Midtrans Snap API
+            order_id = f"GET-LOAN-{pk}-{installment_number}-{int(timezone.now().timestamp())}"
+            
+            url = "https://app.midtrans.com/snap/v1/transactions" if is_production else "https://app.sandbox.midtrans.com/snap/v1/transactions"
+            
+            # Determine customer first name and email from the loan's member data
+            first_name = ""
+            email = ""
+            
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT m.full_name, u.email
+                    FROM loans l
+                    inner join members m on l.member_id = m.id
+                    inner join users u on m.user_id = u.id
+                    WHERE l.id = %s
             """, [pk])
             member_row = cursor.fetchone()
             if member_row:
@@ -1552,7 +1615,13 @@ class LoanViewSet(viewsets.ModelViewSet):
             ON li.loan_id = l.id
         WHERE l.status_id = 25;
         """
-        
+
+        penalty_query = """
+        SELECT COALESCE(SUM(penalty_paid), 0) AS penalty_collected
+        FROM loan_installments
+        WHERE penalty_paid > 0;
+        """
+
         # Trend analytics query
         trend_query = """
         SELECT
@@ -1576,7 +1645,11 @@ class LoanViewSet(viewsets.ModelViewSet):
             (SELECT COALESCE(SUM(li.amount_principal), 0)
                 FROM loan_installments li
                 JOIN loans l ON l.id = li.loan_id
-                WHERE li.status_id = 28 AND l.created_at < DATE_TRUNC('month', CURRENT_DATE)) as bor_prev
+                WHERE li.status_id = 28 AND l.created_at < DATE_TRUNC('month', CURRENT_DATE)) as bor_prev,
+
+            -- Penalty Collected Trends
+            (SELECT COALESCE(SUM(penalty_paid), 0) FROM loan_installments WHERE penalty_paid > 0 AND DATE_TRUNC('month', updated_at) = DATE_TRUNC('month', CURRENT_DATE)) as pen_curr,
+            (SELECT COALESCE(SUM(penalty_paid), 0) FROM loan_installments WHERE penalty_paid > 0 AND DATE_TRUNC('month', updated_at) = DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')) as pen_prev
         """
 
         # Current month installment query
@@ -1619,17 +1692,22 @@ class LoanViewSet(viewsets.ModelViewSet):
             interest_row = cursor.fetchone()
             interest_achieved = interest_row[0] if interest_row and interest_row[0] else 0
 
+            cursor.execute(penalty_query)
+            penalty_row = cursor.fetchone()
+            penalty_collected = penalty_row[0] if penalty_row and penalty_row[0] else 0
+
             cursor.execute(trend_query)
             trend_row = cursor.fetchone()
-            # [int_curr, int_prev, out_curr, out_prev, bor_curr, bor_prev]
+            # [int_curr, int_prev, out_curr, out_prev, bor_curr, bor_prev, pen_curr, pen_prev]
             interest_trend = calculate_trend(trend_row[0], trend_row[1])
             outstanding_trend = calculate_trend(trend_row[2], trend_row[3])
             borrowers_trend = calculate_trend(trend_row[4], trend_row[5])
-            
+            penalty_trend = calculate_trend(trend_row[6], trend_row[7])
+
             cursor.execute(current_month_query, [current_period_due_date])
             current_month_row = cursor.fetchone()
             current_month_installment = current_month_row[0] if current_month_row and current_month_row[0] else 0
-            
+
         data = {
             'pending_approvals': submit_application,
             'total_outstanding': total_outstanding,
@@ -1638,6 +1716,8 @@ class LoanViewSet(viewsets.ModelViewSet):
             'borrowers_trend': borrowers_trend,
             'interest_achieved': interest_achieved,
             'interest_trend': interest_trend,
+            'penalty_collected': penalty_collected,
+            'penalty_trend': penalty_trend,
             'current_month_installment': current_month_installment
         }
         return Response(data)
@@ -1926,12 +2006,25 @@ class LoanViewSet(viewsets.ModelViewSet):
 
         period_str = f"{sel_year}-{sel_month:02d}"  # e.g. '2026-05'
 
-        query = """  
-        SELECT 
-                    m.id as member_id, 
+        # Same lazy snapshot used by the per-loan schedule() endpoint, but run
+        # across every installment: without this, penalty_due only gets
+        # populated for a loan once someone opens that specific loan's detail
+        # page, so this list-wide view would show "-" for overdue loans no one
+        # has clicked into yet.
+        snapshot_query = """
+        UPDATE loan_installments li
+        SET penalty_due = (SELECT monthly_limit FROM funding_settings WHERE id = 2 AND is_active = TRUE AND effective_date <= CURRENT_DATE ORDER BY effective_date DESC LIMIT 1),
+            updated_at = NOW()
+        WHERE (li.penalty_due IS NULL OR li.penalty_due = 0)
+          AND (li.status_id = 30 OR (li.status_id IN (27, 28) AND li.due_date < CURRENT_DATE))
+        """
+
+        query = """
+        SELECT
+                    m.id as member_id,
                     m.full_name,
                     m.nik_employee,
-                    d.department_name, 
+                    d.department_name,
                     la.purpose,
                     la.salary_statement_file,
                     la.duration_months,
@@ -1953,28 +2046,38 @@ class LoanViewSet(viewsets.ModelViewSet):
                     COALESCE(current_month_inst.due_date, NULL) AS current_month_due_date,
                     COALESCE(current_month_inst.amount_total, 0) AS current_month_amount,
                     COALESCE(current_month_inst.inst_status_id, NULL) AS current_month_status_id,
-                
-                    CASE 
-                        WHEN COALESCE(li_summary.total_installment, 0) > 0 
+                    COALESCE(penalty_summary.total_penalty_due, 0) AS penalty_due,
+
+                    CASE
+                        WHEN COALESCE(li_summary.total_installment, 0) > 0
                         THEN (li_summary.paid_installment * 100.0 / li_summary.total_installment)
                         ELSE 0
                     END AS progress_percent
-                
-                FROM loan_applications la 
+
+                FROM loan_applications la
                 INNER JOIN members m ON la.member_id = m.id
                 INNER JOIN departments d ON m.department_id = d.id
                 INNER JOIN users u ON m.user_id = u.id
                 INNER JOIN loan_types lt ON la.loan_type_id = lt.id
-                INNER JOIN loans l ON l.application_id = la.id   
+                INNER JOIN loans l ON l.application_id = la.id
                 INNER JOIN statuses s on s.id = l.status_id
                 JOIN (
-                    SELECT 
+                    SELECT
                         loan_id,
                         COUNT(*) AS total_installment,
                         SUM(CASE WHEN status_id IN (29,30) THEN 1 ELSE 0 END) AS paid_installment
                     FROM loan_installments
                     GROUP BY loan_id
                 ) li_summary ON li_summary.loan_id = l.id
+                LEFT JOIN (
+                    SELECT
+                        loan_id,
+                        SUM(penalty_due) AS total_penalty_due
+                    FROM loan_installments
+                    WHERE status_id = 28
+                      AND COALESCE(penalty_paid, 0) = 0
+                    GROUP BY loan_id
+                ) penalty_summary ON penalty_summary.loan_id = l.id
                 LEFT JOIN LATERAL (
             SELECT 
                 li.id as inst_id,
@@ -1993,6 +2096,7 @@ class LoanViewSet(viewsets.ModelViewSet):
             AND NOT EXISTS (SELECT 1 FROM close_account_requests car WHERE car.member_id = m.id AND car.status_id = 44 AND car.deleted_at IS NULL)
         """
         with connection.cursor() as cursor:
+            cursor.execute(snapshot_query)
             cursor.execute(query, [period_str])
             columns = [col[0] for col in cursor.description]
             results = [dict(zip(columns, row)) for row in cursor.fetchall()]
@@ -2015,12 +2119,23 @@ class LoanViewSet(viewsets.ModelViewSet):
         except ValueError:
             return Response({'error': 'Invalid period format. Use YYYY-MM'}, status=400)
 
-        query = """  
-        SELECT 
-            m.id as member_id, 
+        # Same lazy snapshot used by admin_loans_list()/schedule() — ensures
+        # current_month_penalty below is populated even if no one has opened
+        # this loan's detail page yet.
+        snapshot_query = """
+        UPDATE loan_installments li
+        SET penalty_due = (SELECT monthly_limit FROM funding_settings WHERE id = 2 AND is_active = TRUE AND effective_date <= CURRENT_DATE ORDER BY effective_date DESC LIMIT 1),
+            updated_at = NOW()
+        WHERE (li.penalty_due IS NULL OR li.penalty_due = 0)
+          AND (li.status_id = 30 OR (li.status_id IN (27, 28) AND li.due_date < CURRENT_DATE))
+        """
+
+        query = """
+        SELECT
+            m.id as member_id,
             m.full_name,
             m.nik_employee,
-            d.department_name, 
+            d.department_name,
             la.duration_months,
             l.total_amount as amount,
             lt.name as type_name,
@@ -2037,6 +2152,7 @@ class LoanViewSet(viewsets.ModelViewSet):
             COALESCE(current_month_inst.due_date, NULL) AS current_month_due_date,
             COALESCE(current_month_inst.amount_total, 0) AS current_month_amount,
             COALESCE(current_month_inst.inst_status_id, NULL) AS current_month_status_id,
+            COALESCE(current_month_inst.penalty_due, 0) AS current_month_penalty,
             es.status_name as employee_status,
             proof.proof_file_path AS payment_proof,
 
@@ -2068,7 +2184,8 @@ class LoanViewSet(viewsets.ModelViewSet):
                 li.installment_number,
                 li.due_date,
                 li.amount_total,
-                li.status_id as inst_status_id
+                li.status_id as inst_status_id,
+                li.penalty_due
             FROM loan_installments li
             WHERE li.loan_id = l.id
             AND EXTRACT(YEAR FROM li.due_date) = %s
@@ -2095,6 +2212,7 @@ class LoanViewSet(viewsets.ModelViewSet):
             AND EXISTS (SELECT 1 FROM loan_fund_allocations lfa WHERE lfa.loan_id = l.id)
         """
         with connection.cursor() as cursor:
+            cursor.execute(snapshot_query)
             cursor.execute(query, [year, month])
             columns = [col[0] for col in cursor.description]
             results = [dict(zip(columns, row)) for row in cursor.fetchall()]
@@ -2505,7 +2623,7 @@ class LoanViewSet(viewsets.ModelViewSet):
             overdue = overdue_row[0] if overdue_row and overdue_row[0] else 0
 
             # Get monthly funding limit (most recent active setting)
-            cursor.execute("SELECT monthly_limit FROM loan_funding_settings WHERE is_active = TRUE ORDER BY effective_date DESC LIMIT 1")
+            cursor.execute("SELECT monthly_limit FROM funding_settings WHERE is_active = TRUE AND effective_date <= CURRENT_DATE ORDER BY effective_date DESC LIMIT 1")
             ml_row = cursor.fetchone()
             monthly_limit = float(ml_row[0]) if ml_row and ml_row[0] is not None else 0.0
 
@@ -2541,8 +2659,8 @@ class LoanViewSet(viewsets.ModelViewSet):
             if request.method == 'GET':
                 cursor.execute(
                     "SELECT id, monthly_limit, effective_date, is_active "
-                    "FROM loan_funding_settings "
-                    "WHERE is_active = TRUE "
+                    "FROM funding_settings "
+                    "WHERE is_active = TRUE AND effective_date <= CURRENT_DATE "
                     "ORDER BY effective_date DESC LIMIT 1"
                 )
                 row = cursor.fetchone()
@@ -2576,19 +2694,19 @@ class LoanViewSet(viewsets.ModelViewSet):
                 return Response({'error': 'effective_date must be in YYYY-MM-DD format.'}, status=400)
 
             cursor.execute(
-                "SELECT id FROM loan_funding_settings WHERE is_active = TRUE ORDER BY effective_date DESC LIMIT 1"
+                "SELECT id FROM funding_settings WHERE is_active = TRUE AND effective_date <= CURRENT_DATE ORDER BY effective_date DESC LIMIT 1"
             )
             active_row = cursor.fetchone()
 
             if active_row:
                 cursor.execute(
-                    "UPDATE loan_funding_settings SET monthly_limit = %s, effective_date = %s "
+                    "UPDATE funding_settings SET monthly_limit = %s, effective_date = %s "
                     "WHERE id = %s",
                     [monthly_limit_value, parsed_effective_date, active_row[0]]
                 )
             else:
                 cursor.execute(
-                    "INSERT INTO loan_funding_settings (monthly_limit, effective_date, is_active) "
+                    "INSERT INTO funding_settings (monthly_limit, effective_date, is_active) "
                     "VALUES (%s, %s, TRUE)",
                     [monthly_limit_value, parsed_effective_date]
                 )
@@ -3171,7 +3289,21 @@ class LoanViewSet(viewsets.ModelViewSet):
                       AND li.due_date < p.end_date
                 )
                 ELSE 0
-            END AS loan_deduction
+            END AS loan_deduction,
+
+            -- Outstanding loan penalty (unpaid) on the member's active loan,
+            -- scoped to the installment due within the selected month/year
+            -- filter (same period window as loan_deduction above).
+            (
+                SELECT COALESCE(SUM(li.penalty_due), 0)
+                FROM loan_installments li
+                CROSS JOIN params p
+                WHERE li.loan_id = s.id
+                  AND li.status_id = 28
+                  AND COALESCE(li.penalty_paid, 0) = 0
+                  AND li.due_date >= p.start_date
+                  AND li.due_date < p.end_date
+            ) AS loan_penalty
 
         FROM members m
         INNER JOIN users u ON u.id = m.user_id
@@ -3197,9 +3329,25 @@ class LoanViewSet(viewsets.ModelViewSet):
             mba.account_holder_name,
             b.bank_name
         """
-        
+
+        # Same lazy snapshot used elsewhere (schedule(), admin_loans_list()):
+        # scoped to this member's loans so loan_penalty below reflects an
+        # up-to-date value even if nobody has opened this member's loan
+        # detail page yet.
+        snapshot_query = """
+        UPDATE loan_installments li
+        SET penalty_due = (SELECT monthly_limit FROM funding_settings WHERE id = 2 AND is_active = TRUE AND effective_date <= CURRENT_DATE ORDER BY effective_date DESC LIMIT 1),
+            updated_at = NOW()
+        FROM loans l2
+        WHERE l2.id = li.loan_id
+          AND l2.member_id = %s
+          AND (li.penalty_due IS NULL OR li.penalty_due = 0)
+          AND (li.status_id = 30 OR (li.status_id IN (27, 28) AND li.due_date < CURRENT_DATE))
+        """
+
         try:
             with connection.cursor() as cursor:
+                cursor.execute(snapshot_query, [member_id])
                 cursor.execute(query, [member_id])
                 columns = [col[0] for col in cursor.description]
                 row = cursor.fetchone()
@@ -3269,6 +3417,10 @@ class LoanViewSet(viewsets.ModelViewSet):
 
         results = []
         errors = []
+        # Tracks penalty actually collected in this batch, so the confirmation
+        # email below can call it out explicitly instead of silently folding
+        # it into the total amount.
+        paid_penalty_total = 0
 
         try:
             with transaction.atomic():
@@ -3308,9 +3460,17 @@ class LoanViewSet(viewsets.ModelViewSet):
                                     """, [member_id])
                                     inst = cursor.fetchone()
                                 if inst:
-                                    cursor.execute("CALL public.sp_manual_loan_installment(%s, %s, %s, %s, %s)", 
+                                    cursor.execute("CALL public.sp_manual_loan_installment(%s, %s, %s, %s, %s)",
                                                  [inst[0], member_id, file_path, admin_id, notes])
                                     results.append("Loan: Repayment processed successfully")
+
+                                    # The stored procedure sets penalty_paid when it
+                                    # collects an outstanding penalty on this installment —
+                                    # check it so the email can mention it explicitly.
+                                    cursor.execute("SELECT penalty_paid FROM loan_installments WHERE id = %s", [inst[0]])
+                                    penalty_row = cursor.fetchone()
+                                    if penalty_row and penalty_row[0]:
+                                        paid_penalty_total += float(penalty_row[0])
                                 else:
                                     errors.append("Loan: No unpaid installments found")
                                     raise Exception("Loan SP failed: No unpaid installments found")
@@ -3404,16 +3564,26 @@ class LoanViewSet(viewsets.ModelViewSet):
                             except:
                                 pass
 
+                        intro_message = f'Halo {member_name}, pembayaran manual Anda telah berhasil diproses oleh administrator.'
+                        if paid_penalty_total > 0:
+                            intro_message += ' Pembayaran ini turut mencakup pinalti keterlambatan angsuran, bukan hanya pokok dan bunga pinjaman.'
+
+                        email_details = [
+                            ('Total Jumlah Diproses', f'Rp {total_processed:,.0f}'),
+                        ]
+                        if paid_penalty_total > 0:
+                            email_details.append(('Termasuk Pinalti Keterlambatan', f'Rp {paid_penalty_total:,.0f}'))
+                        email_details += [
+                            ('Detail Transaksi', ', '.join(results) if results else '-'),
+                            ('Catatan', notes if notes else '-'),
+                            ('Tanggal', new_date_str),
+                            ('Bukti Transfer', 'Terlampir dalam email ini' if file_path else 'Tidak terlampir'),
+                        ]
+
                         html_message = _build_email_html(
                             'Konfirmasi Pembayaran',
-                            f'Halo {member_name}, pembayaran manual Anda telah berhasil diproses oleh administrator.',
-                            details=[
-                                ('Total Jumlah Diproses', f'Rp {total_processed:,.0f}'),
-                                ('Detail Transaksi', ', '.join(results) if results else '-'),
-                                ('Catatan', notes if notes else '-'),
-                                ('Tanggal', new_date_str),
-                                ('Bukti Transfer', 'Terlampir dalam email ini' if file_path else 'Tidak terlampir'),
-                            ],
+                            intro_message,
+                            details=email_details,
                             highlight=('Status', 'Berhasil Diproses'),
                             footer_note='Ini adalah pesan otomatis dari Koperasi Sanoh Sinergi Bersama. Mohon jangan membalas email ini.'
                         )
@@ -3531,6 +3701,24 @@ class LoanViewSet(viewsets.ModelViewSet):
 
         sync_member_pending_payments(member_id)
 
+        # Same lazy snapshot used elsewhere, scoped to this member's loans so
+        # total_unpaid_penalty below is accurate even if nobody has opened
+        # this loan's schedule yet.
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE loan_installments li
+                SET penalty_due = (SELECT monthly_limit FROM funding_settings WHERE id = 2 AND is_active = TRUE AND effective_date <= CURRENT_DATE ORDER BY effective_date DESC LIMIT 1),
+                    updated_at = NOW()
+                FROM loans l2
+                WHERE l2.id = li.loan_id
+                  AND l2.member_id = %s
+                  AND (li.penalty_due IS NULL OR li.penalty_due = 0)
+                  AND (li.status_id = 30 OR (li.status_id IN (27, 28) AND li.due_date < CURRENT_DATE))
+                """,
+                [member_id],
+            )
+
         query = """
         WITH member_info AS (
             SELECT m.full_name, es.status_name as employee_status, m.employee_status_id
@@ -3583,13 +3771,15 @@ class LoanViewSet(viewsets.ModelViewSet):
         total_unpaid_installments AS (
             SELECT
                 COALESCE(SUM(li.amount_total), 0) as total_unpaid_installments,
+                COALESCE(SUM(CASE WHEN COALESCE(li.penalty_paid, 0) = 0 THEN li.penalty_due ELSE 0 END), 0) as total_unpaid_penalty,
                 COALESCE(
                     JSON_AGG(
                         JSON_BUILD_OBJECT(
                             'id', li.id,
                             'installment_number', li.installment_number,
                             'due_date', li.due_date,
-                            'amount_total', li.amount_total
+                            'amount_total', li.amount_total,
+                            'penalty', CASE WHEN COALESCE(li.penalty_paid, 0) = 0 THEN li.penalty_due ELSE 0 END
                         ) ORDER BY li.installment_number ASC
                     ), '[]'::json
                 ) as unpaid_installments_list
@@ -3631,6 +3821,7 @@ class LoanViewSet(viewsets.ModelViewSet):
             ob.total_unpaid_bills,
             ob.unpaid_bills_list,
             tui.total_unpaid_installments,
+            tui.total_unpaid_penalty,
             tui.unpaid_installments_list,
             CASE WHEN ls.principal_amount IS NOT NULL THEN true ELSE false END as has_active_loan,
             (ob.total_unpaid_bills + tui.total_unpaid_installments) as grand_total_outstanding
@@ -4073,15 +4264,16 @@ class LoanViewSet(viewsets.ModelViewSet):
         
         # Build individual queries
         savings_parts = [
-            """SELECT 
-                st.transaction_date, 
-                tt.name AS transaction_type, 
-                st.amount, 
-                s.status_name AS status, 
-                CASE 
+            """SELECT
+                st.transaction_date,
+                tt.name AS transaction_type,
+                st.amount,
+                s.status_name AS status,
+                CASE
                     WHEN st.payment_method_id = 1 THEN COALESCE(pgt.gateway_transaction_id, st.payment_reference_id)
                     ELSE st.payment_reference_id
-                END AS reference""",
+                END AS reference,
+                NULL::numeric AS penalty""",
             "FROM saving_transactions st",
             "INNER JOIN transaction_types tt ON tt.id = st.transaction_type_id",
             "INNER JOIN statuses s ON s.id = st.status_id",
@@ -4102,7 +4294,7 @@ class LoanViewSet(viewsets.ModelViewSet):
         savings_q = " ".join(savings_parts)
 
         withdrawal_parts = [
-            "SELECT w.request_date AS transaction_date, 'WITHDRAWAL' AS transaction_type, w.amount, s.status_name AS status, w.payment_reference_id AS reference",
+            "SELECT w.request_date AS transaction_date, 'WITHDRAWAL' AS transaction_type, w.amount, s.status_name AS status, w.payment_reference_id AS reference, NULL::numeric AS penalty",
             "FROM withdrawals w",
             "INNER JOIN statuses s ON s.id = w.status_id",
             "WHERE w.member_id = %s",
@@ -4119,15 +4311,16 @@ class LoanViewSet(viewsets.ModelViewSet):
         withdrawal_q = " ".join(withdrawal_parts)
 
         loan_parts = [
-            """SELECT 
-                lp.payment_date AS transaction_date, 
-                'LOAN INSTALLMENT' AS transaction_type, 
-                lp.amount_paid AS amount, 
-                s.status_name AS status, 
-                CASE 
+            """SELECT
+                lp.payment_date AS transaction_date,
+                'LOAN INSTALLMENT' AS transaction_type,
+                lp.amount_paid AS amount,
+                s.status_name AS status,
+                CASE
                     WHEN lp.payment_method_id = 1 THEN COALESCE(pgt.gateway_transaction_id, lp.payment_reference_id)
                     ELSE lp.payment_reference_id
-                END AS reference""",
+                END AS reference,
+                li.penalty_paid AS penalty""",
             "FROM loan_payments lp",
             "INNER JOIN statuses s ON s.id = lp.status_id",
             "INNER JOIN loan_installments li ON li.id = lp.installment_id",
@@ -4153,7 +4346,8 @@ class LoanViewSet(viewsets.ModelViewSet):
                 'SHU DISTRIBUTION' AS transaction_type,
                 w.total_shu AS amount,
                 'COMPLETED' AS status,
-                w.tf_reference_id AS reference""",
+                w.tf_reference_id AS reference,
+                NULL::numeric AS penalty""",
             "FROM shu_member_distributions w",
             "WHERE w.distributed_status = TRUE AND w.status_shu = TRUE AND w.member_id = %s"
         ]

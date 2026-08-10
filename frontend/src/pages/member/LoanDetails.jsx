@@ -220,12 +220,13 @@ const LoanDetails = () => {
 
       const formatNum = (num) => new Intl.NumberFormat('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(num || 0);
 
-      const tableColumn = ["No", "Jatuh Tempo", "Tgl Transaksi", "Pokok (Rp)", "Bunga (Rp)", "Total (Rp)", "Status"];
+      const tableColumn = ["No", "Jatuh Tempo", "Tgl Transaksi", "Pokok (Rp)", "Bunga (Rp)", "Pinalti (Rp)", "Total Payment (Rp)", "Status"];
       const tableRows = [];
 
       schedule.forEach(s => {
         const isPaid = s.status_code === 'PAID' || s.status_code === 'PAID_OFF';
         const txnDate = isPaid ? formatDate(s.due_date) : '-';
+        const totalPayment = (Number(s.amount_principal) || 0) + (Number(s.amount_interest) || 0) + (Number(s.penalty) || 0);
 
         tableRows.push([
           s.installment_number,
@@ -233,7 +234,8 @@ const LoanDetails = () => {
           txnDate,
           formatNum(s.amount_principal),
           formatNum(s.amount_interest),
-          formatNum(s.amount_total),
+          s.penalty ? formatNum(s.penalty) : '-',
+          formatNum(totalPayment),
           s.status_code
         ]);
       });
@@ -265,8 +267,9 @@ const LoanDetails = () => {
           2: { halign: 'center' },
           3: { halign: 'right' },
           4: { halign: 'right' },
-          5: { halign: 'right', fontStyle: 'bold' },
-          6: { halign: 'center' },
+          5: { halign: 'right' },
+          6: { halign: 'right', fontStyle: 'bold' },
+          7: { halign: 'center' },
         },
         styles: {
           font: 'helvetica',
@@ -663,9 +666,17 @@ const LoanDetails = () => {
             
             {status === 'Active' && (
               <div className="ld-g-col ld-next-deduction">
-                <span className="lbl">POTONGAN BERIKUTNYA</span>
+                <span className="lbl">{empStatus === 3 ? 'PEMBAYARAN BERIKUTNYA' : 'POTONGAN BERIKUTNYA'}</span>
                 <span className="val-large">{loanData?.next_installment_balance ? formatRupiah(loanData.next_installment_balance) : '-'}</span>
                 <span className="sub">Jatuh Tempo - {loanData?.next_installment_due_date ? formatDate(loanData.next_installment_due_date) : ''}</span>
+                {Number(loanData?.total_penalty) > 0 && (
+                  <div style={{ marginBottom: 16 }}>
+                    <span className="lbl" style={{ display: 'block', marginBottom: 4 }}>TOTAL PINALTI</span>
+                    <span className="sub" style={{ color: '#dc2626', fontWeight: 700, fontSize: 16, marginBottom: 0 }}>
+                      {formatRupiah(loanData.total_penalty)}
+                    </span>
+                  </div>
+                )}
                 {empStatus === 3 && (
                   <button 
                     className="btn-pay-now" 
@@ -754,6 +765,7 @@ const LoanDetails = () => {
                   <th>JATUH TEMPO</th>
                   <th>JUMLAH POKOK</th>
                   <th>JUMLAH BUNGA</th>
+                  <th>PINALTI</th>
                   <th>TOTAL PEMBAYARAN</th>
                   <th>STATUS</th>
                 </tr>
@@ -761,7 +773,7 @@ const LoanDetails = () => {
               <tbody>
                 {status === 'Pending' ? (
                   <tr>
-                    <td colSpan="6" className="ld-empty-row">Jadwal akan dibuat setelah disetujui.</td>
+                    <td colSpan="7" className="ld-empty-row">Jadwal akan dibuat setelah disetujui.</td>
                   </tr>
                 ) : schedule.length > 0 ? (
                   schedule.map(s => {
@@ -796,7 +808,12 @@ const LoanDetails = () => {
                       <td>{formatDate(s.due_date)}</td>
                       <td>{formatRupiah(s.amount_principal)}</td>
                       <td>{formatRupiah(s.amount_interest)}</td>
-                      <td>{formatRupiah(s.amount_total)}</td>
+                      <td style={s.penalty ? { color: '#dc2626', fontWeight: 600 } : undefined}>
+                        {s.penalty ? formatRupiah(s.penalty) : '-'}
+                      </td>
+                      <td>
+                        {formatRupiah((Number(s.amount_principal) || 0) + (Number(s.amount_interest) || 0) + (Number(s.penalty) || 0))}
+                      </td>
                       <td>
                         <span className={`ld-badge ${status === 'Completed' ? 'bdg-paid' : getBadgeClass(s.status_code)}`}>
                           {isPaid && <span className="dot" style={{backgroundColor: '#059669'}}></span>}
@@ -808,7 +825,7 @@ const LoanDetails = () => {
                   )}
                 )) : (
                   <tr>
-                    <td colSpan="6" className="ld-empty-row">Jadwal belum tersedia.</td>
+                    <td colSpan="7" className="ld-empty-row">Jadwal belum tersedia.</td>
                   </tr>
                 )}
               </tbody>
@@ -925,46 +942,61 @@ const LoanDetails = () => {
                       </span>
                     </div>
                   )}
-                  <div className="m-inv-row">
-                    <span className="lbl">No. Angsuran</span>
-                    <span className="val">#{invoiceData.installment_number}</span>
-                  </div>
-                  <div className="m-inv-row">
-                    <span className="lbl">Item</span>
-                    <span className="val">Pembayaran Angsuran Pinjaman</span>
-                  </div>
-                  <div className="m-inv-row amount">
-                    <span className="lbl">Jumlah Bayar</span>
-                    <span className="val">{formatRupiah(invoiceData.amount_paid)}</span>
-                  </div>
-                  
                   {(() => {
+                    const rowStyle = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontFamily: 'inherit' };
+                    const lblStyle = { fontSize: 13, fontWeight: 500, color: '#64748b' };
+                    const valStyle = { fontSize: 13, fontWeight: 700, color: '#0a1628', textAlign: 'right' };
+
                     const selectedChannel = paymentChannels.find(ch => ch.channel_code === selectedPaymentMethod);
                     const feePercentage = selectedChannel ? Number(selectedChannel.fee_percentage) : 0;
                     const feeFixed = selectedChannel ? Number(selectedChannel.fee_fixed) : 0;
-                    const subtotal = invoiceData ? Number(invoiceData.amount_paid) : 0;
-                    const feeTotal = Math.round((subtotal * feePercentage) / 100) + feeFixed;
-                    const totalAmount = subtotal + feeTotal;
+                    const penalty = Number(invoiceData.penalty) || 0;
+                    const subtotal = Number(invoiceData.amount_paid) || 0;
+                    const totalBeforeFee = subtotal + penalty;
+                    const feeTotal = Math.round((totalBeforeFee * feePercentage) / 100) + feeFixed;
+                    const totalAmount = totalBeforeFee + feeTotal;
 
-                    return selectedPaymentMethod ? (
-                      <>
-                        <div className="m-inv-row">
-                          <span className="lbl">Biaya Layanan</span>
-                          <span className="val">{formatRupiah(feeTotal)}</span>
+                    return (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                        <div style={rowStyle}>
+                          <span style={lblStyle}>No. Angsuran</span>
+                          <span style={valStyle}>#{invoiceData.installment_number}</span>
                         </div>
-                        <div className="m-inv-row amount" style={{ borderTop: '1px dashed #e2e8f0', paddingTop: '8px', marginTop: '8px' }}>
-                          <span className="lbl" style={{ fontWeight: '700', color: '#1e293b' }}>Total Pembayaran</span>
-                          <span className="val" style={{ fontWeight: '700', color: '#2563eb' }}>{formatRupiah(totalAmount)}</span>
+                        <div style={rowStyle}>
+                          <span style={lblStyle}>Item</span>
+                          <span style={valStyle}>Pembayaran Angsuran Pinjaman</span>
                         </div>
-                      </>
-                    ) : null;
+
+                        <div style={{ ...rowStyle, borderTop: '1px dashed #cbd5e1', paddingTop: 14 }}>
+                          <span style={lblStyle}>Total Pokok</span>
+                          <span style={{ ...valStyle, fontSize: 16, color: '#2563eb' }}>{formatRupiah(subtotal)}</span>
+                        </div>
+                        {penalty > 0 && (
+                          <div style={rowStyle}>
+                            <span style={lblStyle}>Pinalti</span>
+                            <span style={{ ...valStyle, fontSize: 16, color: '#dc2626' }}>{formatRupiah(penalty)}</span>
+                          </div>
+                        )}
+                        {selectedPaymentMethod && (
+                          <div style={rowStyle}>
+                            <span style={lblStyle}>Biaya Layanan</span>
+                            <span style={valStyle}>{formatRupiah(feeTotal)}</span>
+                          </div>
+                        )}
+
+                        <div style={{ ...rowStyle, borderTop: '1px dashed #cbd5e1', paddingTop: 14 }}>
+                          <span style={{ ...lblStyle, fontWeight: 700, color: '#1e293b' }}>Total Pembayaran</span>
+                          <span style={{ ...valStyle, fontSize: 18, color: '#2563eb' }}>{formatRupiah(selectedPaymentMethod ? totalAmount : totalBeforeFee)}</span>
+                        </div>
+                      </div>
+                    );
                   })()}
 
-                  <div className="m-inv-row">
-                    <span className="lbl">Status</span>
-                    <span className="val">{invoiceData.status_code || invoiceData.gateway_status || 'PENDING'}</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14 }}>
+                    <span style={{ fontSize: 13, fontWeight: 500, color: '#64748b' }}>Status</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#0a1628' }}>{invoiceData.status_code || invoiceData.gateway_status || 'PENDING'}</span>
                   </div>
-                  
+
                   {(!invoiceData || !invoiceData.snap_token) && (
                     <div className="m-payment-methods">
                       <h4 style={{marginTop: '20px', marginBottom: '10px', fontSize: '14px', color: '#1e293b'}}>Pilih Metode Pembayaran</h4>

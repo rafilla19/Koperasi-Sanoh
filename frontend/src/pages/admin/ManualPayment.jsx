@@ -86,8 +86,7 @@ const ManualPayment = () => {
         // Re-fill amounts for any already-selected payment types
         setPayments(prev => prev.map(p => {
           if (!p.type) return p;
-          const pt = PAYMENT_TYPES.find(t => t.value === p.type);
-          return { ...p, amount: pt ? String(roundAmount(data[pt.detailKey])) : p.amount };
+          return { ...p, amount: computeAutoAmount(p.type, data) || p.amount };
         }));
       } else {
         setMemberDetail(null);
@@ -120,11 +119,19 @@ const ManualPayment = () => {
 
   const roundAmount = (value) => Math.round(Number(value) || 0);
 
-  const getAutoAmount = (type) => {
-    if (!memberDetail) return '';
+  // Cicilan Pinjaman's auto-filled amount includes any outstanding penalty
+  // on top of the installment amount, so the admin collects both in one go.
+  const computeAutoAmount = (type, data) => {
     const pt = PAYMENT_TYPES.find(t => t.value === type);
-    return pt ? String(roundAmount(memberDetail[pt.detailKey])) : '';
+    if (!pt || !data) return '';
+    let amount = Number(data[pt.detailKey]) || 0;
+    if (type === 'loan') {
+      amount += Number(data.loan_penalty) || 0;
+    }
+    return String(roundAmount(amount));
   };
+
+  const getAutoAmount = (type) => computeAutoAmount(type, memberDetail);
 
   const handleTypeChange = (idx, newType) => {
     let updated = [...payments];
@@ -400,9 +407,23 @@ const ManualPayment = () => {
 
           <div className="mp-grid">
             <div className="mp-outstanding-list">
+              <div className="mp-out-item" style={{ display: 'flex', gap: '24px' }}>
+                <div style={{ flex: 1 }}>
+                  <label>Potongan Pinjaman (Siklus Saat Ini)</label>
+                  <div className="mp-amount">{formatRupiah(memberDetail?.loan_deduction)}</div>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label>Pinalti Pinjaman</label>
+                  <div className="mp-amount" style={Number(memberDetail?.loan_penalty) > 0 ? { color: '#dc2626' } : undefined}>
+                    {formatRupiah(memberDetail?.loan_penalty)}
+                  </div>
+                </div>
+              </div>
               <div className="mp-out-item">
-                <label>Potongan Pinjaman (Siklus Saat Ini)</label>
-                <div className="mp-amount">{formatRupiah(memberDetail?.loan_deduction)}</div>
+                <label>Total Loans Payment</label>
+                <div className="mp-amount">
+                  {formatRupiah((Number(memberDetail?.loan_deduction) || 0) + (Number(memberDetail?.loan_penalty) || 0))}
+                </div>
               </div>
               <div className="mp-out-item">
                 <label>Simpanan Wajib (Tunggakan)</label>

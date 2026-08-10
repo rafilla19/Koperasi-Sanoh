@@ -6,12 +6,11 @@ import {
   Users,
   BadgeDollarSign,
   Calendar,
-  Clock3,
   Search,
   Printer,
   TrendingUp,
-  BarChart3,
   AlertCircle,
+  AlertTriangle,
   PiggyBank,
   Loader
 } from "lucide-react";
@@ -26,10 +25,9 @@ const AdminLoansDashboard = () => {
     { icon: <Wallet size={22} />, bg: 'linear-gradient(135deg, #6366f1, #4f46e5)', shadow: 'rgba(99,102,241,0.35)' },
     { icon: <Users size={22} />, bg: 'linear-gradient(135deg, #0ea5e9, #0284c7)', shadow: 'rgba(14,165,233,0.35)' },
     { icon: <BadgeDollarSign size={22} />, bg: 'linear-gradient(135deg, #10b981, #059669)', shadow: 'rgba(16,185,129,0.35)' },
-    { icon: <Clock3 size={22} />, bg: 'linear-gradient(135deg, #f59e0b, #d97706)', shadow: 'rgba(245,158,11,0.35)' },
-    { icon: <BarChart3 size={22} />, bg: 'linear-gradient(135deg, #8b5cf6, #7c3aed)', shadow: 'rgba(139,92,246,0.35)' },
+    { icon: <AlertCircle size={22} />, bg: 'linear-gradient(135deg, #f43f5e, #e11d48)', shadow: 'rgba(244,63,94,0.35)' },
     { icon: <PiggyBank size={22} />, bg: 'linear-gradient(135deg, #ec4899, #db2777)', shadow: 'rgba(236,72,153,0.35)' },
-    { icon: <AlertCircle size={22} />, bg: 'linear-gradient(135deg, #ef4444, #dc2626)', shadow: 'rgba(239,68,68,0.35)' },
+    { icon: <AlertTriangle size={22} />, bg: 'linear-gradient(135deg, #ef4444, #dc2626)', shadow: 'rgba(239,68,68,0.35)' },
     { icon: <TrendingUp size={22} />, bg: 'linear-gradient(135deg, #14b8a6, #0d9488)', shadow: 'rgba(20,184,166,0.35)' },
   ];
 
@@ -37,11 +35,12 @@ const AdminLoansDashboard = () => {
     { title: 'Total Tertunggak', value: 'Memuat...', up: '', tooltip: 'Total saldo pinjaman tertunggak dari semua pinjaman aktif.' },
     { title: 'Peminjam Aktif', value: 'Memuat...', up: '', tooltip: 'Jumlah anggota dengan pinjaman aktif.' },
     { title: 'Bunga Tercapai', value: 'Memuat...', up: '', tooltip: 'Total bunga terkumpul dari semua pinjaman.' },
-    { title: 'Menunggu Persetujuan', value: 'Memuat...', up: '', tooltip: 'Jumlah pengajuan pinjaman yang menunggu persetujuan.' }
+    { title: 'Pinalti Terkumpul', value: 'Memuat...', up: '', tooltip: 'Total pinalti yang sudah dibayar dari semua angsuran pinjaman.' },
   ]);
 
   const [pendingList, setPendingList] = useState([]);
   const [activeLoans, setActiveLoans] = useState([]);
+  const [activeLoanSummary, setActiveLoanSummary] = useState({ active_loans: 0, total_members: 0 });
 
   // Period filter state — default to current month/year
   const now = new Date();
@@ -89,14 +88,14 @@ const AdminLoansDashboard = () => {
           { title: 'Total Tertunggak', value: formatRupiah(data.total_outstanding), up: data.outstanding_trend },
           { title: 'Peminjam Aktif', value: formatRupiah(data.active_borrowers), up: data.borrowers_trend },
           { title: 'Bunga Tercapai', value: formatRupiah(data.interest_achieved), up: data.interest_trend },
-          { title: 'Menunggu Persetujuan', value: (data.pending_approvals || 0).toString(), up: '' }
+          { title: 'Pinalti Terkumpul', value: formatRupiah(data.penalty_collected), up: data.penalty_trend },
         ];
       }
 
       if (response2.ok) {
         const data = await response2.json();
+        setActiveLoanSummary({ active_loans: data.active_loans || 0, total_members: data.total_members || 0 });
         row2Stats = [
-          { title: 'Total Pinjaman Aktif', value: `${data.active_loans}/${data.total_members} Anggota`, up: '' },
           { title: 'Terkumpul Bulan Ini', value: `${formatRupiah(data.collected_this_month)}`, up: '' },
           { title: 'Total Pinjaman Macet Bulan Ini', value: formatRupiah(data.total_overdue), up: '' },
           { title: 'Sisa Alokasi Pinjaman Bulan Ini', value: formatRupiah(data.remaining_allocation || data.monthly_limit || 0), up: '' }
@@ -365,7 +364,7 @@ const AdminLoansDashboard = () => {
     if (isExporting) return;
     setIsExporting(true);
     try {
-      const headers = ['ID', 'Nama', 'NIK', 'Tujuan', 'Jenis', 'Departemen', 'Tgl Mulai', 'Tgl Akhir', 'Pokok', 'Bunga', 'Total', 'Sisa Saldo', 'Progres (%)', 'Jatuh Tempo Bulan Ini', 'Angsuran Bulan Ini', 'Status'];
+      const headers = ['ID', 'Nama', 'NIK', 'Tujuan', 'Jenis', 'Departemen', 'Tgl Mulai', 'Tgl Akhir', 'Pokok', 'Bunga', 'Total', 'Sisa Saldo', 'Progres (%)', 'Jatuh Tempo Bulan Ini', 'Angsuran Bulan Ini', 'Total Pinalti', 'Status'];
 
       const rows = filteredLoans.map(loan => {
         let statusDisplay = 'Aktif';
@@ -401,6 +400,7 @@ const AdminLoansDashboard = () => {
           Math.round(loan.progress_percent) || 0,
           dueDate,
           installmentInfo,
+          Number(loan.penalty_due) || 0,
           statusDisplay,
         ];
       });
@@ -506,10 +506,18 @@ const AdminLoansDashboard = () => {
       )}
       <div className="ald-pending-section">
         <div className="ald-pending-header">
-          <h2>Menunggu Persetujuan</h2>
-          <Link to="/dashboard/admin/ls-loans/pending" className="ald-view-more">
-            Lihat Semua &rarr;
-          </Link>
+          <div>
+            <h2>Menunggu Persetujuan</h2>
+            <p className="ald-pending-desc">Permintaan anggota yang memerlukan tindakan segera</p>
+          </div>
+          <div className="ald-pending-header-right">
+            {pendingList.length > 0 && (
+              <span className="ald-badge-count">{pendingList.length} permintaan</span>
+            )}
+            <Link to="/dashboard/admin/ls-loans/pending" className="ald-view-more">
+              Lihat Semua &rarr;
+            </Link>
+          </div>
         </div>
 
         <div className="ald-pending-list">
@@ -628,6 +636,7 @@ const AdminLoansDashboard = () => {
                   { label: 'Progres', key: 'progress' },
                   { label: 'Jatuh Tempo Bulan Ini', key: 'due' },
                   { label: 'Angsuran Bulan Ini', key: 'inst' },
+                  { label: 'Total Pinalti', key: 'penalty' },
                   ...(statusFilter === 'All' ? [{ label: 'Status', key: 'status' }] : []),
                 ].map(({ label, key }) => (
                   <th
@@ -721,6 +730,16 @@ const AdminLoansDashboard = () => {
                         : '-'
                       }
                     </td>
+                    <td style={loan.penalty_due > 0 ? { color: '#dc2626', fontWeight: 600 } : undefined}>
+                      {loan.penalty_due > 0
+                        ? new Intl.NumberFormat('id-ID', {
+                            style: 'currency',
+                            currency: 'IDR',
+                            minimumFractionDigits: 0
+                          }).format(loan.penalty_due).replace(',00', '')
+                        : '-'
+                      }
+                    </td>
                     {statusFilter === 'All' && (
                       <td>
                         <span className={`ald-status ${loan.status_code && (loan.status_code.toLowerCase().includes('paid') || loan.status_code.toLowerCase() === 'paid_off') ? 'unpaid' : 'active'}`}>
@@ -733,7 +752,13 @@ const AdminLoansDashboard = () => {
               })}
             </tbody>
           </table>
+        </div>
 
+        <div className="ald-table-footer">
+          <div className="ald-total-active-loans">
+            <span className="ald-tal-label">Total Pinjaman Aktif</span>
+            <span className="ald-tal-value">{activeLoanSummary.active_loans}/{activeLoanSummary.total_members} Anggota</span>
+          </div>
           {renderPagination()}
         </div>
       </div>

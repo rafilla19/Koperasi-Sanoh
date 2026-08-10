@@ -1,10 +1,16 @@
 from rest_framework import serializers
-from .models import LoanApplication, LoanType, Loan, LoanInstallment
+from .models import LoanApplication, LoanType, Loan, LoanInstallment, LoanFundingSetting
 
 class LoanTypeSerializer(serializers.ModelSerializer):
     class Meta:
         model = LoanType
         fields = ('id', 'name')
+
+class LoanFundingSettingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LoanFundingSetting
+        fields = ('id', 'description', 'monthly_limit', 'effective_date', 'is_active', 'created_at', 'updated_at')
+        read_only_fields = ('is_active', 'created_at', 'updated_at')
 
 class LoanApplicationSerializer(serializers.ModelSerializer):
     class Meta:

@@ -34,13 +34,10 @@ def predict_loan_eligibility(request):
     
     Response:
     {
-        "success": true,
         "eligibility": "High|Medium|Low",
         "probability": 0.85,
-        "suggested_interest_rate": 0.95,
-        "recommendation": "...",
-        "risk_factors": [...],
-        "member_info": {...}
+        "suggested_interest_rate": 0.95
+
     }
     """
     try:

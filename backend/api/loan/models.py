@@ -13,6 +13,19 @@ class LoanType(models.Model):
         db_table = 'loan_types'
         managed = False
         
+class LoanFundingSetting(models.Model):
+    description = models.CharField(max_length=255, null=True, blank=True)
+    monthly_limit = models.DecimalField(max_digits=15, decimal_places=2)
+    effective_date = models.DateField()
+    is_active = models.BooleanField(default=True)
+
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
+
+    class Meta:
+        db_table = 'funding_settings'
+        managed = False
+
 class LoanApplication(models.Model):
     member = models.ForeignKey(Member, on_delete=models.RESTRICT)
     loan_type = models.ForeignKey('LoanType', on_delete=models.RESTRICT)
