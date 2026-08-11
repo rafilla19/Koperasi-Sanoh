@@ -18,6 +18,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from .models import EmailOTP
 from datetime import timedelta
 from rest_framework.response import Response
+from api.utils.crypto_utils import encrypt_pii, decrypt_pii, hash_pii
 
 from api.member.serializers import (
     MemberClosureRequestSerializer,
@@ -141,7 +142,7 @@ def _member_profile_query(member_id):
         cursor.execute(
             """
             UPDATE loan_installments li
-            SET penalty_due = (SELECT monthly_limit FROM funding_settings WHERE id = 2 AND is_active = TRUE AND effective_date <= CURRENT_DATE ORDER BY effective_date DESC LIMIT 1),
+            SET penalty_due = (SELECT monthly_limit FROM funding_settings WHERE id = 2 AND is_active = TRUE LIMIT 1),
                 updated_at = NOW()
             FROM loans l2
             WHERE l2.id = li.loan_id
@@ -152,12 +153,14 @@ def _member_profile_query(member_id):
             [member_id],
         )
 
-    return _try_fetchone(
+    result = _try_fetchone(
         """
         SELECT
             m.id,
             m.full_name,
             m.nik_employee,
+            m.nik_ktp,
+            m.npwp_number,
             m.phone_number,
             m.address,
             m.gender,
@@ -272,6 +275,10 @@ def _member_profile_query(member_id):
         """,
         [member_id],
     )
+    if result:
+        result['nik_ktp'] = decrypt_pii(result.get('nik_ktp'))
+        result['npwp_number'] = decrypt_pii(result.get('npwp_number'))
+    return result
 
 
 class MemberViewSet(viewsets.ViewSet):
@@ -525,7 +532,7 @@ class MemberViewSet(viewsets.ViewSet):
                     cursor.execute(
                         """
                         CALL sp_regist_new_member(
-                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                         )
                         """,
                         [
@@ -548,6 +555,7 @@ class MemberViewSet(viewsets.ViewSet):
                             bool(data.get('tncAgreement', False)),
                             contract_end_date,
                             data.get('password'),
+                            hash_pii(data.get('nik')),
                         ],
                     )
 
@@ -1483,6 +1491,8 @@ class MemberViewSet(viewsets.ViewSet):
             ORDER BY cr.request_date DESC
             """
         )
+        for row in rows:
+            row['nik_ktp'] = decrypt_pii(row.get('nik_ktp'))
         return Response(rows)
 
     @action(detail=True, methods=['post'])
@@ -1495,15 +1505,29 @@ class MemberViewSet(viewsets.ViewSet):
         try:
             registration_row = _try_fetchone(
                 """
-                SELECT full_name, email, employee_nik AS nik_employee, employee_status_id, status_id, id
+                SELECT full_name, email, employee_nik AS nik_employee, employee_status_id, status_id, id, nik, npwp_number
                 FROM registrations
                 WHERE id = %s
                 LIMIT 1
                 """,
                 [pk],
             )
+            if not registration_row:
+                return Response({'error': 'Registration not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+            # nik_ktp / npwp_number are stored encrypted on members — encrypt
+            # here (and derive the deterministic hash used for exact-match
+            # NIK lookups) before handing off to the stored procedure.
+            raw_nik = registration_row.get('nik')
+            nik_encrypted = encrypt_pii(raw_nik)
+            nik_hash = hash_pii(raw_nik)
+            npwp_encrypted = encrypt_pii(registration_row.get('npwp_number'))
+
             with connection.cursor() as cursor:
-                cursor.execute('CALL sp_approve_request_regist(%s, %s)', [pk, comment])
+                cursor.execute(
+                    'CALL sp_approve_request_regist(%s, %s, %s, %s, %s)',
+                    [pk, comment, nik_encrypted, nik_hash, npwp_encrypted],
+                )
 
             if registration_row and registration_row.get('email'):
                 employee_status_id = int(registration_row.get('employee_status_id') or 0)

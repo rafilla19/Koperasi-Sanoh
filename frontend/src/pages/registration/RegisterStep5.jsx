@@ -37,8 +37,8 @@ const RegisterStep5 = () => {
     const step2 = JSON.parse(sessionStorage.getItem('regStep2') || '{}');
     const step3 = JSON.parse(sessionStorage.getItem('regStep3') || '{}');
 
-    if (!step2.npwpPath || !step2.ktpPath) {
-      setErrorMsg('File dokumen (NPWP/KTP) tidak ditemukan. Silakan kembali ke Step 2 dan upload ulang.');
+    if (!step2.ktpPath) {
+      setErrorMsg('File dokumen KTP tidak ditemukan. Silakan kembali ke Step 2 dan upload ulang.');
       return;
     }
 

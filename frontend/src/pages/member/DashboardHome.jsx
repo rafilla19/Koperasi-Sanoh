@@ -3,7 +3,7 @@ import {
   Wallet, PiggyBank, Briefcase, CreditCard,
   Download, Copy, HandCoins, ArrowUpRight, TrendingUp,
   PieChart, Calendar, Search, FileText, Filter,
-  ArrowRightLeft, AlertCircle, AlertTriangle, Info, CheckCircle2,
+  ArrowRightLeft, AlertCircle, Info, CheckCircle2,
   ChevronDown, TrendingDown, X, Check, UserCircle, Loader
 } from 'lucide-react';
 import {
@@ -1651,16 +1651,9 @@ const DashboardHome = () => {
             <hr className="modal-dashed-divider" />
 
             {Number(selectedTx.penalty) > 0 && (
-              <div style={{
-                display: 'flex', gap: 8, alignItems: 'flex-start',
-                backgroundColor: '#fff1f2', border: '1px solid #fecaca',
-                padding: '10px 14px', borderRadius: 8, marginBottom: 14,
-                color: '#be123c', fontSize: 12.5, fontWeight: 500,
-              }}>
-                <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 1 }} />
-                <span>
-                  Pembayaran ini mencakup pinalti keterlambatan sebesar <strong>{formatRupiah(selectedTx.penalty)}</strong>, bukan hanya pokok dan bunga angsuran.
-                </span>
+              <div className="modal-row">
+                <span className="modal-row-key">Termasuk Pinalti Keterlambatan</span>
+                <span className="modal-row-val" style={{ color: '#dc2626', fontWeight: 700 }}>{formatRupiah(selectedTx.penalty)}</span>
               </div>
             )}
 

@@ -36,6 +36,7 @@ from .serializers import (
 )
 from .email_utils import send_member_notification_email, send_withdrawal_paid_email, send_voluntary_request_submitted_email
 from api.utils.auth import get_verified_admin
+from api.utils.crypto_utils import decrypt_pii, hash_pii
 
 TEMP_MEMBER_ID = 5
 _MEMBER_SAVINGS_CONFIG_TABLE_EXISTS = None
@@ -204,7 +205,7 @@ def my_member_profile(request):
             'id': member.id,
             'full_name': member.full_name,
             'nik_employee': member.nik_employee,
-            'nik_ktp': member.nik_ktp,
+            'nik_ktp': decrypt_pii(member.nik_ktp),
             'employee_status_id': employee_status_id,
             'is_payroll': is_payroll,
             'email': user_email,
@@ -926,7 +927,7 @@ def admin_all_transactions(request):
         qs = qs.filter(
             Q(member__full_name__icontains=search) |
             Q(member__nik_employee__icontains=search) |
-            Q(member__nik_ktp__icontains=search) |
+            Q(member__nik_ktp_hash=hash_pii(search)) |
             Q(transaction_code__icontains=search)
         )
 
@@ -1398,7 +1399,7 @@ def admin_member_wallets(request):
         members_qs = members_qs.filter(
             Q(full_name__icontains=search) |
             Q(nik_employee__icontains=search) |
-            Q(nik_ktp__icontains=search)
+            Q(nik_ktp_hash=hash_pii(search))
         )
     if department_id:
         members_qs = members_qs.filter(department_id=department_id)
@@ -1431,7 +1432,7 @@ def admin_member_wallets(request):
         result.append({
             'member_id': member.id,
             'member_name': member.full_name,
-            'member_nik': member.nik_employee or member.nik_ktp,
+            'member_nik': member.nik_employee or decrypt_pii(member.nik_ktp),
             'department_name': dept_map.get(member.id, '-'),
             'total_withdrawal': withdrawal_map.get(member.id, 0),
             'wallets': [
@@ -1513,7 +1514,7 @@ def admin_member_obligations(request):
         members_qs = members_qs.filter(
             Q(full_name__icontains=search) |
             Q(nik_employee__icontains=search) |
-            Q(nik_ktp__icontains=search)
+            Q(nik_ktp_hash=hash_pii(search))
         )
     if employee_status_filter:
         members_qs = members_qs.filter(employee_status_id=employee_status_filter)
@@ -1590,7 +1591,7 @@ def admin_member_obligations(request):
             'member_id': mid,
             'member_name': member.full_name,
             'nik_employee': member.nik_employee or '-',
-            'member_nik': member.nik_employee or member.nik_ktp,
+            'member_nik': member.nik_employee or decrypt_pii(member.nik_ktp),
             'department_name': dept_map.get(mid, '-'),
             'employee_status_name': emp_status_map.get(mid, '-'),
             'is_new_member': is_new,
@@ -1731,7 +1732,7 @@ def admin_withdrawal_detail(request, pk):
             'id': withdrawal.member.id,
             'full_name': withdrawal.member.full_name,
             'nik_employee': withdrawal.member.nik_employee,
-            'nik_ktp': withdrawal.member.nik_ktp,
+            'nik_ktp': decrypt_pii(withdrawal.member.nik_ktp),
             'join_date': withdrawal.member.join_date,
         },
         'bank_account': bank_account_data,

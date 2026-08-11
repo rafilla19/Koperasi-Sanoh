@@ -54,7 +54,7 @@ const AdminLoansDashboard = () => {
   const [selectedLoans, setSelectedLoans] = useState([]);
   const [selectAll, setSelectAll] = useState(false);
   const [showFundingModal, setShowFundingModal] = useState(false);
-  const [fundingSetting, setFundingSetting] = useState({ id: null, monthly_limit: '', effective_date: '' });
+  const [fundingSetting, setFundingSetting] = useState({ id: null, monthly_limit: '' });
   const [fundingError, setFundingError] = useState('');
   const [isSavingFunding, setIsSavingFunding] = useState(false);
   const [isSendingReminder, setIsSendingReminder] = useState(false);
@@ -135,11 +135,10 @@ const AdminLoansDashboard = () => {
         const data = await response.json();
         setFundingSetting({
           id: data.id,
-          monthly_limit: data.monthly_limit || '',
-          effective_date: data.effective_date || ''
+          monthly_limit: data.monthly_limit || ''
         });
       } else if (response.status === 404) {
-        setFundingSetting({ id: null, monthly_limit: '', effective_date: '' });
+        setFundingSetting({ id: null, monthly_limit: '' });
       } else {
         const error = await response.json();
         setFundingError(error.error || 'Gagal memuat pengaturan dana');
@@ -158,8 +157,8 @@ const AdminLoansDashboard = () => {
 
   const saveFundingSettings = async () => {
     setFundingError('');
-    if (!fundingSetting.monthly_limit || !fundingSetting.effective_date) {
-      setFundingError('Batas bulanan dan tanggal efektif wajib diisi.');
+    if (!fundingSetting.monthly_limit) {
+      setFundingError('Batas bulanan wajib diisi.');
       return;
     }
 
@@ -172,8 +171,7 @@ const AdminLoansDashboard = () => {
           ...getAuthHeaders()
         },
         body: JSON.stringify({
-          monthly_limit: fundingSetting.monthly_limit,
-          effective_date: fundingSetting.effective_date
+          monthly_limit: fundingSetting.monthly_limit
         })
       });
 
@@ -469,7 +467,7 @@ const AdminLoansDashboard = () => {
             <div className="ald-modal-header">
               <div>
                 <h3>Edit Pengaturan Dana Pinjaman</h3>
-                <p>Perbarui batas bulanan aktif dan tanggal efektif.</p>
+                <p>Perbarui batas bulanan aktif.</p>
               </div>
               <button className="ald-modal-close" onClick={() => setShowFundingModal(false)}>
                 ×
@@ -483,14 +481,6 @@ const AdminLoansDashboard = () => {
                   value={fundingSetting.monthly_limit}
                   onChange={(e) => handleFundingFieldChange('monthly_limit', e.target.value)}
                   placeholder="Masukkan batas bulanan"
-                />
-              </label>
-              <label>
-                Tanggal Efektif
-                <input
-                  type="date"
-                  value={fundingSetting.effective_date}
-                  onChange={(e) => handleFundingFieldChange('effective_date', e.target.value)}
                 />
               </label>
               {fundingError && <div className="ald-modal-error">{fundingError}</div>}

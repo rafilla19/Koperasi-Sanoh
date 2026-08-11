@@ -420,6 +420,27 @@
   animation: scaleUp 0.2s ease-out forwards;
 }
 
+.ld-document-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin-top: 4px;
+  border-radius: 10px;
+  border: 1px solid #E0F2FE;
+  background: #F0F9FF;
+  color: #0284C7;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.ld-document-link:hover {
+  background: #E0F2FE;
+  border-color: #BAE6FD;
+  color: #0369A1;
+}
+
 .ld-modal-close {
   position: absolute;
   top: 20px; right: 20px;
@@ -499,11 +520,24 @@
   text-align: right;
 }
 
-.ld-r-row .val.badge-outline {
+.ld-r-row .badge-outline {
   border: 1px solid #E2E8F0;
   padding: 4px 10px;
   border-radius: 99px;
   font-size: 11px;
+  color: #0A1628;
+  font-weight: 600;
+}
+
+.ld-r-row .badge-penalty {
+  border: 1px solid #FECACA;
+  background: #FEF2F2;
+  color: #DC2626;
+  padding: 4px 10px;
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .ld-r-row .sub {
@@ -562,8 +596,22 @@
   border-radius: 4px;
 }
 
+.ld-receipt-breakdown {
+  padding: 16px 0 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ld-receipt-breakdown .ld-r-row .val.penalty {
+  color: #DC2626;
+  font-weight: 700;
+}
+
 .ld-receipt-total {
-  padding: 24px 0;
+  padding-top: 16px;
+  margin-top: 4px;
+  border-top: 1px dashed #CBD5E1;
   display: flex;
   justify-content: space-between;
   align-items: center;

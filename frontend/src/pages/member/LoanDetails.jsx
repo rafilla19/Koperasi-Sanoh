@@ -4,7 +4,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, FileText, Printer, CheckCircle, AlertTriangle, X, Download, CreditCard, Copy, Loader } from 'lucide-react';
+import { ArrowLeft, FileText, Printer, CheckCircle, AlertTriangle, X, Download, CreditCard, Copy, Loader, Eye } from 'lucide-react';
 import { apiUrl, getAuthHeaders } from '../../services/api';
 import logoImg from '../../assets/logo.png';
 import './LoanDetails.css';
@@ -224,7 +224,7 @@ const LoanDetails = () => {
       const tableRows = [];
 
       schedule.forEach(s => {
-        const isPaid = s.status_code === 'PAID' || s.status_code === 'PAID_OFF';
+        const isPaid = s.status_code === 'PAID' || s.status_code === 'PAID_OFF' || s.status_code === 'OVERDUE';
         const txnDate = isPaid ? formatDate(s.due_date) : '-';
         const totalPayment = (Number(s.amount_principal) || 0) + (Number(s.amount_interest) || 0) + (Number(s.penalty) || 0);
 
@@ -526,6 +526,15 @@ const LoanDetails = () => {
     return `${date} pukul ${time}`;
   };
 
+  const formatPaymentMethod = (method) => {
+    const labels = {
+      MANUAL: 'Transfer Manual',
+      GATEWAY: 'Midtrans',
+      PAYROLL_DEDUCTION: 'Potongan Payroll',
+    };
+    return labels[method] || method || '-';
+  };
+
   if (loading) {
     return <div className="ld-page"><div className="ld-header"><h2>Memuat...</h2></div></div>;
   }
@@ -544,7 +553,9 @@ const LoanDetails = () => {
   };
 
   const getBadgeClass = (s) => {
-    if (s === 'Paid' || s === 'PAID' || s === 'PAID_OFF') return 'bdg-paid';
+    // OVERDUE means the installment was paid late — it's a paid state, so it
+    // gets the same green treatment as PAID rather than reading as unpaid.
+    if (s === 'Paid' || s === 'PAID' || s === 'PAID_OFF' || s === 'OVERDUE') return 'bdg-paid';
     if (s === 'Due Soon') return 'bdg-due';
     if (s === 'Scheduled' || s === 'UNPAID') return 'bdg-sched';
     return '';
@@ -639,9 +650,9 @@ const LoanDetails = () => {
                     type="button"
                     onClick={() => setPreviewDoc({ url: loanData.salary_statement_file, name: 'Slip Gaji' })}
                     className="ld-document-link"
-                    style={{ color: '#0284c7', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 500, background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit' }}
+                    title="Lihat Dokumen"
                   >
-                    <FileText size={16} /> Lihat Dokumen
+                    <Eye size={17} />
                   </button>
                 </span>
               </div>
@@ -726,9 +737,9 @@ const LoanDetails = () => {
                     type="button"
                     onClick={() => setPreviewDoc({ url: loanData.salary_statement_file, name: 'Slip Gaji' })}
                     className="ld-document-link"
-                    style={{ color: '#0284c7', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 500, background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit' }}
+                    title="Lihat Dokumen"
                   >
-                    <FileText size={16} /> Lihat Dokumen
+                    <Eye size={17} />
                   </button>
                 </span>
               </div>
@@ -777,13 +788,14 @@ const LoanDetails = () => {
                   </tr>
                 ) : schedule.length > 0 ? (
                   schedule.map(s => {
-                    const isPaid = status === 'Completed' || s.status_code === 'PAID' || s.status_code === 'PAID_OFF';
+                    const isPaid = status === 'Completed' || s.status_code === 'PAID' || s.status_code === 'PAID_OFF' || s.status_code === 'OVERDUE';
                     return (
                     <tr 
                       key={s.id || s.installment_number}
                       onDoubleClick={async () => {
                         if (isPaid) {
                           try {
+                            const memberId = getCurrentMemberId();
                             const res = await fetch(apiUrl(`/loan/loans/${id}/receipts/?member_id=${memberId}`));
                             if (res.ok) {
                               const receipts = await res.json();
@@ -818,7 +830,7 @@ const LoanDetails = () => {
                         <span className={`ld-badge ${status === 'Completed' ? 'bdg-paid' : getBadgeClass(s.status_code)}`}>
                           {isPaid && <span className="dot" style={{backgroundColor: '#059669'}}></span>}
                           {(!isPaid && s.status_code === 'DUE_SOON') && <span className="dot" style={{backgroundColor: '#D97706'}}></span>}
-                          {status === 'Completed' ? 'Lunas' : s.status_code}
+                          {isPaid ? 'PAID' : s.status_code}
                         </span>
                       </td>
                     </tr>
@@ -850,7 +862,12 @@ const LoanDetails = () => {
             <div className="ld-receipt-details">
               <div className="ld-r-row">
                 <span className="lbl">KATEGORI</span>
-                <span className="val badge-outline">Angsuran Pinjaman #{selectedReceipt.installment_number}</span>
+                <span className="val" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span className="badge-outline">Angsuran Pinjaman #{selectedReceipt.installment_number}</span>
+                  {Number(selectedReceipt.penalty) > 0 && (
+                    <span className="badge-penalty">+ Pinalti</span>
+                  )}
+                </span>
               </div>
               <div className="ld-r-row">
                 <span className="lbl">TANGGAL & WAKTU</span>
@@ -862,14 +879,14 @@ const LoanDetails = () => {
               <div className="ld-r-box">
                 <span className="lbl">ID TRANSAKSI</span>
                 <div className="val id-box">
-                  {selectedReceipt.id ? `TXN-${selectedReceipt.id}` : 'N/A'}
+                  {selectedReceipt.reference || (selectedReceipt.id ? `TXN-${selectedReceipt.id}` : 'N/A')}
                   <Copy size={14} className="copy-icon" />
                 </div>
               </div>
               <div className="ld-r-row recipient">
                 <span className="lbl">METODE PEMBAYARAN</span>
                 <span className="val flex-align">
-                  {selectedReceipt.payment_method || '-'}
+                  {formatPaymentMethod(selectedReceipt.payment_method)}
                 </span>
               </div>
               <div className="ld-r-row recipient">
@@ -880,22 +897,40 @@ const LoanDetails = () => {
               </div>
             </div>
 
-            <div className="ld-receipt-total" style={{borderBottom: 'none', paddingBottom: '10px', display: 'flex', flexDirection: 'column', gap: '8px'}}>
-              <div className="ld-r-row">
-                <span className="lbl" style={{fontWeight: 'normal', color: '#64748b'}}>Jumlah Angsuran</span>
-                <span className="val" style={{fontWeight: 'normal', color: '#64748b'}}>{formatRupiah(selectedReceipt.amount_paid || selectedReceipt.amount_total)}</span>
-              </div>
-              {(selectedReceipt.admin_fee > 0) && (
-                <div className="ld-r-row">
-                  <span className="lbl" style={{fontWeight: 'normal', color: '#64748b'}}>Biaya Admin</span>
-                  <span className="val" style={{fontWeight: 'normal', color: '#64748b'}}>{formatRupiah(selectedReceipt.admin_fee)}</span>
+            {(() => {
+              const hasBreakdown = selectedReceipt.amount_principal !== undefined && selectedReceipt.amount_interest !== undefined;
+              const installmentAmount = hasBreakdown
+                ? (Number(selectedReceipt.amount_principal) || 0) + (Number(selectedReceipt.amount_interest) || 0)
+                : Number(selectedReceipt.amount_paid || selectedReceipt.amount_total) || 0;
+              const penaltyAmount = Number(selectedReceipt.penalty) || 0;
+              const adminFee = Number(selectedReceipt.admin_fee) || 0;
+              const totalPaid = Number(selectedReceipt.amount_paid) || (installmentAmount + penaltyAmount);
+
+              return (
+                <div className="ld-receipt-breakdown">
+                  <div className="ld-r-row">
+                    <span className="lbl">Jumlah Angsuran</span>
+                    <span className="val">{formatRupiah(installmentAmount)}</span>
+                  </div>
+                  {penaltyAmount > 0 && (
+                    <div className="ld-r-row">
+                      <span className="lbl">Pinalti Keterlambatan</span>
+                      <span className="val penalty">{formatRupiah(penaltyAmount)}</span>
+                    </div>
+                  )}
+                  {adminFee > 0 && (
+                    <div className="ld-r-row">
+                      <span className="lbl">Biaya Admin</span>
+                      <span className="val">{formatRupiah(adminFee)}</span>
+                    </div>
+                  )}
+                  <div className="ld-receipt-total">
+                    <span className="lbl">Total Dibayar</span>
+                    <span className="val">{formatRupiah(totalPaid + adminFee)}</span>
+                  </div>
                 </div>
-              )}
-              <div className="ld-r-row" style={{borderTop: '1px dashed #cbd5e1', paddingTop: '12px', marginTop: '4px'}}>
-                <span className="lbl" style={{fontWeight: 'bold', fontSize: '14px'}}>TOTAL DIBAYAR</span>
-                <span className="val" style={{fontWeight: 'bold', fontSize: '18px'}}>{formatRupiah((selectedReceipt.amount_paid || selectedReceipt.amount_total) + (parseFloat(selectedReceipt.admin_fee) || 0))}</span>
-              </div>
-            </div>
+              );
+            })()}
           </div>
         </div>,
         document.body

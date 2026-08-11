@@ -143,7 +143,7 @@ const RegisterStep2 = () => {
   const isFormValid = () => {
     // Basic fields validation
     const hasBasicFields = formData.mobilePhone && formData.email && formData.employeeStatus && formData.department && formData.voluntarySaving >= 50000;
-    const hasFiles = formData.npwpPath && formData.ktpPath;
+    const hasFiles = formData.ktpPath; // NPWP is optional
     const hasContractDate = isContract() ? formData.contractEndDate : true;
     
     // Checkbox validation based on status
@@ -245,7 +245,7 @@ const RegisterStep2 = () => {
 
         {/* File Uploads */}
         <div className="reg-form-group">
-          <label className="reg-form-label">Upload NPWP <span style={{ fontWeight: 'normal', color: '#64748b' }}>(Max 10MB)</span></label>
+          <label className="reg-form-label">Upload NPWP <span style={{ fontWeight: 'normal', color: '#64748b' }}>(Optional, Max 10MB)</span></label>
           <div className="file-upload-box" onClick={() => !isUploading.npwp && npwpInputRef.current.click()} style={{ cursor: isUploading.npwp ? 'wait' : 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', borderColor: formData.npwpPath ? '#22c55e' : 'var(--color-border)' }}>
             <Upload size={20} className={isUploading.npwp ? "animate-bounce" : ""} />
             {isUploading.npwp ? (

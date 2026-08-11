@@ -18,6 +18,7 @@ class EmailOTP(models.Model):
 class Member(models.Model):
     user = models.ForeignKey('member.User', on_delete=models.RESTRICT, db_column='user_id', null=True, blank=True)
     nik_ktp = models.CharField(max_length=50)
+    nik_ktp_hash = models.CharField(max_length=64, null=True, blank=True)
     nik_employee = models.CharField(max_length=50, null=True, blank=True)
     full_name = models.CharField(max_length=100)
     phone_number = models.CharField(max_length=30, null=True, blank=True)

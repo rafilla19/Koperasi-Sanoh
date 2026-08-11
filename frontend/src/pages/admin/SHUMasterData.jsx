@@ -40,7 +40,6 @@ const SHUMasterData = () => {
     // Loan funding setting fields
     description: '',
     monthly_limit: '',
-    effective_date: '',
   });
 
   const currentTab = TABS.find(t => t.id === activeTab);
@@ -116,7 +115,6 @@ const SHUMasterData = () => {
       payload = {
         description: formData.description,
         monthly_limit: formData.monthly_limit,
-        effective_date: formData.effective_date,
       };
     }
 
@@ -191,7 +189,6 @@ const SHUMasterData = () => {
       setFormData({
         description: item.description || '',
         monthly_limit: item.monthly_limit,
-        effective_date: item.effective_date || '',
       });
     }
     setShowForm(true);
@@ -203,7 +200,7 @@ const SHUMasterData = () => {
       department_name: '', name: '',
       channel_code: '', channel_name: '', fee_percentage: '', fee_fixed: '', is_active: true,
       category_name: '', type: 'INCOME',
-      description: '', monthly_limit: '', effective_date: ''
+      description: '', monthly_limit: ''
     });
     setEditingId(null);
     setShowForm(false);
@@ -389,15 +386,6 @@ const SHUMasterData = () => {
                         required
                       />
                     </div>
-                    <div className="shum-form-group">
-                      <label>Tanggal Efektif</label>
-                      <input
-                        type="date"
-                        value={formData.effective_date}
-                        onChange={(e) => setFormData({...formData, effective_date: e.target.value})}
-                        required
-                      />
-                    </div>
                   </>
                 )}
 
@@ -441,7 +429,6 @@ const SHUMasterData = () => {
                 <>
                   <th>Deskripsi</th>
                   <th>Batas Bulanan</th>
-                  <th>Tanggal Efektif</th>
                 </>
               ) : (
                 <th>Nama Kategori</th>
@@ -487,15 +474,12 @@ const SHUMasterData = () => {
                   </td>
                 )}
                 {activeTab === 'loans' && (
-                  <>
-                    <td>Rp {parseFloat(item.monthly_limit || 0).toLocaleString('id-ID')}</td>
-                    <td>{item.effective_date ? new Date(item.effective_date).toLocaleDateString('id-ID') : '-'}</td>
-                  </>
+                  <td>Rp {parseFloat(item.monthly_limit || 0).toLocaleString('id-ID')}</td>
                 )}
                 <td>
                   <div className="shum-table-actions">
                     <button className="action-edit" onClick={() => startEdit(item)}><Edit2 size={16} /></button>
-                    {activeTab !== 'payment_channel' && activeTab !== 'loans' && (
+                    {activeTab !== 'payment_channel' && (
                       <button className="action-delete" onClick={() => handleDelete(item.id)}><Trash2 size={16} /></button>
                     )}
                   </div>

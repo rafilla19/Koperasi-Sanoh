@@ -31,6 +31,10 @@ DEBUG = os.getenv('DEBUG') == 'True'
 
 ALLOWED_HOSTS = [h.strip() for h in os.getenv('ALLOWED_HOSTS').split(',') if h.strip()]
 
+# PII field-level encryption (NIK KTP / NPWP) — see api/common/crypto_utils.py
+FIELD_ENCRYPTION_KEY = os.getenv('FIELD_ENCRYPTION_KEY')
+FIELD_HASH_KEY = os.getenv('FIELD_HASH_KEY')
+
 
 # Application definition
 

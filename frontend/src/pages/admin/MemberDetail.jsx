@@ -364,6 +364,16 @@ const MemberDetail = () => {
             </div>
 
             <div className="md-form-group">
+              <label className="lbl">NIK KTP</label>
+              <div className="md-value-box text-bold">{profile.nik_ktp || '-'}</div>
+            </div>
+
+            <div className="md-form-group">
+              <label className="lbl">NPWP</label>
+              <div className="md-value-box text-bold">{profile.npwp_number || '-'}</div>
+            </div>
+
+            <div className="md-form-group">
               <label className="lbl">Jenis Kelamin</label>
               {isEditing ? (
                 <select
