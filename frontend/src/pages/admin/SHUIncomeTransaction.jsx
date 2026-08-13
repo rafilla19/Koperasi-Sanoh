@@ -178,8 +178,19 @@ const SHUIncomeTransaction = () => {
     ? Object.fromEntries(distributions.map(d => [d.member_id, d]))
     : {};
 
-  // Selection helpers (only undistributed members can be selected)
-  const undistributedMembers = members.filter(m => !annualDistMap[m.member_id]);
+  const getAnnualRowStatus = (dist) => {
+    if (!dist) return 'belum';
+    if (!dist.status_shu && !dist.distributed_status) return 'belum';
+    if (dist.status_shu && !dist.distributed_status) return 'pending';
+    if (dist.status_shu && dist.distributed_status) return 'done';
+    return 'belum';
+  };
+
+  // Selection helpers (only rows that have not been distributed yet can be selected)
+  const undistributedMembers = members.filter((m) => {
+    const dist = annualDistMap[m.member_id];
+    return getAnnualRowStatus(dist) === 'belum';
+  });
   const allUndistributedSelected =
     undistributedMembers.length > 0 &&
     undistributedMembers.every(m => selectedIds.has(m.member_id));
@@ -307,9 +318,10 @@ const SHUIncomeTransaction = () => {
   const filteredMembers = summary === 'year' && statusFilter !== 'all'
     ? members.filter(m => {
         const dist = annualDistMap[m.member_id];
-        if (statusFilter === 'selesai') return dist && dist.distributed_status;
-        if (statusFilter === 'pending') return dist && !dist.distributed_status;
-        if (statusFilter === 'belum') return !dist;
+        const rowStatus = getAnnualRowStatus(dist);
+        if (statusFilter === 'selesai') return rowStatus === 'done';
+        if (statusFilter === 'pending') return rowStatus === 'pending';
+        if (statusFilter === 'belum') return rowStatus === 'belum';
         return true;
       })
     : members;
@@ -491,11 +503,7 @@ const SHUIncomeTransaction = () => {
                 whiteSpace: 'nowrap',
               }}
             >
-              {distributing
-                ? 'Memproses...'
-                : selectedIds.size > 0
-                  ? `Distribusikan Terpilih (${selectedIds.size})`
-                  : `Distribusikan Semua`}
+              {distributing ? 'Memproses...' : 'Distribusikan aja'}
             </button>
           </div>
         </div>
@@ -554,15 +562,24 @@ const SHUIncomeTransaction = () => {
                 // ── ANNUAL TABLE ROWS ──
                 paginated.map((row, idx) => {
                   const dist = annualDistMap[row.member_id];
-                  const isDistributed = Boolean(dist);
-                  const isStatusDone = isDistributed && dist.distributed_status;
+                  const rowStatus = getAnnualRowStatus(dist);
                   const isSelected = selectedIds.has(row.member_id);
-                  const bankInfo = row.bank_info || (isDistributed && dist.bank_info) || null;
+                  const isDistributed = rowStatus !== 'belum';
+                  const isStatusDone = rowStatus === 'done';
+                  const bankInfo = row.bank_info || (dist && dist.bank_info) || null;
+
+                  const rowBackground = rowStatus === 'done'
+                    ? '#f3f4f6'
+                    : rowStatus === 'pending'
+                      ? '#fefce8'
+                      : isSelected
+                        ? '#f5f3ff'
+                        : (idx % 2 === 0 ? '#fff' : '#f9fafb');
 
                   return (
                     <tr key={row.member_id} style={{
                       borderBottom: '1px solid #e5e7eb',
-                      background: isStatusDone ? '#f3f4f6' : isDistributed ? '#fefce8' : isSelected ? '#f5f3ff' : (idx % 2 === 0 ? '#fff' : '#f9fafb'),
+                      background: rowBackground,
                     }}>
                       {/* Checkbox cell */}
                       <td style={{ padding: '10px', textAlign: 'center' }}>
@@ -626,11 +643,11 @@ const SHUIncomeTransaction = () => {
 
                       {/* Status */}
                       <td style={{ padding: '12px 12px', fontSize: 13 }}>
-                        {isStatusDone ? (
+                        {rowStatus === 'done' ? (
                           <span style={{ display: 'inline-block', padding: '3px 9px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: '#e5e7eb', color: '#6b7280' }}>
                             Selesai
                           </span>
-                        ) : isDistributed ? (
+                        ) : rowStatus === 'pending' ? (
                           <span style={{ display: 'inline-block', padding: '3px 9px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: '#fef9c3', color: '#ca8a04' }}>
                             Pending
                           </span>
@@ -643,7 +660,7 @@ const SHUIncomeTransaction = () => {
 
                       {/* Aksi */}
                       <td style={{ padding: '10px 12px', fontSize: 13 }}>
-                        {isDistributed ? (
+                        {rowStatus !== 'belum' ? (
                           <div>
                             <button
                               onClick={() => handleOpenAction(dist)}

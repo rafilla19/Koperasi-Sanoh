@@ -25,6 +25,8 @@ class MonthlySavingBills(models.Model):
     status = models.ForeignKey(Statuses, models.DO_NOTHING)
     due_date = models.DateField(blank=True, null=True)
     paid_at = models.DateTimeField(blank=True, null=True)
+    penalty_due = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True)
+    penalty_paid = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True)
     created_at = models.DateTimeField(blank=True, null=True)
     updated_at = models.DateTimeField(blank=True, null=True)
     deleted_at = models.DateTimeField(blank=True, null=True)

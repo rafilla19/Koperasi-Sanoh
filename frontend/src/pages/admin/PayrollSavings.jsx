@@ -167,6 +167,7 @@ const PayrollSavings = () => {
           pokok: parseFloat(item.pokok || 0),
           wajib: parseFloat(item.wajib || 0),
           sukarela: parseFloat(item.sukarela || 0),
+          penalty: parseFloat(item.penalty || 0),
           bulat: parseFloat(item.bulat || 0),
           total: parseFloat(item.total || 0),
           totalOutstanding: parseFloat(item.total_outstanding || 0),
@@ -272,9 +273,9 @@ const PayrollSavings = () => {
   const handleExport = () => {
     const rows = selectedIds.length > 0 ? data.filter(i => selectedIds.includes(i.id)) : filteredData;
     if (rows.length === 0) { showToast('Tidak ada data untuk diekspor.', 'error'); return; }
-    const headers = ['Anggota', 'Departemen', 'Status Karyawan', 'Pokok', 'Wajib', 'Sukarela', 'Total Tertunggak', 'Total Terbayar', 'Status'];
+    const headers = ['Anggota', 'Departemen', 'Status Karyawan', 'Pokok', 'Wajib', 'Sukarela', 'Pinalti', 'Total Tertunggak', 'Total Terbayar', 'Status'];
     const csv = "data:text/csv;charset=utf-8," + headers.join(',') + "\n" +
-      rows.map(r => `"${r.name}","${r.department}","${r.employeeStatus || '-'}","${r.pokok}","${r.wajib}","${r.sukarela}","${r.totalOutstanding}","${r.totalPaid}","${r.isPaid ? 'Lunas' : 'Belum Bayar'}"`).join('\n');
+      rows.map(r => `"${r.name}","${r.department}","${r.employeeStatus || '-'}","${r.pokok}","${r.wajib}","${r.sukarela}","${r.penalty || 0}","${r.totalOutstanding}","${r.totalPaid}","${r.isPaid ? 'Lunas' : 'Belum Bayar'}"`).join('\n');
     const link = document.createElement('a');
     link.href = encodeURI(csv);
     link.download = `payroll_savings_${reportingMonth}.csv`;
@@ -402,6 +403,7 @@ const PayrollSavings = () => {
                   <th>Pokok</th>
                   <th>Wajib</th>
                   <th>Sukarela</th>
+                  <th>Pinalti</th>
                   <th>Total Tertunggak</th>
                   <th>Total Terbayar</th>
                   <th>Status</th>
@@ -426,6 +428,11 @@ const PayrollSavings = () => {
                     <td>{formatRupiah(row.pokok)}</td>
                     <td>{formatRupiah(row.wajib)}</td>
                     <td>{formatRupiah(row.sukarela)}</td>
+                    <td>
+                      <span style={row.penalty > 0 ? { color: '#dc2626', fontWeight: 600 } : undefined}>
+                        {row.penalty > 0 ? formatRupiah(row.penalty) : '-'}
+                      </span>
+                    </td>
                     <td className="pl-amount" style={{ color: '#ef4444' }}><strong>{formatRupiah(row.totalOutstanding)}</strong></td>
                     <td className="pl-amount" style={{ color: '#22c55e' }}><strong>{formatRupiah(row.totalPaid)}</strong></td>
                     <td><StatusBadge statusId={row.status_id} /></td>
@@ -445,7 +452,7 @@ const PayrollSavings = () => {
                     <td>{(row.isPaid) ? (<button className="pl-rollback-btn" title="Batalkan ke Belum Bayar" onClick={() => handleRollback(row)}><RotateCcw size={14} /> Batalkan</button>) : (<span className="pl-action-none">—</span>)}</td>
                   </tr>
                 )) : (
-                  <tr><td colSpan="11" style={{ textAlign:'center', padding:'24px' }}>Tidak ada data ditemukan untuk filter yang dipilih.</td></tr>
+                  <tr><td colSpan="12" style={{ textAlign:'center', padding:'24px' }}>Tidak ada data ditemukan untuk filter yang dipilih.</td></tr>
                 )}
               </tbody>
             </table>

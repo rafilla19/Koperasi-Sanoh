@@ -94,6 +94,12 @@ const formatRp = (value) => {
   return Number(value).toLocaleString('id-ID');
 };
 
+const SAVING_TYPE_LABEL = {
+  1: 'Simpanan Wajib',
+  2: 'Simpanan Sukarela',
+  3: 'Simpanan Pokok',
+};
+
 const MySaving = () => {
   const navigate = useNavigate();
   const { hasPendingCloseAccount } = useOutletContext() || {};
@@ -128,10 +134,12 @@ const MySaving = () => {
   const [vrMessage, setVrMessage] = useState('');
   const [showVoluntaryForm, setShowVoluntaryForm] = useState(false);
   const [selectedWd, setSelectedWd] = useState(null);
+  const [selectedBill, setSelectedBill] = useState(null);
   const [voluntaryRequests, setVoluntaryRequests] = useState([]);
   const [loadingVR, setLoadingVR] = useState(true);
   const [paymentSchedule, setPaymentSchedule] = useState({ paid: [], upcoming: [] });
   const [loadingSchedule, setLoadingSchedule] = useState(true);
+  const [totalPenaltyIncurred, setTotalPenaltyIncurred] = useState(0);
 
   const [paidBills, setPaidBills] = useState([]);
   const [loadingBills, setLoadingBills] = useState(true);
@@ -182,11 +190,14 @@ const MySaving = () => {
   useEffect(() => {
     setLoadingSchedule(true);
     savingsApi.getPaymentSchedule()
-      .then(data => setPaymentSchedule({
-        paid: Array.isArray(data?.paid) ? data.paid : [],
-        upcoming: Array.isArray(data?.upcoming) ? data.upcoming : [],
-      }))
-      .catch(() => setPaymentSchedule({ paid: [], upcoming: [] }))
+      .then(data => {
+        setPaymentSchedule({
+          paid: Array.isArray(data?.paid) ? data.paid : [],
+          upcoming: Array.isArray(data?.upcoming) ? data.upcoming : [],
+        });
+        setTotalPenaltyIncurred(Number(data?.total_penalty_incurred || 0));
+      })
+      .catch(() => { setPaymentSchedule({ paid: [], upcoming: [] }); setTotalPenaltyIncurred(0); })
       .finally(() => setLoadingSchedule(false));
   }, []);
 
@@ -265,12 +276,8 @@ const MySaving = () => {
   const latestWithdrawal = withdrawals[0];
   const memberName = memberProfile?.full_name || memberProfile?.username || 'Member';
   const memberEmail = memberProfile?.email || '-';
-  // Demo: date-window restriction (normally only allowed on the 22nd-23rd)
-  // temporarily disabled so the request can be submitted any day. The
-  // informational note below stays visible regardless (see render below) per
-  // explicit request not to remove it.
-  // Revert to: const today = new Date().getDate(); today === 22 || today === 23;
-  const isVoluntaryChangeAllowed = true;
+  const today = new Date().getDate();
+  const isVoluntaryChangeAllowed = today === 22 || today === 23;
 
   const handleTabChange = (tab) => {
     setActiveTab(tab);
@@ -475,13 +482,13 @@ const MySaving = () => {
   };
 
   useEffect(() => {
-    if (showBankPopup || selectedWd) {
+    if (showBankPopup || selectedWd || selectedBill) {
       document.body.classList.add('has-global-modal');
     } else {
       document.body.classList.remove('has-global-modal');
     }
     return () => { document.body.classList.remove('has-global-modal'); };
-  }, [showBankPopup, selectedWd]);
+  }, [showBankPopup, selectedWd, selectedBill]);
 
   return (
     <div className="sv-page">
@@ -493,10 +500,17 @@ const MySaving = () => {
             Pantau saldo, permintaan sukarela, dan jadwal pembayaran dalam satu dashboard.
           </p>
         </div>
-        <div className="sv-hero-profile">
-          <span className="sv-stat-label">Penarikan Terakhir</span>
-          <strong className="sv-stat-value">{latestWithdrawal ? `Rp ${formatRp(latestWithdrawal.amount)}` : '—'}</strong>
-          <span className="sv-stat-note">{latestWithdrawal?.status_name || latestWithdrawal?.status_code || 'Belum ada penarikan'}</span>
+        <div className="sv-hero-stats">
+          <div className="sv-hero-profile">
+            <span className="sv-stat-label">Penarikan Terakhir</span>
+            <strong className="sv-stat-value">{latestWithdrawal ? `Rp ${formatRp(latestWithdrawal.amount)}` : '—'}</strong>
+            <span className="sv-stat-note">{latestWithdrawal?.status_name || latestWithdrawal?.status_code || 'Belum ada penarikan'}</span>
+          </div>
+          <div className={`sv-hero-profile ${totalPenaltyIncurred > 0 ? 'sv-hero-profile--warn' : ''}`}>
+            <span className="sv-stat-label">Total Pinalti Diterima</span>
+            <strong className="sv-stat-value">{loadingSchedule ? '—' : `Rp ${formatRp(totalPenaltyIncurred)}`}</strong>
+            <span className="sv-stat-note">Denda telat bayar Simpanan Wajib</span>
+          </div>
         </div>
       </section>
 
@@ -768,12 +782,23 @@ const MySaving = () => {
                               })
                             : '-';
                           return (
-                            <tr key={bill.id}>
+                            <tr
+                              key={bill.id}
+                              className="sv-table-row-clickable"
+                              onClick={() => setSelectedBill(bill)}
+                            >
                               <td style={{ color: '#94a3b8', fontSize: 12, width: 36 }}>
                                 {(billsPage - 1) * BILLS_PER_PAGE + idx + 1}
                               </td>
                               <td className="sv-td-date">{periode}</td>
-                              <td>{bill.saving_type_name || '-'}</td>
+                              <td>
+                                {bill.saving_type_name || '-'}
+                                {bill.status_name === 'Terlambat' && (
+                                  <div className="sv-trx-late">
+                                    Dibayar terlambat{Number(bill.penalty_paid) > 0 ? ` • Denda Rp${formatRp(bill.penalty_paid)}` : ''}
+                                  </div>
+                                )}
+                              </td>
                               <td style={{ textAlign: 'right' }}>
                                 <span className="sv-trx-amount credit">Rp {formatRp(bill.amount_due)}</span>
                               </td>
@@ -825,6 +850,8 @@ const MySaving = () => {
               ) : (
                 <div className="sv-timeline" style={{ maxHeight: showAllSchedule ? 'none' : 400, overflowY: showAllSchedule ? 'visible' : 'auto' }}>
                   {(() => {
+                    // One row per bill period (month) — backend already groups
+                    // pokok/wajib/sukarela of the same month into one entry.
                     const upcoming = [...paymentSchedule.upcoming].sort((a, b) => {
                       const aDate = new Date(a.due_date || a.bill_period_start);
                       const bDate = new Date(b.due_date || b.bill_period_start);
@@ -833,22 +860,34 @@ const MySaving = () => {
                     const displayItems = showAllSchedule ? upcoming : upcoming.slice(0, 5);
                     return (
                       <>
-                        {displayItems.map((bill) => {
-                          const period = bill.bill_period_start ? new Date(bill.bill_period_start) : null;
+                        {displayItems.map((group, gi) => {
+                          const period = group.bill_period_start ? new Date(group.bill_period_start) : null;
                           const label = period
                             ? period.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
                             : 'Tanpa Periode';
-                          const dueDate = bill.due_date;
-                          const dueLabel = dueDate
-                            ? new Date(dueDate).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })
+                          const dueLabel = group.due_date
+                            ? new Date(group.due_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })
                             : '-';
                           return (
-                            <div key={bill.id} className="sv-tl-item upcoming">
+                            <div key={`${label}-${gi}`} className={`sv-tl-item ${group.is_overdue ? 'overdue' : 'upcoming'}`}>
                               <div className="sv-tl-icon" />
                               <div className="sv-tl-content">
-                                <span className="sv-tl-status">Akan Datang</span>
+                                <span className="sv-tl-status">{group.is_overdue ? 'Terlambat' : 'Akan Datang'}</span>
                                 <h4 className="sv-tl-title">{label}</h4>
-                                <p className="sv-tl-desc">{dueLabel} — Rp {formatRp(bill.amount_due)}</p>
+                                <p className="sv-tl-desc">Jatuh tempo {dueLabel} — Total Rp {formatRp(group.total_amount_due + group.total_penalty)}</p>
+                                <ul className="sv-tl-breakdown">
+                                  {group.items.map((it, ii) => (
+                                    <li key={ii}>
+                                      {SAVING_TYPE_LABEL[it.saving_type_id] || it.saving_type_name || '-'}
+                                      <span>Rp {formatRp(it.amount_due)}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                                {group.total_penalty > 0 && (
+                                  <div className="sv-tl-penalty">
+                                    Denda keterlambatan Rp {formatRp(group.total_penalty)}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           );
@@ -1034,6 +1073,11 @@ const MySaving = () => {
 
       {selectedWd && createPortal(
         <WithdrawalDetailPopup withdrawal={selectedWd} onClose={() => setSelectedWd(null)} />,
+        document.body
+      )}
+
+      {selectedBill && createPortal(
+        <BillDetailPopup bill={selectedBill} onClose={() => setSelectedBill(null)} />,
         document.body
       )}
 
@@ -1286,6 +1330,82 @@ function WithdrawalDetailPopup({ withdrawal: w, onClose }) {
                   )}
                 </div>
               )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Bill (Transaksi) Detail Popup ───────────────────────────── */
+
+function BillDetailPopup({ bill: b, onClose }) {
+  const periode = b.bill_period_start
+    ? new Date(b.bill_period_start).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
+    : '-';
+  const isLate = b.status_name === 'Terlambat';
+
+  return (
+    <div
+      className="modal-overlay global-modal-overlay"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="wd-popup">
+        <div className="wd-popup__header">
+          <div>
+            <p className="wd-popup__kicker">Transaksi #{b.id}</p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <h2 className="wd-popup__amount">Rp {formatRp(b.amount_due)},00</h2>
+              <span style={{
+                background: isLate ? '#FEE2E2' : '#D1FAE5',
+                color: isLate ? '#991B1B' : '#059669',
+                padding: '5px 12px', borderRadius: 99, fontSize: 11, fontWeight: 700,
+              }}>
+                {b.status_name || 'Lunas'}
+              </span>
+            </div>
+          </div>
+          <button className="wd-popup__close" onClick={onClose} aria-label="Tutup">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="wd-popup__body">
+          <div className="wd-popup__section">
+            <p className="wd-popup__section-title">Informasi Transaksi</p>
+            <div className="wd-popup__rows">
+              <div className="wd-popup__row">
+                <span>Kategori Simpanan</span><span>{b.saving_type_name || '-'}</span>
+              </div>
+              <div className="wd-popup__row">
+                <span>Periode</span><span>{periode}</span>
+              </div>
+              <div className="wd-popup__row">
+                <span>Jumlah Ditagih</span><span>Rp {formatRp(b.amount_due)},00</span>
+              </div>
+              <div className="wd-popup__row">
+                <span>Jumlah Dibayar</span><span>Rp {formatRp(b.amount_paid)},00</span>
+              </div>
+              {b.due_date && (
+                <div className="wd-popup__row">
+                  <span>Jatuh Tempo</span><span>{fmtDate(b.due_date)}</span>
+                </div>
+              )}
+              {b.paid_at && (
+                <div className="wd-popup__row">
+                  <span>Tanggal Dibayar</span><span>{fmtDateTime(b.paid_at)}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {Number(b.penalty_paid) > 0 && (
+            <div className="wd-popup__reject" style={{ background: '#FEF2F2', borderColor: '#FECACA', color: '#991B1B' }}>
+              <p style={{ margin: '0 0 2px', fontWeight: 700, fontSize: 12 }}>Termasuk Pinalti Keterlambatan</p>
+              <p style={{ margin: 0, fontSize: 13 }}>
+                Tagihan ini dibayar setelah tanggal jatuh tempo, sehingga dikenakan denda Rp {formatRp(b.penalty_paid)},00.
+              </p>
             </div>
           )}
         </div>

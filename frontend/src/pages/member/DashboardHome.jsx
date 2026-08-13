@@ -342,6 +342,13 @@ const DashboardHome = () => {
 
   const calculatePenaltyTotal = () => {
     let total = 0;
+    if (summary?.unpaid_bills_list) {
+      summary.unpaid_bills_list.forEach(b => {
+        if (selectedPayments.savingIds.includes(b.id)) {
+          total += Number(b.penalty) || 0;
+        }
+      });
+    }
     if (summary?.unpaid_installments_list) {
       summary.unpaid_installments_list.forEach(inst => {
         if (selectedPayments.loanIds.includes(inst.id)) {
@@ -1442,6 +1449,11 @@ const DashboardHome = () => {
                         <div>
                           <span className="option-label">{b.saving_type_id === 1 ? 'Simpanan Wajib' : b.saving_type_id === 3 ? 'Simpanan Pokok' : 'Simpanan Sukarela'}</span>
                           <span className="option-desc">Tanggal Tagihan: {new Date(b.bill_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                          {Number(b.penalty) > 0 && (
+                            <span className="option-desc" style={{ display: 'block', color: '#dc2626', fontWeight: 600 }}>
+                              Pinalti: {formatRupiah(b.penalty)}
+                            </span>
+                          )}
                         </div>
                       </div>
                       <span className="option-amount">{formatRupiah(b.amount_due - (b.amount_paid || 0))}</span>

@@ -38,6 +38,20 @@ from .email_utils import send_member_notification_email, send_withdrawal_paid_em
 from api.utils.auth import get_verified_admin
 from api.utils.crypto_utils import decrypt_pii, hash_pii
 
+
+def _search_nik_hash(search):
+    """
+    hash_pii() for admin search-by-NIK. Falls back to None (an impossible
+    hash match, so the OR clause is a harmless no-op) instead of raising when
+    FIELD_HASH_KEY isn't configured, so search still works by name/NIK
+    karyawan instead of 500ing outright. Registration/write paths that hash a
+    NIK on create should keep using hash_pii() directly and fail loudly.
+    """
+    try:
+        return hash_pii(search)
+    except RuntimeError:
+        return None
+
 TEMP_MEMBER_ID = 5
 _MEMBER_SAVINGS_CONFIG_TABLE_EXISTS = None
 
@@ -408,13 +422,13 @@ def my_notifications(request):
 
 @api_view(['GET'])
 def my_paid_bills(request):
-    """Paid monthly_saving_bills (status_id=39) for current member — used for Transaction table."""
+    """Paid monthly_saving_bills (status_id=39 PAID or 40 OVERDUE-but-paid-late) for current member — used for Transaction table."""
     member_id = _get_member_id_from_request(request)
     from api.loan.view import sync_member_pending_payments
     sync_member_pending_payments(member_id)
     bills = MonthlySavingBills.objects.filter(
         member_id=member_id,
-        status_id=39,
+        status_id__in=[39, 40],
         deleted_at__isnull=True,
     ).select_related('saving_type').order_by('-bill_period_start')
     return Response(MonthlySavingBillSerializer(bills, many=True).data)
@@ -422,10 +436,35 @@ def my_paid_bills(request):
 
 @api_view(['GET'])
 def my_payment_schedule(request):
-    """PAID (status_id=39) and UNPAID (status_id=38) bills for current member."""
+    """
+    PAID (status_id=39) and UNPAID (status_id=38) bills for current member.
+    "upcoming" is grouped one row per bill period (month), combining
+    pokok/wajib/sukarela into a single entry with a per-type breakdown so a
+    member sees one line per month instead of one line per saving type —
+    this naturally includes past, still-unpaid periods (overdue), not just
+    future ones, since it's simply every status_id=38 bill regardless of date.
+    """
     member_id = _get_member_id_from_request(request)
     from api.loan.view import sync_member_pending_payments
     sync_member_pending_payments(member_id)
+
+    # Denda telat Simpanan Wajib: same lazy snapshot used by the admin pages
+    # (api.saving.views.admin_member_obligations, payroll_savings_list), so a
+    # member sees their denda here even if no admin page has touched this
+    # bill yet. Guarded/idempotent — never overwrites an already-set value.
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            UPDATE monthly_saving_bills
+            SET penalty_due = (SELECT monthly_limit FROM funding_settings WHERE id = 3 AND is_active = TRUE LIMIT 1),
+                updated_at = NOW()
+            WHERE member_id = %s
+              AND saving_type_id = 1
+              AND status_id = 38
+              AND due_date < CURRENT_DATE
+              AND (penalty_due IS NULL OR penalty_due = 0)
+              AND deleted_at IS NULL
+        """, [member_id])
+
     bills = MonthlySavingBills.objects.filter(
         member_id=member_id,
         deleted_at__isnull=True,
@@ -433,11 +472,49 @@ def my_payment_schedule(request):
     ).select_related('saving_type', 'status').order_by('-bill_period_start')
 
     paid = [b for b in bills if b.status_id == 39]
-    upcoming = [b for b in bills if b.status_id == 38]
+    unpaid = [b for b in bills if b.status_id == 38]
+
+    today = timezone.now().date()
+    period_groups = {}
+    for b in unpaid:
+        key = (b.bill_period_start.year, b.bill_period_start.month)
+        group = period_groups.setdefault(key, {
+            'bill_period_start': b.bill_period_start,
+            'due_date': b.due_date,
+            'is_overdue': bool(b.due_date and b.due_date < today),
+            'items': [],
+            'total_amount_due': 0.0,
+            'total_penalty': 0.0,
+        })
+        penalty = float(b.penalty_due or 0)
+        group['items'].append({
+            'saving_type_id': b.saving_type_id,
+            'saving_type_name': b.saving_type.name if b.saving_type else None,
+            'amount_due': float(b.amount_due),
+            'penalty_due': penalty,
+            'has_penalty': penalty > 0,
+        })
+        group['total_amount_due'] += float(b.amount_due)
+        group['total_penalty'] += penalty
+        if b.due_date and (not group['due_date'] or b.due_date < group['due_date']):
+            group['due_date'] = b.due_date
+            group['is_overdue'] = b.due_date < today
+
+    upcoming = sorted(period_groups.values(), key=lambda g: g['bill_period_start'], reverse=True)
+
+    # Lifetime denda incurred by this member, paid or not — the KPI shown
+    # above the dashboard. Stays a stable historical total even after a bill
+    # is eventually paid (penalty_due is never cleared once set).
+    total_penalty_incurred = MonthlySavingBills.objects.filter(
+        member_id=member_id,
+        deleted_at__isnull=True,
+        penalty_due__gt=0,
+    ).aggregate(total=Sum('penalty_due'))['total'] or 0
 
     return Response({
         'paid': MonthlySavingBillSerializer(paid, many=True).data,
-        'upcoming': MonthlySavingBillSerializer(upcoming, many=True).data,
+        'upcoming': upcoming,
+        'total_penalty_incurred': float(total_penalty_incurred),
     })
 
 
@@ -927,7 +1004,7 @@ def admin_all_transactions(request):
         qs = qs.filter(
             Q(member__full_name__icontains=search) |
             Q(member__nik_employee__icontains=search) |
-            Q(member__nik_ktp_hash=hash_pii(search)) |
+            Q(member__nik_ktp_hash=_search_nik_hash(search)) |
             Q(transaction_code__icontains=search)
         )
 
@@ -1399,7 +1476,7 @@ def admin_member_wallets(request):
         members_qs = members_qs.filter(
             Q(full_name__icontains=search) |
             Q(nik_employee__icontains=search) |
-            Q(nik_ktp_hash=hash_pii(search))
+            Q(nik_ktp_hash=_search_nik_hash(search))
         )
     if department_id:
         members_qs = members_qs.filter(department_id=department_id)
@@ -1509,12 +1586,29 @@ def admin_member_obligations(request):
     status_filter = request.query_params.get('status', '')
     employee_status_filter = request.query_params.get('employee_status', '')
 
+    # Denda telat Simpanan Wajib: snapshot penalty_due once a bill is past its
+    # due date and still unpaid, so it shows up here even before anyone pays.
+    # Guarded by "penalty_due IS NULL/0" so it never overwrites an
+    # already-snapshotted value, and frozen once set (later changes to the
+    # funding_settings amount don't retroactively change bills already flagged).
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            UPDATE monthly_saving_bills
+            SET penalty_due = (SELECT monthly_limit FROM funding_settings WHERE id = 3 AND is_active = TRUE LIMIT 1),
+                updated_at = NOW()
+            WHERE saving_type_id = 1
+              AND status_id = 38
+              AND due_date < CURRENT_DATE
+              AND (penalty_due IS NULL OR penalty_due = 0)
+              AND deleted_at IS NULL
+        """)
+
     members_qs = Members.objects.filter(deleted_at__isnull=True, user__is_active=True).order_by('full_name')
     if search:
         members_qs = members_qs.filter(
             Q(full_name__icontains=search) |
             Q(nik_employee__icontains=search) |
-            Q(nik_ktp_hash=hash_pii(search))
+            Q(nik_ktp_hash=_search_nik_hash(search))
         )
     if employee_status_filter:
         members_qs = members_qs.filter(employee_status_id=employee_status_filter)
@@ -1541,10 +1635,11 @@ def admin_member_obligations(request):
         bill_period_start__month=month,
         bill_period_start__year=year,
         deleted_at__isnull=True,
-    ).select_related('status').values('member_id', 'saving_type_id', 'status__status_code')
+    ).select_related('status').values('member_id', 'saving_type_id', 'status__status_code', 'penalty_due')
 
     bill_status_map = {}
     pokok_status_map = {}
+    wajib_penalty_map = {}
     for b in bills:
         mid = b['member_id']
         if mid not in bill_status_map:
@@ -1552,6 +1647,8 @@ def admin_member_obligations(request):
         bill_status_map[mid].add(b['status__status_code'])
         if b['saving_type_id'] == 3:
             pokok_status_map[mid] = b['status__status_code']
+        if b['saving_type_id'] == 1 and b['penalty_due']:
+            wajib_penalty_map[mid] = float(b['penalty_due'])
 
     dept_map = _get_dept_map(member_ids)
     emp_status_map = _get_employee_status_map(member_ids)
@@ -1601,6 +1698,8 @@ def admin_member_obligations(request):
             'sukarela_amount': sukarela,
             'total_amount': total,
             'bill_status': bill_status,
+            'wajib_penalty_due': wajib_penalty_map.get(mid, 0),
+            'wajib_has_penalty': mid in wajib_penalty_map,
         })
 
     return Response(result)

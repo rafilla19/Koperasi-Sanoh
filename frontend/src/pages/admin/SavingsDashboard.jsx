@@ -96,6 +96,9 @@ export default function SavingsDashboard() {
       .finally(() => setLoadingAnalytics(false));
   }, [trendPeriod]);
 
+  const today = new Date().getDate();
+  const isMandatoryUpdateAllowed = today === 22 || today === 23;
+
   const handleChange = (e) => {
     const value = e.target.value.replace(/\D/g, "");
     setTempAmount(value ? Number(value) : 0);
@@ -249,7 +252,7 @@ export default function SavingsDashboard() {
               type="text"
               value={formatRupiah(tempAmount)}
               onChange={handleChange}
-              disabled={updating}
+              disabled={updating || !isMandatoryUpdateAllowed}
             />
 
             {updateMsg && (
@@ -263,10 +266,20 @@ export default function SavingsDashboard() {
             )}
 
             <div className="actions">
-              <button className="btn primary" onClick={() => setShowUpdateConfirm(true)} disabled={updating}>
+              <button
+                className="btn primary"
+                onClick={() => setShowUpdateConfirm(true)}
+                disabled={updating || !isMandatoryUpdateAllowed}
+                title={isMandatoryUpdateAllowed ? 'Perbarui semua anggota' : 'Update hanya dapat dilakukan tanggal 22-23 setiap bulan'}
+              >
                 {updating ? 'Menyimpan...' : 'Perbarui Semua Anggota'}
               </button>
             </div>
+            {!isMandatoryUpdateAllowed && (
+              <p style={{ marginTop: 8, fontSize: 12, color: '#64748B' }}>
+                Perubahan simpanan wajib hanya dapat dilakukan pada tanggal 22-23 setiap bulan.
+              </p>
+            )}
           </div>
         </div>
       </div>

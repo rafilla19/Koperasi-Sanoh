@@ -2255,8 +2255,24 @@ class LoanViewSet(viewsets.ModelViewSet):
         except ValueError:
             return Response({'error': 'Invalid period format. Use YYYY-MM'}, status=400)
 
+        # Denda telat Simpanan Wajib: same lazy snapshot as Kewajiban Simpanan
+        # (api.saving.views.admin_member_obligations), repeated here so this
+        # payroll list shows the penalty even for a period nobody has opened
+        # there yet. Guarded/idempotent — never overwrites an already-set value.
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                UPDATE monthly_saving_bills
+                SET penalty_due = (SELECT monthly_limit FROM funding_settings WHERE id = 3 AND is_active = TRUE LIMIT 1),
+                    updated_at = NOW()
+                WHERE saving_type_id = 1
+                  AND status_id = 38
+                  AND due_date < CURRENT_DATE
+                  AND (penalty_due IS NULL OR penalty_due = 0)
+                  AND deleted_at IS NULL
+            """)
+
         query = """
-        SELECT 
+        SELECT
             m.id AS id,
             m.id AS member_id,
             m.full_name,
@@ -2270,6 +2286,8 @@ class LoanViewSet(viewsets.ModelViewSet):
             MAX(CASE WHEN st.id = 1 THEN msb.id END) AS mandatory_bill_id,
             COALESCE(MAX(CASE WHEN st.id = 1 THEN msb.amount_due ELSE 0 END), 0) AS mandatory_amount,
             COALESCE(MAX(CASE WHEN st.id = 1 AND msb.status_id = 38 THEN msb.amount_due ELSE 0 END), 0) AS mandatory_outstanding,
+            COALESCE(MAX(CASE WHEN st.id = 1 THEN msb.penalty_due ELSE 0 END), 0) AS mandatory_penalty_due,
+            COALESCE(MAX(CASE WHEN st.id = 1 THEN msb.penalty_paid ELSE 0 END), 0) AS mandatory_penalty_paid,
 
             -- VOLUNTARY
             MAX(CASE WHEN st.id = 2 THEN msb.id END) AS voluntary_bill_id,
@@ -2330,11 +2348,22 @@ class LoanViewSet(viewsets.ModelViewSet):
             total_outstanding = float(item['total_outstanding'])
             total_amount = float(item['total_amount'])
             total_paid = total_amount - total_outstanding
+            # is_paid/status_id are based on the bare bill amount only — the
+            # wajib payment SP always settles penalty_due/penalty_paid in the
+            # same UPDATE as the bill itself, so this never disagrees with
+            # denda state, and it keeps Confirm/Rollback eligibility on this
+            # page unaffected by the totals below.
             is_paid = total_outstanding == 0
             status_id = 39 if is_paid else 38
             payment_proof = item.get('payment_proof') if is_paid else None
             if payment_proof:
                 payment_proof = get_absolute_media_url(request, payment_proof)
+
+            # Denda telat Simpanan Wajib: fold into "Total Tertunggak" while
+            # still unpaid, and into "Total Terbayar" once collected.
+            penalty_due = float(item['mandatory_penalty_due'])
+            penalty_paid = float(item['mandatory_penalty_paid'])
+            penalty_outstanding = penalty_due if penalty_paid == 0 else 0
 
             formatted_results.append({
                 'id': item['member_id'],
@@ -2346,9 +2375,10 @@ class LoanViewSet(viewsets.ModelViewSet):
                 'pokok': float(item['principal_amount']),
                 'wajib': float(item['mandatory_amount']),
                 'sukarela': float(item['voluntary_amount']),
-                'bulat': 0, 
+                'penalty': penalty_due,
+                'bulat': 0,
                 'total': total_amount,
-                'total_paid': total_paid,
+                'total_paid': total_paid + penalty_paid,
                 'is_paid': is_paid,
                 'status_id': status_id,
                 'mandatory_bill_id': item['mandatory_bill_id'],
@@ -2357,7 +2387,7 @@ class LoanViewSet(viewsets.ModelViewSet):
                 'mandatory_outstanding': float(item['mandatory_outstanding']),
                 'voluntary_outstanding': float(item['voluntary_outstanding']),
                 'principal_outstanding': float(item['principal_outstanding']),
-                'total_outstanding': total_outstanding,
+                'total_outstanding': total_outstanding + penalty_outstanding,
                 'payment_proof': payment_proof
             })
             
@@ -3718,6 +3748,24 @@ class LoanViewSet(viewsets.ModelViewSet):
                 [member_id],
             )
 
+        # Same lazy snapshot for denda telat Simpanan Wajib, scoped to this
+        # member, so total_unpaid_savings_penalty below is accurate even if
+        # nobody has opened Kewajiban Simpanan / this bill yet.
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE monthly_saving_bills
+                SET penalty_due = (SELECT monthly_limit FROM funding_settings WHERE id = 3 AND is_active = TRUE LIMIT 1),
+                    updated_at = NOW()
+                WHERE member_id = %s
+                  AND saving_type_id = 1
+                  AND status_id = 38
+                  AND due_date < CURRENT_DATE
+                  AND (penalty_due IS NULL OR penalty_due = 0)
+                """,
+                [member_id],
+            )
+
         query = """
         WITH member_info AS (
             SELECT m.full_name, es.status_name as employee_status, m.employee_status_id
@@ -3787,8 +3835,9 @@ class LoanViewSet(viewsets.ModelViewSet):
             WHERE li.status_id IN (27, 28)
         ),
         outstanding_bills AS (
-            SELECT 
+            SELECT
                 COALESCE(SUM(amount_due - COALESCE(amount_paid, 0)), 0) as total_unpaid_bills,
+                COALESCE(SUM(CASE WHEN saving_type_id = 1 AND COALESCE(penalty_paid, 0) = 0 THEN COALESCE(penalty_due, 0) ELSE 0 END), 0) as total_unpaid_savings_penalty,
                 COALESCE(
                     JSON_AGG(
                         JSON_BUILD_OBJECT(
@@ -3796,7 +3845,8 @@ class LoanViewSet(viewsets.ModelViewSet):
                             'saving_type_id', saving_type_id,
                             'bill_date', due_date,
                             'amount_due', amount_due,
-                            'amount_paid', amount_paid
+                            'amount_paid', amount_paid,
+                            'penalty', CASE WHEN saving_type_id = 1 AND COALESCE(penalty_paid, 0) = 0 THEN COALESCE(penalty_due, 0) ELSE 0 END
                         ) ORDER BY due_date ASC
                     ), '[]'::json
                 ) as unpaid_bills_list
@@ -3818,12 +3868,13 @@ class LoanViewSet(viewsets.ModelViewSet):
             np.next_due_date,
             np.next_due_amount,
             ob.total_unpaid_bills,
+            ob.total_unpaid_savings_penalty,
             ob.unpaid_bills_list,
             tui.total_unpaid_installments,
             tui.total_unpaid_penalty,
             tui.unpaid_installments_list,
             CASE WHEN ls.principal_amount IS NOT NULL THEN true ELSE false END as has_active_loan,
-            (ob.total_unpaid_bills + tui.total_unpaid_installments) as grand_total_outstanding
+            (ob.total_unpaid_bills + ob.total_unpaid_savings_penalty + tui.total_unpaid_installments) as grand_total_outstanding
         FROM member_info mi
         CROSS JOIN saving_data sd
         CROSS JOIN saving_growth sg
@@ -3888,8 +3939,24 @@ class LoanViewSet(viewsets.ModelViewSet):
         saving_bills = []
         if saving_ids:
             saving_ids = [int(x) for x in saving_ids]
+
+            # Denda telat Simpanan Wajib: same lazy snapshot used elsewhere, so
+            # the amount charged through the gateway below reflects it even if
+            # nothing else has touched this bill yet.
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    UPDATE monthly_saving_bills
+                    SET penalty_due = (SELECT monthly_limit FROM funding_settings WHERE id = 3 AND is_active = TRUE LIMIT 1),
+                        updated_at = NOW()
+                    WHERE id IN %s
+                      AND saving_type_id = 1
+                      AND status_id = 38
+                      AND due_date < CURRENT_DATE
+                      AND (penalty_due IS NULL OR penalty_due = 0)
+                """, [tuple(saving_ids)])
+
             query_savings = """
-                SELECT id, amount_due, amount_paid, saving_type_id, bill_period_end
+                SELECT id, amount_due, amount_paid, saving_type_id, bill_period_end, penalty_due, penalty_paid
                 FROM monthly_saving_bills
                 WHERE id IN %s AND member_id = %s AND status_id = 38
             """
@@ -4011,7 +4078,17 @@ class LoanViewSet(viewsets.ModelViewSet):
                 "quantity": 1,
                 "name": label
             })
-            
+            penalty = int(b['penalty_due']) if b.get('penalty_due') and not b.get('penalty_paid') else 0
+            if penalty > 0:
+                subtotal += penalty
+                item_details.append({
+                    "id": f"SAV-PENALTY-{b['id']}",
+                    "price": penalty,
+                    "quantity": 1,
+                    "name": "Denda Keterlambatan Simpanan Wajib"
+                })
+
+
         for inst in loan_installments:
             amount = int(inst['amount_total'])
             subtotal += amount
@@ -4293,11 +4370,12 @@ class LoanViewSet(viewsets.ModelViewSet):
                     WHEN st.payment_method_id = 1 THEN COALESCE(pgt.gateway_transaction_id, st.payment_reference_id)
                     ELSE st.payment_reference_id
                 END AS reference,
-                NULL::NUMERIC AS penalty""",
+                msb.penalty_paid AS penalty""",
             "FROM saving_transactions st",
             "INNER JOIN transaction_types tt ON tt.id = st.transaction_type_id",
             "INNER JOIN statuses s ON s.id = st.status_id",
             "LEFT JOIN payment_gateway_transactions pgt ON st.payment_method_id = 1 AND CAST(pgt.id AS VARCHAR) = st.payment_reference_id",
+            "LEFT JOIN monthly_saving_bills msb ON msb.id = st.monthly_saving_bill_id",
             "WHERE st.member_id = %s",
             # Hide pending/expired/cancelled gateway attempts — only show a
             # gateway transaction once it has actually settled (status_id=34).

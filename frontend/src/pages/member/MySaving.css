@@ -54,6 +54,12 @@
   line-height: 1.7;
 }
 
+.sv-hero-stats {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .sv-hero-profile {
   min-width: 220px;
   padding: 16px 18px;
@@ -61,6 +67,11 @@
   background: rgba(10, 22, 40, 0.94);
   color: #fff;
   box-shadow: 0 14px 30px rgba(10, 22, 40, 0.16);
+}
+
+.sv-hero-profile--warn {
+  background: linear-gradient(135deg, #7f1d1d 0%, #b91c1c 100%);
+  box-shadow: 0 14px 30px rgba(127, 29, 29, 0.24);
 }
 
 .sv-hero-profile-label {
@@ -476,6 +487,7 @@
   display: grid;
   grid-template-columns: 1.5fr 1fr;
   gap: 24px;
+  margin-top: 20px;
 }
 @media (max-width: 900px) {
   .sv-content-grid { grid-template-columns: 1fr; }
@@ -550,6 +562,7 @@
 }
 .sv-table tr:last-child td { border-bottom: none; }
 .sv-table tbody tr:hover td { background: #F8FAFC; }
+.sv-table-row-clickable { cursor: pointer; }
 
 .sv-td-date {
   color: #64748B;
@@ -563,6 +576,13 @@
 }
 .sv-trx-amount.credit { color: #059669; }
 .sv-trx-amount.debit  { color: #E11D48; }
+
+.sv-trx-late {
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #DC2626;
+}
 
 /* ── Show All Button ─────────────────────────────────── */
 .sv-show-all-btn {
@@ -644,6 +664,7 @@
   border: 2px solid #fff;
 }
 .sv-tl-item.paid .sv-tl-icon { background: #10B981; }
+.sv-tl-item.overdue .sv-tl-icon { background: #DC2626; }
 .sv-tl-content { flex: 1; }
 .sv-tl-status {
   font-size: 10px; font-weight: 800; letter-spacing: 0.1em;
@@ -652,8 +673,40 @@
 .sv-tl-item.paid .sv-tl-status     { color: #059669; }
 .sv-tl-item.upcoming .sv-tl-status { color: #3B82F6; }
 .sv-tl-item.scheduled .sv-tl-status{ color: #64748B; }
+.sv-tl-item.overdue .sv-tl-status  { color: #DC2626; }
 .sv-tl-title { font-size: 14px; font-weight: 700; color: #0A1628; margin: 0 0 2px 0; }
 .sv-tl-desc  { font-size: 12px; color: #64748B; margin: 0; }
+
+.sv-tl-breakdown {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sv-tl-breakdown li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: #475569;
+}
+.sv-tl-breakdown li span {
+  font-weight: 600;
+  color: #0F172A;
+}
+
+.sv-tl-penalty {
+  margin-top: 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #FEE2E2;
+  color: #991B1B;
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-block;
+}
 
 /* ── Withdraw layout ─────────────────────────────────── */
 .wd-layout { display: grid; gap: 24px; }
@@ -715,6 +768,7 @@
     flex-direction: column;
     align-items: stretch;
   }
+  .sv-hero-stats { width: 100%; flex-direction: column; }
   .sv-hero-profile { width: 100%; }
   .sv-stat-grid { grid-template-columns: 1fr; }
   .sv-section-title { margin-top: 4px; }

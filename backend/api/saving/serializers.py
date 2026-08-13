@@ -170,6 +170,7 @@ class MonthlySavingBillSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'saving_type_name', 'bill_period_start', 'bill_period_end',
             'amount_due', 'amount_paid', 'status_name', 'due_date', 'paid_at',
+            'penalty_due', 'penalty_paid',
         ]
 
 

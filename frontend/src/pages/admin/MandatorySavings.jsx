@@ -247,12 +247,13 @@ export default function MandatorySavings() {
         <button
           disabled={loading || data.length === 0}
           onClick={() => {
-            const headers = ['No', 'NIK', 'Nama Anggota', 'Departemen', 'Status Karyawan', 'Simp. Pokok', 'Simp. Wajib', 'Simp. Sukarela', 'Total', 'Status'];
+            const headers = ['No', 'NIK', 'Nama Anggota', 'Departemen', 'Status Karyawan', 'Simp. Pokok', 'Simp. Wajib', 'Simp. Sukarela', 'Total', 'Pinalti', 'Status'];
             const rows = data.map((row, i) => [
               i + 1, row.nik_employee || '-', row.member_name,
               row.department_name || '-', row.employee_status_name || '-',
               row.is_new_member ? row.pokok_amount : '-',
               row.wajib_amount, row.sukarela_amount, row.total_amount,
+              row.wajib_has_penalty ? row.wajib_penalty_due : '-',
               statusLabel[row.bill_status] || row.bill_status,
             ]);
             exportToExcel(headers, rows, `mandatory_savings_${month}_${year}`);
@@ -315,14 +316,14 @@ export default function MandatorySavings() {
               />
             </th>
             <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none', width: 40 }}>No</th>
-            <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Nama Anggota</th>
-            <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>NIK</th>
+            <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Anggota</th>
             <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Departemen</th>
             <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Status Karyawan</th>
             <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Simp. Pokok</th>
             <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Simp. Wajib</th>
             <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Simp. Sukarela</th>
             <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Total</th>
+            <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Pinalti</th>
             <th style={{ color: '#ffffff', background: 'transparent', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontSize: '0.75rem', padding: '1rem', borderBottom: 'none' }}>Status</th>
           </tr>
         </thead>
@@ -347,8 +348,10 @@ export default function MandatorySavings() {
                   />
                 </td>
                 <td style={{ color: '#94a3b8', fontSize: 12 }}>{(currentPage - 1) * rowsPerPage + index + 1}</td>
-                <td style={{ fontWeight: 500 }}>{row.member_name}</td>
-                <td style={{ fontSize: 13, color: '#374151' }}>{row.nik_employee || '-'}</td>
+                <td>
+                  <span style={{ fontWeight: 500 }}>{row.member_name}</span><br />
+                  <span style={{ fontSize: 12, color: '#64748b' }}>{row.nik_employee || '-'}</span>
+                </td>
                 <td style={{ fontSize: 13, color: '#374151' }}>{row.department_name || '-'}</td>
                 <td>
                   <span style={{
@@ -375,6 +378,15 @@ export default function MandatorySavings() {
                 <td>{formatRupiah(row.wajib_amount)}</td>
                 <td>{formatRupiah(row.sukarela_amount)}</td>
                 <td style={{ fontWeight: 600 }}>{formatRupiah(row.total_amount)}</td>
+                <td>
+                  {row.wajib_has_penalty ? (
+                    <span title="Pinalti telat bayar Simpanan Wajib (lewat tanggal 27)">
+                      {formatRupiah(row.wajib_penalty_due)}
+                    </span>
+                  ) : (
+                    <span style={{ color: '#cbd5e1' }}>-</span>
+                  )}
+                </td>
                 <td>
                   <span style={{
                     display: 'inline-block',

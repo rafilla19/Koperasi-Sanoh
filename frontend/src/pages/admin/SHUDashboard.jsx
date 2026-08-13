@@ -89,7 +89,7 @@ const SHUDashboard = () => {
 
   // Edit modal state
   const [showEditModal, setShowEditModal] = useState(false);
-  const [modalPeriodType, setModalPeriodType] = useState('tahunan'); // 'bulanan' or 'tahunan'
+  const [modalPeriodType, setModalPeriodType] = useState('bulanan');
   const [modalMonth, setModalMonth] = useState('');
   const [modalYear, setModalYear] = useState(String(currentYear));
   const [modalNetProfit, setModalNetProfit] = useState(0);
@@ -179,7 +179,7 @@ const SHUDashboard = () => {
 
   // Modal logic handlers
   const handleOpenEditModal = () => {
-    setModalPeriodType(selectedMonth ? 'bulanan' : 'tahunan');
+    setModalPeriodType('bulanan');
     setModalMonth(selectedMonth || '1');
     setModalYear(selectedYear);
     setModalError('');
@@ -196,10 +196,9 @@ const SHUDashboard = () => {
       setModalAllocations([]);
       setModalNetProfit(0);
       try {
-        const monthParam = modalPeriodType === 'tahunan' ? undefined : modalMonth;
         const res = await shuApi.getComponentAllocations({
           year: modalYear,
-          month: monthParam || undefined,
+          month: modalMonth || undefined,
         });
         setModalAllocations(res.results || []);
         setModalNetProfit(res.net_profit || 0);
@@ -685,35 +684,19 @@ const SHUDashboard = () => {
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button
                     type="button"
-                    onClick={() => setModalPeriodType('bulanan')}
+                    disabled
                     style={{
                       padding: '6px 12px',
                       borderRadius: 20,
                       border: '1px solid #d1d5db',
-                      background: modalPeriodType === 'bulanan' ? '#3b82f6' : '#fff',
-                      color: modalPeriodType === 'bulanan' ? '#fff' : '#374151',
+                      background: '#3b82f6',
+                      color: '#fff',
                       fontSize: 12,
                       fontWeight: 600,
-                      cursor: 'pointer'
+                      cursor: 'not-allowed'
                     }}
                   >
                     Bulanan
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setModalPeriodType('tahunan')}
-                    style={{
-                      padding: '6px 12px',
-                      borderRadius: 20,
-                      border: '1px solid #d1d5db',
-                      background: modalPeriodType === 'tahunan' ? '#3b82f6' : '#fff',
-                      color: modalPeriodType === 'tahunan' ? '#fff' : '#374151',
-                      fontSize: 12,
-                      fontWeight: 600,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Tahunan
                   </button>
                 </div>
               </div>

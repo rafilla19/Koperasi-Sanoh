@@ -853,13 +853,13 @@ def admin_shu_member_bases(request):
     except (ValueError, TypeError):
         month = None
 
-    members_qs = Members.objects.filter(deleted_at__isnull=True, user__is_active=True)
+    all_members_qs = Members.objects.filter(deleted_at__isnull=True, user__is_active=True).order_by('full_name')
+    members_qs = all_members_qs
     if search:
         members_qs = members_qs.filter(
             Q(full_name__icontains=search) |
             Q(nik_employee__icontains=search)
         )
-    members_qs = members_qs.order_by('full_name')
 
     departments = {d.id: d.department_name for d in Departments.objects.all()}
 
@@ -884,6 +884,7 @@ def admin_shu_member_bases(request):
 
     members = list(members_qs)
     member_map = {m.id: m for m in members}
+    all_member_ids = list(all_members_qs.values_list('id', flat=True))
 
     if summary == 'year':
         if year < now.year:
@@ -902,19 +903,18 @@ def admin_shu_member_bases(request):
 
     # Use actual paid saving transactions for mandatory/voluntary savings, attributed to the
     # month the underlying bill was actually for (not just when it was processed/paid).
-    savings_by_period = _member_savings_by_period(period_start, period_end, member_ids=member_map.keys())
-
+    all_savings_by_period = _member_savings_by_period(period_start, period_end, member_ids=all_member_ids)
     member_savings = {m.id: {'mandatory': Decimal('0'), 'voluntary': Decimal('0')} for m in members}
-    for mid, sv in savings_by_period.items():
-        if mid not in member_savings:
-            continue
-        member_savings[mid]['mandatory'] = sv['wajib']
-        member_savings[mid]['voluntary'] = sv['sukarela']
+    for mid, sv in all_savings_by_period.items():
+        if mid in member_savings:
+            member_savings[mid]['mandatory'] = sv['wajib']
+            member_savings[mid]['voluntary'] = sv['sukarela']
 
-    # Total simpanan semua member aktif (denominator untuk proporsi jasa modal)
+    # Total simpanan semua member aktif (denominator untuk proporsi jasa modal).
+    # Harus dihitung dari semua member, bukan hanya hasil pencarian.
     total_all_savings = sum(
-        savings['mandatory'] + savings['voluntary']
-        for savings in member_savings.values()
+        sv['wajib'] + sv['sukarela']
+        for sv in all_savings_by_period.values()
     )
 
     # Hitung jasa modal pool dari shu_component_allocations (master_configuration_id=1)
@@ -1697,6 +1697,17 @@ def admin_shu_annual_from_monthly(request):
     # di-"Distribusikan" manual tetap ikut terhitung di rekap tahunan.
     _sync_year_monthly_distributions(year)
 
+    # Auto-sync ke shu_member_distributions (tabel final) juga, supaya angka yang
+    # ditampilkan di sini selalu konsisten dengan status PAID/DISTRIBUTED yang
+    # dibaca dari tabel final oleh endpoint jasa-modal-annual/. Tanpa ini,
+    # total_shu bulanan bisa berubah (mis. ada income_expenses baru) tanpa
+    # tabel final ikut ter-update, sehingga dua endpoint annual menampilkan
+    # nominal yang berbeda untuk anggota yang sama.
+    # create_missing=False: cuma refresh baris yang SUDAH ada, jangan bikin baris
+    # baru cuma karena admin membuka tab ini — frontend memakai ada/tidaknya baris
+    # di shu_member_distributions sebagai penanda "belum didistribusi".
+    _sync_annual_distributions(year, create_missing=False)
+
     monthly_agg = (
         ShuMemberDistributionsMonthly.objects
         .filter(period__period_year=year)
@@ -1979,11 +1990,16 @@ def admin_shu_jasa_modal_update_notes(request, pk):
     return Response(AdminAnnualJasaModalSerializer(dist, context={'bank_map': bank_map, 'departments': departments}).data)
 
 
-def _sync_annual_distributions(year: int):
+def _sync_annual_distributions(year: int, create_missing: bool = True):
     """
     Agregasi data dari shu_member_distributions_monthly untuk semua bulan di tahun tertentu,
     lalu upsert ke shu_member_distributions (tahunan).
     Hanya berjalan jika ShuResults period_month=13 untuk tahun tersebut sudah ada.
+
+    create_missing=False → hanya update baris yang SUDAH ada (tidak membuat baris baru).
+    Dipakai oleh endpoint read-only (mis. tampilan tab tahunan) supaya sekadar membuka
+    halaman tidak membuat anggota "otomatis tercatat sudah didistribusikan" di tabel final
+    — frontend memakai ada/tidaknya baris di sini sebagai penanda "belum didistribusi".
     """
     try:
         annual_result = ShuResults.objects.get(period_year=year, period_month=13, deleted_at__isnull=True)
@@ -2020,6 +2036,8 @@ def _sync_annual_distributions(year: int):
             dist.updated_at = now_ts
             dist.save(update_fields=['simp_wajib', 'simp_sukarela', 'total_savings', 'total_shu', 'updated_at'])
         except ShuMemberDistributions.DoesNotExist:
+            if not create_missing:
+                continue
             ShuMemberDistributions.objects.create(
                 member_id=row['member_id'],
                 simp_wajib=simp_wajib,
