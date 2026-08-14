@@ -1571,13 +1571,14 @@ const DashboardHome = () => {
                       </div>
                     </div>
 
-                    <button 
+                    <button
                       className="dh-modal-pay-btn"
                       disabled={
-                        (selectedPayments.savingIds.length === 0 && selectedPayments.loanIds.length === 0) || 
+                        (selectedPayments.savingIds.length === 0 && selectedPayments.loanIds.length === 0) ||
                         !isSequentialSelectionValid() ||
                         !selectedPaymentMethod ||
-                        isInitiating
+                        isInitiating ||
+                        pendingBulkPayment?.pending
                       }
                       onClick={handleInitiatePayment}
                       style={{
@@ -1585,15 +1586,15 @@ const DashboardHome = () => {
                         padding: '14px',
                         borderRadius: '12px',
                         border: 'none',
-                        background: ((selectedPayments.savingIds.length === 0 && selectedPayments.loanIds.length === 0) || !isSequentialSelectionValid() || !selectedPaymentMethod || isInitiating) ? '#CBD5E1' : '#E11D48',
+                        background: ((selectedPayments.savingIds.length === 0 && selectedPayments.loanIds.length === 0) || !isSequentialSelectionValid() || !selectedPaymentMethod || isInitiating || pendingBulkPayment?.pending) ? '#CBD5E1' : '#E11D48',
                         color: '#FFFFFF',
                         fontWeight: '600',
-                        cursor: ((selectedPayments.savingIds.length === 0 && selectedPayments.loanIds.length === 0) || !isSequentialSelectionValid() || !selectedPaymentMethod || isInitiating) ? 'not-allowed' : 'pointer',
+                        cursor: ((selectedPayments.savingIds.length === 0 && selectedPayments.loanIds.length === 0) || !isSequentialSelectionValid() || !selectedPaymentMethod || isInitiating || pendingBulkPayment?.pending) ? 'not-allowed' : 'pointer',
                         transition: 'all 0.2s',
                         textAlign: 'center'
                       }}
                     >
-                      {isInitiating ? 'Memproses...' : (!isSequentialSelectionValid() ? 'Pilih Secara Berurutan' : (!selectedPaymentMethod ? 'Pilih Metode Pembayaran' : 'Bayar Sekarang'))}
+                      {isInitiating ? 'Memproses...' : (pendingBulkPayment?.pending ? 'Selesaikan Transaksi Tertunda Dahulu' : (!isSequentialSelectionValid() ? 'Pilih Secara Berurutan' : (!selectedPaymentMethod ? 'Pilih Metode Pembayaran' : 'Bayar Sekarang')))}
                     </button>
                   </>
                 );

@@ -479,7 +479,7 @@ const SHUMasterData = () => {
                 <td>
                   <div className="shum-table-actions">
                     <button className="action-edit" onClick={() => startEdit(item)}><Edit2 size={16} /></button>
-                    {activeTab !== 'payment_channel' && (
+                    {activeTab !== 'payment_channel' && activeTab !== 'loans' && (
                       <button className="action-delete" onClick={() => handleDelete(item.id)}><Trash2 size={16} /></button>
                     )}
                   </div>

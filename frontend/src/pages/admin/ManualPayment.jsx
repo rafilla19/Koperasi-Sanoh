@@ -119,14 +119,17 @@ const ManualPayment = () => {
 
   const roundAmount = (value) => Math.round(Number(value) || 0);
 
-  // Cicilan Pinjaman's auto-filled amount includes any outstanding penalty
-  // on top of the installment amount, so the admin collects both in one go.
+  // Cicilan Pinjaman's and Simpanan Wajib's auto-filled amount include any
+  // outstanding penalty on top of the base amount, so the admin collects
+  // both in one go.
   const computeAutoAmount = (type, data) => {
     const pt = PAYMENT_TYPES.find(t => t.value === type);
     if (!pt || !data) return '';
     let amount = Number(data[pt.detailKey]) || 0;
     if (type === 'loan') {
       amount += Number(data.loan_penalty) || 0;
+    } else if (type === 'mandatory') {
+      amount += Number(data.mandatory_penalty) || 0;
     }
     return String(roundAmount(amount));
   };
@@ -425,9 +428,17 @@ const ManualPayment = () => {
                   {formatRupiah((Number(memberDetail?.loan_deduction) || 0) + (Number(memberDetail?.loan_penalty) || 0))}
                 </div>
               </div>
-              <div className="mp-out-item">
-                <label>Simpanan Wajib (Tunggakan)</label>
-                <div className="mp-amount">{formatRupiah(memberDetail?.mandatory_outstanding)}</div>
+              <div className="mp-out-item" style={{ display: 'flex', gap: '24px' }}>
+                <div style={{ flex: 1 }}>
+                  <label>Simpanan Wajib (Tunggakan)</label>
+                  <div className="mp-amount">{formatRupiah(memberDetail?.mandatory_outstanding)}</div>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label>Pinalti Simpanan Wajib</label>
+                  <div className="mp-amount" style={Number(memberDetail?.mandatory_penalty) > 0 ? { color: '#dc2626' } : undefined}>
+                    {formatRupiah(memberDetail?.mandatory_penalty)}
+                  </div>
+                </div>
               </div>
               <div className="mp-out-item">
                 <label>Simpanan Sukarela (Tunggakan)</label>

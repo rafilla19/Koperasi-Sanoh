@@ -1273,7 +1273,7 @@ def admin_dashboard_overview(request):
             )
             total_principle_saving = cursor.fetchone()[0] or 0
 
-            # 4. Total Penalty Paid
+            # 4. Total Penalty Paid (loan installments + Simpanan Wajib late fees)
             cursor.execute(
                 """
                 SELECT COALESCE(SUM(penalty_paid), 0)
@@ -1281,7 +1281,18 @@ def admin_dashboard_overview(request):
                 WHERE penalty_paid > 0
                 """
             )
-            total_penalty_paid = cursor.fetchone()[0] or 0
+            total_loan_penalty_paid = cursor.fetchone()[0] or 0
+
+            cursor.execute(
+                """
+                SELECT COALESCE(SUM(penalty_paid), 0)
+                FROM monthly_saving_bills
+                WHERE penalty_paid > 0
+                """
+            )
+            total_savings_penalty_paid = cursor.fetchone()[0] or 0
+
+            total_penalty_paid = float(total_loan_penalty_paid) + float(total_savings_penalty_paid)
 
             # SHU Cooperative Portion is NO LONGER included in total_assets based on user request,
             # but we keep the logic here if it's still needed in the breakdown
@@ -1327,6 +1338,8 @@ def admin_dashboard_overview(request):
                 'total_admin_fee': float(total_admin_fee),
                 'total_principle_saving': float(total_principle_saving),
                 'total_penalty_paid': float(total_penalty_paid),
+                'total_loan_penalty_paid': float(total_loan_penalty_paid),
+                'total_savings_penalty_paid': float(total_savings_penalty_paid),
                 'shu_cooperative_portion': round(shu_cooperative_portion, 2),
                 'shu_non_distributed_pct': shu_non_distributed_pct,
                 'shu_total_net_profit': total_shu_net_profit,

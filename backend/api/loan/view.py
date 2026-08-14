@@ -3262,6 +3262,27 @@ class LoanViewSet(viewsets.ModelViewSet):
                 END
             ) AS mandatory_outstanding,
 
+            -- Outstanding mandatory-saving late penalty (denda telat
+            -- Simpanan Wajib), scoped to the bill due within the selected
+            -- month/year period (same window as mandatory_outstanding above).
+            MAX(
+                CASE
+                    WHEN st.name = 'MANDATORY'
+                    THEN (
+                        SELECT COALESCE(SUM(msb2.penalty_due), 0)
+                        FROM monthly_saving_bills msb2
+                        CROSS JOIN params p
+                        WHERE msb2.member_id = m.id
+                          AND msb2.saving_type_id = st.id
+                          AND msb2.deleted_at IS NULL
+                          AND COALESCE(msb2.penalty_paid, 0) = 0
+                          AND msb2.bill_period_start < p.end_date
+                          AND msb2.bill_period_end >= p.start_date
+                    )
+                    ELSE 0
+                END
+            ) AS mandatory_penalty,
+
             -- Voluntary Outstanding
             MAX(
                 CASE
@@ -3374,9 +3395,25 @@ class LoanViewSet(viewsets.ModelViewSet):
           AND (li.status_id = 30 OR (li.status_id IN (27, 28) AND li.due_date < CURRENT_DATE))
         """
 
+        # Same lazy snapshot used for the payroll list (denda telat Simpanan
+        # Wajib) — locks in penalty_due for this member's overdue mandatory
+        # bills using the current active penalty setting.
+        saving_snapshot_query = """
+        UPDATE monthly_saving_bills
+        SET penalty_due = (SELECT monthly_limit FROM funding_settings WHERE id = 3 AND is_active = TRUE LIMIT 1),
+            updated_at = NOW()
+        WHERE member_id = %s
+          AND saving_type_id = 1
+          AND status_id = 38
+          AND due_date < CURRENT_DATE
+          AND (penalty_due IS NULL OR penalty_due = 0)
+          AND deleted_at IS NULL
+        """
+
         try:
             with connection.cursor() as cursor:
                 cursor.execute(snapshot_query, [member_id])
+                cursor.execute(saving_snapshot_query, [member_id])
                 cursor.execute(query, [member_id])
                 columns = [col[0] for col in cursor.description]
                 row = cursor.fetchone()
@@ -4204,7 +4241,14 @@ class LoanViewSet(viewsets.ModelViewSet):
                 total_items = len(saving_bills) + len(loan_installments)
                 
                 for b in saving_bills:
-                    amount = int(b['amount_due'] - (b['amount_paid'] or 0))
+                    bill_amount = int(b['amount_due'] - (b['amount_paid'] or 0))
+                    # Denda telat Simpanan Wajib rides along in the same
+                    # transaction total as the bill itself — so amount here
+                    # matches exactly what the Snap item list above charged
+                    # (bill_amount + penalty), giving sp_savings_gateway_payment
+                    # a self-consistent value to split back apart at settlement.
+                    penalty = int(b['penalty_due']) if b['saving_type_id'] == 1 and b.get('penalty_due') and not b.get('penalty_paid') else 0
+                    amount = bill_amount + penalty
                     item_fee = int((amount * fee_percentage) / 100) + int(fee_fixed / total_items) if total_items > 0 else 0
                     cursor.execute("""
                         INSERT INTO saving_transactions (
