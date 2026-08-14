@@ -278,6 +278,8 @@ def _member_profile_query(member_id):
     if result:
         result['nik_ktp'] = decrypt_pii(result.get('nik_ktp'))
         result['npwp_number'] = decrypt_pii(result.get('npwp_number'))
+        result['ktp_file_path'] = decrypt_pii(result.get('ktp_file_path'))
+        result['npwp_file'] = decrypt_pii(result.get('npwp_file'))
     return result
 
 
@@ -935,7 +937,7 @@ class MemberViewSet(viewsets.ViewSet):
                 )
                 if ktp_document not in (None, ''):
                     ktp_path = _persist_member_document(ktp_document, 'members/ktp')
-                    Member.objects.filter(id=pk).update(ktp_file_path=ktp_path or '')
+                    Member.objects.filter(id=pk).update(ktp_file_path=encrypt_pii(ktp_path) or '')
 
                 npwp_document = (
                     request.FILES.get('npwp_file')
@@ -947,7 +949,7 @@ class MemberViewSet(viewsets.ViewSet):
                 )
                 if npwp_document not in (None, ''):
                     npwp_path = _persist_member_document(npwp_document, 'members/npwp')
-                    Member.objects.filter(id=pk).update(npwp_file=npwp_path or '')
+                    Member.objects.filter(id=pk).update(npwp_file=encrypt_pii(npwp_path) or '')
                 if data.get('account_number') or data.get('account_holder_name') or data.get('bank_id'):
                     with connection.cursor() as cursor:
                         cursor.execute("SELECT id FROM member_bank_accounts WHERE member_id = %s LIMIT 1", [pk])
@@ -1523,11 +1525,34 @@ class MemberViewSet(viewsets.ViewSet):
             nik_hash = hash_pii(raw_nik)
             npwp_encrypted = encrypt_pii(registration_row.get('npwp_number'))
 
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    'CALL sp_approve_request_regist(%s, %s, %s, %s, %s)',
-                    [pk, comment, nik_encrypted, nik_hash, npwp_encrypted],
-                )
+            with transaction.atomic():
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        'CALL sp_approve_request_regist(%s, %s, %s, %s, %s)',
+                        [pk, comment, nik_encrypted, nik_hash, npwp_encrypted],
+                    )
+
+                    # sp_approve_request_regist copies ktp_file/npwp_file from the
+                    # plaintext `registrations` staging row into members.ktp_file_path /
+                    # members.npwp_file as-is — encrypt them here so members stays
+                    # fully encrypted at rest, same as nik_ktp/npwp_number above.
+                    cursor.execute(
+                        """
+                        SELECT m.id, m.ktp_file_path, m.npwp_file
+                        FROM members m
+                        INNER JOIN users u ON u.id = m.user_id
+                        WHERE u.email = %s
+                        LIMIT 1
+                        """,
+                        [registration_row.get('email')],
+                    )
+                    member_row = cursor.fetchone()
+                    if member_row:
+                        member_id, ktp_file_path, npwp_file = member_row
+                        cursor.execute(
+                            "UPDATE members SET ktp_file_path = %s, npwp_file = %s WHERE id = %s",
+                            [encrypt_pii(ktp_file_path), encrypt_pii(npwp_file), member_id],
+                        )
 
             if registration_row and registration_row.get('email'):
                 employee_status_id = int(registration_row.get('employee_status_id') or 0)
