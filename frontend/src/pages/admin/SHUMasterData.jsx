@@ -217,8 +217,8 @@ const SHUMasterData = () => {
           <h1 className="shum-title">Manajemen Data Master</h1>
           <p className="shum-subtitle">Konfigurasi data master dan pengaturan sistem</p>
         </div>
-        {activeTab !== 'payment_channel' && (
-          <button 
+        {activeTab !== 'payment_channel' && activeTab !== 'loans' && (
+          <button
             className="shum-add-btn"
             onClick={() => { resetForm(); setShowForm(true); }}
           >
