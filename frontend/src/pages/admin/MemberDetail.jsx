@@ -21,7 +21,7 @@ import {
   MapPin,
   ShieldCheck
 } from 'lucide-react';
-import { apiUrl, API_ORIGIN } from '../../services/api';
+import { apiUrl, getAuthHeaders } from '../../services/api';
 import './MemberDetail.css';
 import '../../styles/members.css';
 
@@ -92,7 +92,7 @@ const MemberDetail = () => {
   const onlyNumeric = (val, maxLen = 999) => val.replace(/[^0-9]/g, '').slice(0, maxLen);
 
   const handleInputChange = (field, value) => {
-    const normalizedValue = field === 'nik_employee' ? onlyNumeric(value, 16) : value;
+    const normalizedValue = (field === 'nik_employee' || field === 'nik_ktp') ? onlyNumeric(value, 16) : value;
     setFormData(prev => {
       const nextState = {
         ...prev,
@@ -147,6 +147,8 @@ const MemberDetail = () => {
       const payload = new FormData();
       payload.append('full_name', formData.full_name || '');
       payload.append('nik_employee', formData.nik_employee || '');
+      payload.append('nik_ktp', formData.nik_ktp || '');
+      payload.append('npwp_number', formData.npwp_number || '');
       payload.append('phone_number', formData.phone_number || '');
       payload.append('email', formData.email || '');
       payload.append('address', formData.address || '');
@@ -213,20 +215,26 @@ const MemberDetail = () => {
     });
   };
 
-  const resolveDocumentUrl = (filePath) => {
-    if (!filePath) return '';
-    const path = String(filePath).trim();
-    if (!path) return '';
-    if (path.startsWith('http://') || path.startsWith('https://')) return path;
-    if (path.startsWith('/')) return `${API_ORIGIN}${path}`;
-    if (path.startsWith('media/')) return `${API_ORIGIN}/${path}`;
-    return `${API_ORIGIN}/media/${path}`;
-  };
-
-  const handlePreviewDocument = (filePath, title) => {
-    const url = resolveDocumentUrl(filePath);
-    if (!url) return;
-    setViewerDoc({ title, url });
+  // KTP/NPWP file bytes are encrypted at rest, so they can no longer be
+  // linked to directly (a plain storage URL would just return ciphertext).
+  // Fetch through the authenticated decrypt-and-serve endpoint instead and
+  // hand the iframe a blob URL.
+  const handlePreviewDocument = async (docType, title) => {
+    try {
+      const res = await fetch(apiUrl(`/member/members/${id}/document/?type=${docType}`), {
+        headers: getAuthHeaders(),
+      });
+      if (!res.ok) {
+        alert('Gagal memuat dokumen.');
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      setViewerDoc({ title, url });
+    } catch (error) {
+      console.error('Failed to load document:', error);
+      alert('Gagal memuat dokumen.');
+    }
   };
 
   const getInitials = (name) => {
@@ -365,12 +373,31 @@ const MemberDetail = () => {
 
             <div className="md-form-group">
               <label className="lbl">NIK KTP</label>
-              <div className="md-value-box text-bold">{profile.nik_ktp || '-'}</div>
+              {isEditing ? (
+                <input
+                  type="text"
+                  className="md-input"
+                  value={formData.nik_ktp || ''}
+                  maxLength={16}
+                  onChange={(e) => handleInputChange('nik_ktp', e.target.value)}
+                />
+              ) : (
+                <div className="md-value-box text-bold">{profile.nik_ktp || '-'}</div>
+              )}
             </div>
 
             <div className="md-form-group">
               <label className="lbl">NPWP</label>
-              <div className="md-value-box text-bold">{profile.npwp_number || '-'}</div>
+              {isEditing ? (
+                <input
+                  type="text"
+                  className="md-input"
+                  value={formData.npwp_number || ''}
+                  onChange={(e) => handleInputChange('npwp_number', e.target.value)}
+                />
+              ) : (
+                <div className="md-value-box text-bold">{profile.npwp_number || '-'}</div>
+              )}
             </div>
 
             <div className="md-form-group">
@@ -457,14 +484,12 @@ const MemberDetail = () => {
                     <FileText size={18} />
                     <div className="file-info">
                       <span className="file-name">KTP_{profile.full_name}.jpg</span>
-                      <a 
-                        href={resolveDocumentUrl(profile.ktp_file_path)} 
-                        target="_blank" 
-                        rel="noopener noreferrer" 
+                      <a
+                        href="#"
                         className="md-file-download-link"
                         onClick={(e) => {
                           e.preventDefault();
-                          handlePreviewDocument(profile.ktp_file_path, `KTP - ${profile.full_name}`);
+                          handlePreviewDocument('ktp', `KTP - ${profile.full_name}`);
                         }}
                       >
                         Lihat Dokumen
@@ -495,14 +520,12 @@ const MemberDetail = () => {
                     <FileText size={18} />
                     <div className="file-info">
                       <span className="file-name">NPWP_{profile.full_name}.jpg</span>
-                      <a 
-                        href={resolveDocumentUrl(profile.npwp_file)} 
-                        target="_blank" 
-                        rel="noopener noreferrer" 
+                      <a
+                        href="#"
                         className="md-file-download-link"
                         onClick={(e) => {
                           e.preventDefault();
-                          handlePreviewDocument(profile.npwp_file, `NPWP - ${profile.full_name}`);
+                          handlePreviewDocument('npwp', `NPWP - ${profile.full_name}`);
                         }}
                       >
                         Lihat Dokumen

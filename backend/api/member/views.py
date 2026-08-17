@@ -1,3 +1,4 @@
+import mimetypes
 import random
 import string
 from decimal import Decimal
@@ -8,9 +9,11 @@ from urllib.parse import urlparse
 from urllib.request import urlopen
 
 from django.conf import settings
+from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.core.mail import send_mail
 from django.db import connection, transaction, IntegrityError
+from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action, parser_classes
@@ -18,7 +21,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from .models import EmailOTP
 from datetime import timedelta
 from rest_framework.response import Response
-from api.utils.crypto_utils import encrypt_pii, decrypt_pii, hash_pii
+from api.utils.crypto_utils import encrypt_pii, decrypt_pii, hash_pii, encrypt_bytes, decrypt_bytes
 
 from api.member.serializers import (
     MemberClosureRequestSerializer,
@@ -95,8 +98,48 @@ def _absolute_media_url(request, path):
 def _save_upload(uploaded_file, prefix):
     filename = uploaded_file.name.replace(' ', '_')
     storage_path = f'{prefix}/{timezone.now():%Y%m%d_%H%M%S}_{filename}'
-    saved_path = default_storage.save(storage_path, uploaded_file)
+    encrypted = encrypt_bytes(uploaded_file.read())
+    saved_path = default_storage.save(storage_path, ContentFile(encrypted))
     return saved_path
+
+
+def _storage_key_from_path(value):
+    """Normalize a stored ktp/npwp path to the relative key default_storage
+    expects. Some rows hold the full public storage URL instead (built by
+    _absolute_media_url at upload time) -- strip everything up through
+    MEDIA_URL, or fall back to the Supabase '/object/public/<bucket>/'
+    convention, so default_storage.exists()/.open() can find the file."""
+    if not value:
+        return value
+    value = str(value).strip()
+    if not (value.startswith('http://') or value.startswith('https://')):
+        return value[1:] if value.startswith('/') else value
+    media_url = settings.MEDIA_URL or ''
+    if media_url and media_url in value:
+        return value.split(media_url, 1)[1]
+    parsed = urlparse(value)
+    source_path = parsed.path.lstrip('/')
+    if 'media/' in source_path:
+        return source_path.split('media/', 1)[1]
+    marker = 'object/public/'
+    if marker in source_path:
+        after_bucket = source_path.split(marker, 1)[1]
+        return after_bucket.split('/', 1)[1] if '/' in after_bucket else after_bucket
+    return source_path
+
+
+def _serve_encrypted_document(storage_path):
+    """Open a file from storage, decrypt it (falling back to the raw bytes
+    for files uploaded before this encryption existed), and return it as an
+    HttpResponse with a content type guessed from the file extension."""
+    storage_path = _storage_key_from_path(storage_path)
+    if not storage_path or not default_storage.exists(storage_path):
+        return Response({'error': 'Document not found'}, status=status.HTTP_404_NOT_FOUND)
+    with default_storage.open(storage_path, 'rb') as f:
+        raw = f.read()
+    decrypted = decrypt_bytes(raw)
+    content_type, _ = mimetypes.guess_type(storage_path)
+    return HttpResponse(decrypted, content_type=content_type or 'application/octet-stream')
 
 
 def _persist_member_document(document, prefix):
@@ -435,6 +478,39 @@ class MemberViewSet(viewsets.ViewSet):
         target_prefix = 'members/ktp' if doc_type == 'ktp' else 'members/npwp'
         saved_path = _save_upload(uploaded_file, target_prefix)
         return Response({'file_path': _absolute_media_url(request, saved_path)})
+
+    @action(detail=True, methods=['get'])
+    def document(self, request, pk=None):
+        """Decrypt-and-serve an approved member's KTP/NPWP scan. The file
+        bytes are encrypted at rest (see _save_upload), so this can't be a
+        direct storage URL like before — it must be streamed back through
+        the app after decrypting."""
+        get_verified_admin(request)
+        doc_type = request.query_params.get('type')
+        if doc_type not in ('ktp', 'npwp'):
+            return Response({'error': 'Invalid document type'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            member = Member.objects.get(id=pk)
+        except Member.DoesNotExist:
+            return Response({'error': 'Member not found'}, status=status.HTTP_404_NOT_FOUND)
+        encrypted_path = member.ktp_file_path if doc_type == 'ktp' else member.npwp_file
+        storage_path = decrypt_pii(encrypted_path)
+        return _serve_encrypted_document(storage_path)
+
+    @action(detail=True, methods=['get'])
+    def registration_document(self, request, pk=None):
+        """Decrypt-and-serve a pending registration's KTP/NPWP scan (the
+        registrations table itself isn't encrypted, but the file bytes it
+        points to are — see _save_upload)."""
+        get_verified_admin(request)
+        doc_type = request.query_params.get('type')
+        if doc_type not in ('ktp', 'npwp'):
+            return Response({'error': 'Invalid document type'}, status=status.HTTP_400_BAD_REQUEST)
+        column = 'ktp_file' if doc_type == 'ktp' else 'npwp_file'
+        row = _try_fetchone(f'SELECT {column} FROM registrations WHERE id = %s', [pk])
+        if not row:
+            return Response({'error': 'Registration not found'}, status=status.HTTP_404_NOT_FOUND)
+        return _serve_encrypted_document(row.get(column))
 
     @action(detail=False, methods=['post'])
     def upload_transfer_file(self, request):
@@ -869,6 +945,17 @@ class MemberViewSet(viewsets.ViewSet):
                 if data.get('nik_employee') is not None:
                     member.nik_employee = data['nik_employee']
                     member_updates.append('nik_employee')
+                if data.get('nik_ktp'):
+                    new_nik_hash = hash_pii(data['nik_ktp'])
+                    if Member.objects.filter(nik_ktp_hash=new_nik_hash).exclude(id=pk).exists():
+                        raise ValueError('NIK KTP sudah digunakan oleh anggota lain.')
+                    member.nik_ktp = encrypt_pii(data['nik_ktp'])
+                    member.nik_ktp_hash = new_nik_hash
+                    member_updates.append('nik_ktp')
+                    member_updates.append('nik_ktp_hash')
+                if data.get('npwp_number') is not None:
+                    member.npwp_number = encrypt_pii(data['npwp_number']) if data['npwp_number'] else data['npwp_number']
+                    member_updates.append('npwp_number')
                 if data.get('phone_number') is not None:
                     member.phone_number = data['phone_number']
                     member_updates.append('phone_number')

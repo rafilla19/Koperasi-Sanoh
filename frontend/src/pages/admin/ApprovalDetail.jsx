@@ -107,6 +107,27 @@ const ApprovalDetail = () => {
     }
   };
 
+  // KTP/NPWP file bytes are encrypted at rest (registrations.ktp_file /
+  // npwp_file still just hold the plain storage path, but the file itself
+  // isn't readable directly anymore) -- fetch through the authenticated
+  // decrypt-and-serve endpoint and preview the resulting blob instead.
+  const handlePreviewEncryptedDoc = async (docType, docName) => {
+    try {
+      const res = await fetch(apiUrl(`/member/members/${id}/registration_document/?type=${docType}`), {
+        headers: getAuthHeaders(),
+      });
+      if (!res.ok) {
+        alert('Gagal memuat dokumen.');
+        return;
+      }
+      const blob = await res.blob();
+      setPreviewDoc({ url: URL.createObjectURL(blob), name: docName || 'Document' });
+    } catch (error) {
+      console.error('Failed to load document:', error);
+      alert('Gagal memuat dokumen.');
+    }
+  };
+
   const isImageFile = (url) => {
     if (!url) return false;
     return /\.(jpg|jpeg|png|gif|bmp|webp|svg)(\?|$)/i.test(url);
@@ -506,7 +527,7 @@ const ApprovalDetail = () => {
                     <p className="doc-path">{getFileName(data.npwp_file)}</p>
                   </div>
                   <div className="doc-actions">
-                    <button className="doc-action-btn" onClick={() => handlePreviewDoc(data.npwp_file, 'NPWP')}>
+                    <button className="doc-action-btn" onClick={() => handlePreviewEncryptedDoc('npwp', 'NPWP')}>
                       <span className="doc-action-icon"><Eye size={14} /></span>
                       Lihat
                     </button>
@@ -524,7 +545,7 @@ const ApprovalDetail = () => {
                     <p className="doc-path">{getFileName(data.ktp_file)}</p>
                   </div>
                   <div className="doc-actions">
-                    <button className="doc-action-btn" onClick={() => handlePreviewDoc(data.ktp_file, 'KTP')}>
+                    <button className="doc-action-btn" onClick={() => handlePreviewEncryptedDoc('ktp', 'KTP')}>
                       <span className="doc-action-icon"><Eye size={14} /></span>
                       Lihat
                     </button>
