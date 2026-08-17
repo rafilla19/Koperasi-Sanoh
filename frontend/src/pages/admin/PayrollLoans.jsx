@@ -235,7 +235,7 @@ const PayrollLoans = () => {
   }, [filteredData, currentPage]);
 
   // --- Handlers ---
-  const handleSelectAll = (e) => setSelectedIds(e.target.checked ? filteredData.map(i => i.id) : []);
+  const handleSelectAll = (e) => setSelectedIds(e.target.checked ? filteredData.filter(i => i.status_id !== 29 && i.status_id !== 30).map(i => i.id) : []);
   const handleSelectOne = (id) => setSelectedIds(prev =>
     prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
   );
@@ -527,6 +527,7 @@ const PayrollLoans = () => {
                     <td>
                       <input type="checkbox" className="pl-checkbox"
                         checked={selectedIds.includes(row.id)}
+                        disabled={row.status_id === 29 || row.status_id === 30}
                         onChange={() => handleSelectOne(row.id)} />
                     </td>
                     <td>

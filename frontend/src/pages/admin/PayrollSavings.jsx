@@ -214,7 +214,7 @@ const PayrollSavings = () => {
   }, [filteredData, currentPage]);
 
   // Selection handlers
-  const handleSelectAll = e => setSelectedIds(e.target.checked ? filteredData.map(i => i.id) : []);
+  const handleSelectAll = e => setSelectedIds(e.target.checked ? filteredData.filter(i => !i.isPaid).map(i => i.id) : []);
   const handleSelectOne = id => setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
 
   // Confirm action
@@ -414,7 +414,7 @@ const PayrollSavings = () => {
               <tbody>
                 {paginatedData.length>0 ? paginatedData.map(row => (
                   <tr key={row.id} className={selectedIds.includes(row.id) ? 'pl-row--selected' : ''}>
-                    <td><input type="checkbox" className="pl-checkbox" checked={selectedIds.includes(row.id)} onChange={() => handleSelectOne(row.id)} /></td>
+                    <td><input type="checkbox" className="pl-checkbox" checked={selectedIds.includes(row.id)} disabled={row.isPaid} onChange={() => handleSelectOne(row.id)} /></td>
                     <td>
                       <div className="pl-member-cell">
                         <div className="pl-member-avatar">{row.name ? row.name.charAt(0) : 'M'}</div>
