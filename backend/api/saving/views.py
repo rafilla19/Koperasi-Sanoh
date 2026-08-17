@@ -1642,17 +1642,23 @@ def admin_member_obligations(request):
     principal_type = SavingTypes.objects.filter(name__icontains='PRINCIPLE').first()
     principal_min = principal_type.minimum_amount if principal_type else 0
 
-    # Bill status for selected period (match by month/year, not exact date)
+    # Bill status + billed amount for selected period (match by month/year, not exact date)
     bills = MonthlySavingBills.objects.filter(
         member_id__in=member_ids,
         bill_period_start__month=month,
         bill_period_start__year=year,
         deleted_at__isnull=True,
-    ).select_related('status').values('member_id', 'saving_type_id', 'status__status_code', 'penalty_due')
+    ).select_related('status').values(
+        'member_id', 'saving_type_id', 'status__status_code', 'penalty_due', 'amount_due',
+    )
 
     bill_status_map = {}
     pokok_status_map = {}
     wajib_penalty_map = {}
+    # amount_due already generated for this period, keyed by (member_id, saving_type_id).
+    # A bill snapshots the nominal that was active when it was generated, so a later change
+    # to the member's obligation must not retroactively change months that already have a bill.
+    billed_amount_map = {}
     for b in bills:
         mid = b['member_id']
         if mid not in bill_status_map:
@@ -1662,6 +1668,8 @@ def admin_member_obligations(request):
             pokok_status_map[mid] = b['status__status_code']
         if b['saving_type_id'] == 1 and b['penalty_due']:
             wajib_penalty_map[mid] = float(b['penalty_due'])
+        if b['saving_type_id'] in (1, 2):
+            billed_amount_map[(mid, b['saving_type_id'])] = b['amount_due']
 
     dept_map = _get_dept_map(member_ids)
     emp_status_map = _get_employee_status_map(member_ids)
@@ -1676,8 +1684,11 @@ def admin_member_obligations(request):
         )
         # Simp. pokok only applies to new members
         pokok = float(obligation_map.get((mid, 3), principal_min if is_new else 0)) if is_new else 0
-        wajib = float(obligation_map.get((mid, 1), 0))
-        sukarela = float(obligation_map.get((mid, 2), 0))
+        # Use the amount actually billed for this period when a bill already exists (so a later
+        # obligation change doesn't retroactively alter past months); otherwise fall back to the
+        # member's current live obligation as a preview of what would be billed.
+        wajib = float(billed_amount_map.get((mid, 1), obligation_map.get((mid, 1), 0)))
+        sukarela = float(billed_amount_map.get((mid, 2), obligation_map.get((mid, 2), 0)))
         # Outsource members pay pokok separately via the Midtrans gateway at
         # registration, not through this admin bill-generation flow — so it's
         # shown for reference but excluded from this page's Total.

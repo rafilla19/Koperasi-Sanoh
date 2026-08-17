@@ -67,8 +67,13 @@ def _get_bank_map(member_ids):
 
 def _member_savings_by_period(period_start, period_end, member_ids=None):
     """
-    Sum simpanan wajib/sukarela (status_id 39 = PAID) per member for the given date range,
-    read directly from monthly_saving_bills.amount_paid and keyed by bill_period_end.
+    Sum simpanan wajib/sukarela (status_id 39 = PAID on time, 40 = PAID late / lunas tapi
+    terlambat) per member for the given date range, read directly from
+    monthly_saving_bills.amount_paid and keyed by bill_period_end.
+
+    amount_paid only ever holds the bill principal (penalty_due/penalty_paid are stored in
+    separate columns and never summed here), so late-but-paid bills are included in full while
+    the penalty amount they incurred stays excluded from SHU.
     """
     params = [period_start, period_end]
     member_filter_sql = ''
@@ -82,7 +87,7 @@ def _member_savings_by_period(period_start, period_end, member_ids=None):
     query = f"""
         SELECT b.member_id, b.saving_type_id, SUM(b.amount_paid)
         FROM monthly_saving_bills b
-        WHERE b.status_id = 39
+        WHERE b.status_id IN (39, 40)
           AND b.saving_type_id IN (1, 2)
           AND b.deleted_at IS NULL
           AND b.bill_period_end BETWEEN %s AND %s
@@ -2111,7 +2116,7 @@ def admin_shu_monthly_distribute(request):
         ).quantize(Decimal('0.01'))
 
     # Hitung simpanan per anggota untuk bulan ini dari transaksi simpanan aktual
-    # (hanya status_id 34/39 yang dihitung; member yang tidak bayar bulan ini = 0)
+    # (hanya status_id 34/39/40 yang dihitung; member yang tidak bayar bulan ini = 0)
     from datetime import date as _date_cls
 
     members = list(Members.objects.filter(deleted_at__isnull=True))
@@ -2229,7 +2234,7 @@ def admin_shu_monthly_distributions(request):
             jasa_modal_pool = (shu_result.net_profit * cfg.percentage / Decimal('100')).quantize(Decimal('0.01'))
 
     # Auto-create missing member records from transaksi simpanan aktual
-    # (hanya status_id 34/39 yang dihitung; member yang tidak bayar bulan ini = 0)
+    # (hanya status_id 34/39/40 yang dihitung; member yang tidak bayar bulan ini = 0)
     if jasa_modal_pool is not None:
         from datetime import date as _date_cls
 
@@ -2337,7 +2342,7 @@ def admin_shu_monthly_distribution_detail(request, pk):
         if cfg:
             jasa_modal_pool = (shu_result.net_profit * cfg.percentage / Decimal('100')).quantize(Decimal('0.01'))
 
-    # Denominator = total simpanan aktual (status_id 34/39) semua member pada periode ini,
+    # Denominator = total simpanan aktual (status_id 34/39/40) semua member pada periode ini,
     # supaya proporsi tetap konsisten dengan data transaksi nyata.
     from datetime import date as _date_cls
     period_year = dist.period_year or shu_result.period_year
@@ -2542,7 +2547,7 @@ def save_component_allocations(request):
                 return Response({'error': f'Allocation item with ID {alloc_id} not found for this period'}, status=404)
 
         # ── Recalculate Member Distributions from actual saving transactions ──
-        # (hanya status_id 34/39 yang dihitung; member yang tidak bayar di periode ini = 0)
+        # (hanya status_id 34/39/40 yang dihitung; member yang tidak bayar di periode ini = 0)
         from datetime import date as _date_cls
 
         now = timezone.now()
