@@ -61,3 +61,24 @@ def hash_pii(value):
         str(value).encode(),
         hashlib.sha256,
     ).hexdigest()
+
+def encrypt_bytes(data):
+    """Encrypt raw bytes (e.g. file/document contents). Returns None/b'' unchanged."""
+    if not data:
+        return data
+    return _get_fernet().encrypt(data)
+
+
+def decrypt_bytes(data):
+    """
+    Decrypt bytes previously produced by encrypt_bytes.
+    Falls back to returning the input unchanged if it isn't valid ciphertext
+    (e.g. legacy files uploaded before encryption existed) so reads never
+    hard-fail on old data.
+    """
+    if not data:
+        return data
+    try:
+        return _get_fernet().decrypt(data)
+    except (InvalidToken, ValueError, TypeError):
+        return data

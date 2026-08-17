@@ -15,3 +15,6 @@ joblib
 openpyxl
 django-storages
 boto3
+cryptography
+requests
+python-dateutil
