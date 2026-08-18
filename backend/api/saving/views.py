@@ -37,6 +37,7 @@ from .serializers import (
 from .email_utils import send_member_notification_email, send_withdrawal_paid_email, send_voluntary_request_submitted_email
 from api.utils.auth import get_verified_admin
 from api.utils.crypto_utils import decrypt_pii, hash_pii
+from api.utils.penalty import accrue_savings_penalties
 
 
 def _search_nik_hash(search):
@@ -448,22 +449,11 @@ def my_payment_schedule(request):
     from api.loan.view import sync_member_pending_payments
     sync_member_pending_payments(member_id)
 
-    # Denda telat Simpanan Wajib: same lazy snapshot used by the admin pages
+    # Denda telat Simpanan Wajib: same per-day accrual used by the admin pages
     # (api.saving.views.admin_member_obligations, payroll_savings_list), so a
     # member sees their denda here even if no admin page has touched this
-    # bill yet. Guarded/idempotent — never overwrites an already-set value.
-    with connection.cursor() as cursor:
-        cursor.execute("""
-            UPDATE monthly_saving_bills
-            SET penalty_due = (SELECT monthly_limit FROM funding_settings WHERE id = 3 AND is_active = TRUE LIMIT 1),
-                updated_at = NOW()
-            WHERE member_id = %s
-              AND saving_type_id = 1
-              AND status_id = 38
-              AND due_date < CURRENT_DATE
-              AND (penalty_due IS NULL OR penalty_due = 0)
-              AND deleted_at IS NULL
-        """, [member_id])
+    # bill yet.
+    accrue_savings_penalties(member_id=member_id)
 
     bills = MonthlySavingBills.objects.filter(
         member_id=member_id,
@@ -1599,22 +1589,10 @@ def admin_member_obligations(request):
     status_filter = request.query_params.get('status', '')
     employee_status_filter = request.query_params.get('employee_status', '')
 
-    # Denda telat Simpanan Wajib: snapshot penalty_due once a bill is past its
-    # due date and still unpaid, so it shows up here even before anyone pays.
-    # Guarded by "penalty_due IS NULL/0" so it never overwrites an
-    # already-snapshotted value, and frozen once set (later changes to the
-    # funding_settings amount don't retroactively change bills already flagged).
-    with connection.cursor() as cursor:
-        cursor.execute("""
-            UPDATE monthly_saving_bills
-            SET penalty_due = (SELECT monthly_limit FROM funding_settings WHERE id = 3 AND is_active = TRUE LIMIT 1),
-                updated_at = NOW()
-            WHERE saving_type_id = 1
-              AND status_id = 38
-              AND due_date < CURRENT_DATE
-              AND (penalty_due IS NULL OR penalty_due = 0)
-              AND deleted_at IS NULL
-        """)
+    # Denda telat Simpanan Wajib: accrues per day a bill stays overdue
+    # (funding_settings id=3 daily_limit), capped at monthly_limit, and
+    # freezes once penalty_paid is set.
+    accrue_savings_penalties()
 
     members_qs = Members.objects.filter(deleted_at__isnull=True, user__is_active=True).order_by('full_name')
     if search:

@@ -16,6 +16,7 @@ class LoanType(models.Model):
 class LoanFundingSetting(models.Model):
     description = models.CharField(max_length=255, null=True, blank=True)
     monthly_limit = models.DecimalField(max_digits=15, decimal_places=2)
+    daily_limit = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
     is_active = models.BooleanField(default=True)
 
     created_at = models.DateTimeField()

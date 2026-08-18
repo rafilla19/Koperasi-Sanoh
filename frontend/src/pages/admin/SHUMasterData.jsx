@@ -40,6 +40,7 @@ const SHUMasterData = () => {
     // Loan funding setting fields
     description: '',
     monthly_limit: '',
+    daily_limit: '',
   });
 
   const currentTab = TABS.find(t => t.id === activeTab);
@@ -115,6 +116,7 @@ const SHUMasterData = () => {
       payload = {
         description: formData.description,
         monthly_limit: formData.monthly_limit,
+        daily_limit: formData.daily_limit,
       };
     }
 
@@ -189,6 +191,7 @@ const SHUMasterData = () => {
       setFormData({
         description: item.description || '',
         monthly_limit: item.monthly_limit,
+        daily_limit: item.daily_limit,
       });
     }
     setShowForm(true);
@@ -200,7 +203,7 @@ const SHUMasterData = () => {
       department_name: '', name: '',
       channel_code: '', channel_name: '', fee_percentage: '', fee_fixed: '', is_active: true,
       category_name: '', type: 'INCOME',
-      description: '', monthly_limit: ''
+      description: '', monthly_limit: '', daily_limit: ''
     });
     setEditingId(null);
     setShowForm(false);
@@ -386,6 +389,17 @@ const SHUMasterData = () => {
                         required
                       />
                     </div>
+                    <div className="shum-form-group">
+                      <label>Batas Harian (Rp)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={formData.daily_limit}
+                        onChange={(e) => setFormData({...formData, daily_limit: e.target.value})}
+                        disabled={editingId === 1}
+                        required
+                      />
+                    </div>
                   </>
                 )}
 
@@ -429,6 +443,7 @@ const SHUMasterData = () => {
                 <>
                   <th>Deskripsi</th>
                   <th>Batas Bulanan</th>
+                  <th>Batas Harian</th>
                 </>
               ) : (
                 <th>Nama Kategori</th>
@@ -474,7 +489,10 @@ const SHUMasterData = () => {
                   </td>
                 )}
                 {activeTab === 'loans' && (
-                  <td>Rp {parseFloat(item.monthly_limit || 0).toLocaleString('id-ID')}</td>
+                  <>
+                    <td>Rp {parseFloat(item.monthly_limit || 0).toLocaleString('id-ID')}</td>
+                    <td>Rp {parseFloat(item.daily_limit || 0).toLocaleString('id-ID')}</td>
+                  </>
                 )}
                 <td>
                   <div className="shum-table-actions">

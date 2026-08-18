@@ -22,6 +22,7 @@ from .models import EmailOTP
 from datetime import timedelta
 from rest_framework.response import Response
 from api.utils.crypto_utils import encrypt_pii, decrypt_pii, hash_pii, encrypt_bytes, decrypt_bytes
+from api.utils.penalty import accrue_loan_penalties
 
 from api.member.serializers import (
     MemberClosureRequestSerializer,
@@ -177,24 +178,11 @@ from api.utils.auth import get_verified_admin
 
 
 def _member_profile_query(member_id):
-    # Same lazy snapshot used in the loan app — locks in penalty_due for any
-    # newly-overdue installment using the current active penalty setting, so
-    # outstanding_penalty below is accurate even if nobody has opened this
-    # member's loan detail page yet.
-    with connection.cursor() as cursor:
-        cursor.execute(
-            """
-            UPDATE loan_installments li
-            SET penalty_due = (SELECT monthly_limit FROM funding_settings WHERE id = 2 AND is_active = TRUE LIMIT 1),
-                updated_at = NOW()
-            FROM loans l2
-            WHERE l2.id = li.loan_id
-              AND l2.member_id = %s
-              AND (li.penalty_due IS NULL OR li.penalty_due = 0)
-              AND (li.status_id = 30 OR (li.status_id IN (27, 28) AND li.due_date < CURRENT_DATE))
-            """,
-            [member_id],
-        )
+    # Same per-day accrual used in the loan app — recomputes penalty_due for
+    # any overdue installment using funding_settings id=2's daily_limit
+    # (capped at monthly_limit), so outstanding_penalty below is accurate
+    # even if nobody has opened this member's loan detail page yet.
+    accrue_loan_penalties(member_id=member_id)
 
     result = _try_fetchone(
         """

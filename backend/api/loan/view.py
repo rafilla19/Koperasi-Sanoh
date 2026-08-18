@@ -39,6 +39,7 @@ from api.master.models import Status
 from .serializers import LoanApplicationSerializer, LoanTypeSerializer, LoanSerializer, LoanInstallmentSerializer, LoanFundingSettingSerializer
 from ml_service.trainer import get_prediction
 from api.utils.auth import get_verified_admin, get_verified_member
+from api.utils.penalty import accrue_loan_penalties, accrue_savings_penalties
 
 def add_months(sourcedate, months):
     month = sourcedate.month - 1 + months
@@ -729,7 +730,7 @@ class LoanTypeViewSet(viewsets.ModelViewSet):
         instance.save()
 
 class LoanFundingSettingViewSet(viewsets.ModelViewSet):
-    queryset = LoanFundingSetting.objects.all().order_by('-id')
+    queryset = LoanFundingSetting.objects.filter(is_active=True).order_by('-id')
     serializer_class = LoanFundingSettingSerializer
 
     def perform_create(self, serializer):
@@ -740,7 +741,10 @@ class LoanFundingSettingViewSet(viewsets.ModelViewSet):
         )
 
     def perform_update(self, serializer):
-        serializer.save(updated_at=timezone.now())
+        if serializer.instance.id == 1:
+            serializer.save(updated_at=timezone.now(), daily_limit=serializer.instance.daily_limit)
+        else:
+            serializer.save(updated_at=timezone.now())
 
 def sync_member_pending_payments(member_id):
     from django.db import connection
@@ -897,21 +901,10 @@ class LoanViewSet(viewsets.ModelViewSet):
         member_id = request.query_params.get('member_id', 1)
         sync_member_pending_payments(member_id)
 
-        # Same lazy snapshot used elsewhere, scoped to this member's loans so
+        # Same per-day accrual used elsewhere, scoped to this member's loans so
         # total_penalty below is accurate even if nobody has opened this
         # loan's schedule yet.
-        snapshot_query = """
-        UPDATE loan_installments li
-        SET penalty_due = (SELECT monthly_limit FROM funding_settings WHERE id = 2 AND is_active = TRUE LIMIT 1),
-            updated_at = NOW()
-        FROM loans l2
-        WHERE l2.id = li.loan_id
-          AND l2.member_id = %s
-          AND (li.penalty_due IS NULL OR li.penalty_due = 0)
-          AND (li.status_id = 30 OR (li.status_id IN (27, 28) AND li.due_date < CURRENT_DATE))
-        """
-        with connection.cursor() as cursor:
-            cursor.execute(snapshot_query, [member_id])
+        accrue_loan_penalties(member_id=member_id)
 
         query = """
         SELECT
@@ -1074,23 +1067,10 @@ class LoanViewSet(viewsets.ModelViewSet):
         #    itself is actually PAID/late-paid (29/30). This guarantees an
         #    expired or still-pending transfer never shows up as "bukti" on
         #    a row that is still UNPAID.
-        # Penalty amounts are snapshotted onto loan_installments.penalty_due the
-        # first time an installment is detected overdue, instead of being read
-        # live from funding_settings on every request. If that were read
-        # live, editing the "Penalty" master setting later would retroactively
-        # change the penalty shown on installments that were already overdue
-        # (including ones the member already paid) — the snapshot locks each
-        # installment's penalty to whatever the setting was at the time it went
-        # overdue, so later edits only affect installments that go overdue after
-        # the edit.
-        snapshot_query = """
-        UPDATE loan_installments li
-        SET penalty_due = (SELECT monthly_limit FROM funding_settings WHERE id = 2 AND is_active = TRUE LIMIT 1),
-            updated_at = NOW()
-        WHERE li.loan_id = %s
-          AND (li.penalty_due IS NULL OR li.penalty_due = 0)
-          AND (li.status_id = 30 OR (li.status_id IN (27, 28) AND li.due_date < CURRENT_DATE))
-        """
+        # Penalty accrues per day an installment stays overdue (funding_settings
+        # id=2 daily_limit), capped at monthly_limit, and freezes once
+        # penalty_paid is set so a settled installment's history never changes.
+        accrue_loan_penalties(loan_id=pk)
 
         query = """
         SELECT
@@ -1138,7 +1118,6 @@ class LoanViewSet(viewsets.ModelViewSet):
         params = [pk]
 
         with connection.cursor() as cursor:
-            cursor.execute(snapshot_query, [pk])
             cursor.execute(query, params)
             columns = [col[0] for col in cursor.description]
             results = [dict(zip(columns, row)) for row in cursor.fetchall()]
@@ -2026,18 +2005,12 @@ class LoanViewSet(viewsets.ModelViewSet):
 
         period_str = f"{sel_year}-{sel_month:02d}"  # e.g. '2026-05'
 
-        # Same lazy snapshot used by the per-loan schedule() endpoint, but run
+        # Same per-day accrual used by the per-loan schedule() endpoint, but run
         # across every installment: without this, penalty_due only gets
         # populated for a loan once someone opens that specific loan's detail
         # page, so this list-wide view would show "-" for overdue loans no one
         # has clicked into yet.
-        snapshot_query = """
-        UPDATE loan_installments li
-        SET penalty_due = (SELECT monthly_limit FROM funding_settings WHERE id = 2 AND is_active = TRUE LIMIT 1),
-            updated_at = NOW()
-        WHERE (li.penalty_due IS NULL OR li.penalty_due = 0)
-          AND (li.status_id = 30 OR (li.status_id IN (27, 28) AND li.due_date < CURRENT_DATE))
-        """
+        accrue_loan_penalties()
 
         query = """
         SELECT
@@ -2116,7 +2089,6 @@ class LoanViewSet(viewsets.ModelViewSet):
             AND NOT EXISTS (SELECT 1 FROM close_account_requests car WHERE car.member_id = m.id AND car.status_id = 44 AND car.deleted_at IS NULL)
         """
         with connection.cursor() as cursor:
-            cursor.execute(snapshot_query)
             cursor.execute(query, [period_str])
             columns = [col[0] for col in cursor.description]
             results = [dict(zip(columns, row)) for row in cursor.fetchall()]
@@ -2139,16 +2111,10 @@ class LoanViewSet(viewsets.ModelViewSet):
         except ValueError:
             return Response({'error': 'Invalid period format. Use YYYY-MM'}, status=400)
 
-        # Same lazy snapshot used by admin_loans_list()/schedule() — ensures
+        # Same per-day accrual used by admin_loans_list()/schedule() — ensures
         # current_month_penalty below is populated even if no one has opened
         # this loan's detail page yet.
-        snapshot_query = """
-        UPDATE loan_installments li
-        SET penalty_due = (SELECT monthly_limit FROM funding_settings WHERE id = 2 AND is_active = TRUE LIMIT 1),
-            updated_at = NOW()
-        WHERE (li.penalty_due IS NULL OR li.penalty_due = 0)
-          AND (li.status_id = 30 OR (li.status_id IN (27, 28) AND li.due_date < CURRENT_DATE))
-        """
+        accrue_loan_penalties()
 
         query = """
         SELECT
@@ -2232,7 +2198,6 @@ class LoanViewSet(viewsets.ModelViewSet):
             AND EXISTS (SELECT 1 FROM loan_fund_allocations lfa WHERE lfa.loan_id = l.id)
         """
         with connection.cursor() as cursor:
-            cursor.execute(snapshot_query)
             cursor.execute(query, [year, month])
             columns = [col[0] for col in cursor.description]
             results = [dict(zip(columns, row)) for row in cursor.fetchall()]
@@ -2255,21 +2220,11 @@ class LoanViewSet(viewsets.ModelViewSet):
         except ValueError:
             return Response({'error': 'Invalid period format. Use YYYY-MM'}, status=400)
 
-        # Denda telat Simpanan Wajib: same lazy snapshot as Kewajiban Simpanan
+        # Denda telat Simpanan Wajib: same per-day accrual as Kewajiban Simpanan
         # (api.saving.views.admin_member_obligations), repeated here so this
         # payroll list shows the penalty even for a period nobody has opened
-        # there yet. Guarded/idempotent — never overwrites an already-set value.
-        with connection.cursor() as cursor:
-            cursor.execute("""
-                UPDATE monthly_saving_bills
-                SET penalty_due = (SELECT monthly_limit FROM funding_settings WHERE id = 3 AND is_active = TRUE LIMIT 1),
-                    updated_at = NOW()
-                WHERE saving_type_id = 1
-                  AND status_id = 38
-                  AND due_date < CURRENT_DATE
-                  AND (penalty_due IS NULL OR penalty_due = 0)
-                  AND deleted_at IS NULL
-            """)
+        # there yet.
+        accrue_savings_penalties()
 
         query = """
         SELECT
@@ -3380,40 +3335,19 @@ class LoanViewSet(viewsets.ModelViewSet):
             b.bank_name
         """
 
-        # Same lazy snapshot used elsewhere (schedule(), admin_loans_list()):
+        # Same per-day accrual used elsewhere (schedule(), admin_loans_list()):
         # scoped to this member's loans so loan_penalty below reflects an
         # up-to-date value even if nobody has opened this member's loan
         # detail page yet.
-        snapshot_query = """
-        UPDATE loan_installments li
-        SET penalty_due = (SELECT monthly_limit FROM funding_settings WHERE id = 2 AND is_active = TRUE LIMIT 1),
-            updated_at = NOW()
-        FROM loans l2
-        WHERE l2.id = li.loan_id
-          AND l2.member_id = %s
-          AND (li.penalty_due IS NULL OR li.penalty_due = 0)
-          AND (li.status_id = 30 OR (li.status_id IN (27, 28) AND li.due_date < CURRENT_DATE))
-        """
+        accrue_loan_penalties(member_id=member_id)
 
-        # Same lazy snapshot used for the payroll list (denda telat Simpanan
+        # Same per-day accrual used for the payroll list (denda telat Simpanan
         # Wajib) — locks in penalty_due for this member's overdue mandatory
         # bills using the current active penalty setting.
-        saving_snapshot_query = """
-        UPDATE monthly_saving_bills
-        SET penalty_due = (SELECT monthly_limit FROM funding_settings WHERE id = 3 AND is_active = TRUE LIMIT 1),
-            updated_at = NOW()
-        WHERE member_id = %s
-          AND saving_type_id = 1
-          AND status_id = 38
-          AND due_date < CURRENT_DATE
-          AND (penalty_due IS NULL OR penalty_due = 0)
-          AND deleted_at IS NULL
-        """
+        accrue_savings_penalties(member_id=member_id)
 
         try:
             with connection.cursor() as cursor:
-                cursor.execute(snapshot_query, [member_id])
-                cursor.execute(saving_snapshot_query, [member_id])
                 cursor.execute(query, [member_id])
                 columns = [col[0] for col in cursor.description]
                 row = cursor.fetchone()
@@ -3767,41 +3701,15 @@ class LoanViewSet(viewsets.ModelViewSet):
 
         sync_member_pending_payments(member_id)
 
-        # Same lazy snapshot used elsewhere, scoped to this member's loans so
+        # Same per-day accrual used elsewhere, scoped to this member's loans so
         # total_unpaid_penalty below is accurate even if nobody has opened
         # this loan's schedule yet.
-        with connection.cursor() as cursor:
-            cursor.execute(
-                """
-                UPDATE loan_installments li
-                SET penalty_due = (SELECT monthly_limit FROM funding_settings WHERE id = 2 AND is_active = TRUE LIMIT 1),
-                    updated_at = NOW()
-                FROM loans l2
-                WHERE l2.id = li.loan_id
-                  AND l2.member_id = %s
-                  AND (li.penalty_due IS NULL OR li.penalty_due = 0)
-                  AND (li.status_id = 30 OR (li.status_id IN (27, 28) AND li.due_date < CURRENT_DATE))
-                """,
-                [member_id],
-            )
+        accrue_loan_penalties(member_id=member_id)
 
-        # Same lazy snapshot for denda telat Simpanan Wajib, scoped to this
+        # Same per-day accrual for denda telat Simpanan Wajib, scoped to this
         # member, so total_unpaid_savings_penalty below is accurate even if
         # nobody has opened Kewajiban Simpanan / this bill yet.
-        with connection.cursor() as cursor:
-            cursor.execute(
-                """
-                UPDATE monthly_saving_bills
-                SET penalty_due = (SELECT monthly_limit FROM funding_settings WHERE id = 3 AND is_active = TRUE LIMIT 1),
-                    updated_at = NOW()
-                WHERE member_id = %s
-                  AND saving_type_id = 1
-                  AND status_id = 38
-                  AND due_date < CURRENT_DATE
-                  AND (penalty_due IS NULL OR penalty_due = 0)
-                """,
-                [member_id],
-            )
+        accrue_savings_penalties(member_id=member_id)
 
         query = """
         WITH member_info AS (
@@ -3977,20 +3885,10 @@ class LoanViewSet(viewsets.ModelViewSet):
         if saving_ids:
             saving_ids = [int(x) for x in saving_ids]
 
-            # Denda telat Simpanan Wajib: same lazy snapshot used elsewhere, so
+            # Denda telat Simpanan Wajib: same per-day accrual used elsewhere, so
             # the amount charged through the gateway below reflects it even if
             # nothing else has touched this bill yet.
-            with connection.cursor() as cursor:
-                cursor.execute("""
-                    UPDATE monthly_saving_bills
-                    SET penalty_due = (SELECT monthly_limit FROM funding_settings WHERE id = 3 AND is_active = TRUE LIMIT 1),
-                        updated_at = NOW()
-                    WHERE id IN %s
-                      AND saving_type_id = 1
-                      AND status_id = 38
-                      AND due_date < CURRENT_DATE
-                      AND (penalty_due IS NULL OR penalty_due = 0)
-                """, [tuple(saving_ids)])
+            accrue_savings_penalties(bill_ids=saving_ids)
 
             query_savings = """
                 SELECT id, amount_due, amount_paid, saving_type_id, bill_period_end, penalty_due, penalty_paid
